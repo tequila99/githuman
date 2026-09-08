@@ -1,0 +1,46 @@
+// app global css
+
+// Self-hosted fonts (via @fontsource) so the app works fully offline,
+// matching the githuman reference's font choices (see githuman/src/web/styles/globals.css)
+@import '@fontsource/syne/400.css';
+@import '@fontsource/syne/500.css';
+@import '@fontsource/syne/600.css';
+@import '@fontsource/syne/700.css';
+@import '@fontsource/syne/800.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/jetbrains-mono/600.css';
+@import '@fontsource/fira-code/400.css';
+@import '@fontsource/fira-code/500.css';
+@import '@fontsource/fira-code/600.css';
+
+:root {
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+// Switchable code/monospace font (default: JetBrains Mono). A future
+// settings UI can set data-code-font="fira" on <html> to switch it.
+html[data-code-font='fira'] {
+  --font-mono: 'Fira Code', ui-monospace, monospace;
+}
+
+.text-mono {
+  font-family: var(--font-mono);
+}
+
+// Diff line colors (see githuman/src/web/styles/globals.css)
+:root {
+  --diff-added-bg: #e6ffed;
+  --diff-removed-bg: #ffeef0;
+  --diff-gutter-color: #94a3b8;
+  --diff-header-bg: #f8fafc;
+  color-scheme: light;
+}
+
+body.body--dark {
+  --diff-added-bg: rgba(34, 197, 94, 0.15);
+  --diff-removed-bg: rgba(244, 63, 94, 0.15);
+  --diff-gutter-color: #64748b;
+  --diff-header-bg: #1a2234;
+  color-scheme: dark;
+}

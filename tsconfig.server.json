@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "noEmit": true,
+    "paths": {
+      "@/server/*": ["./src/server/*"],
+      "@/shared/*": ["./src/shared/*"]
+    }
+  },
+  "include": [
+    "src/cli/**/*",
+    "src/server/**/*",
+    "src/shared/**/*",
+    "tests/server/**/*",
+    "tests/cli/**/*"
+  ]
+}
