@@ -10,7 +10,7 @@ export default defineConfig({
     '.quasar/',
     'src-cordova/',
     'src-capacitor/',
-    'src/router/typed-router.d.ts',
+    'src/web/router/typed-router.d.ts',
     'reference/',
     'docs/',
     '.claude/',

@@ -184,7 +184,7 @@ test('reviews persist across a server restart when using a file-backed database'
   await stageOneChange(fixture.dir, fixture.git)
 
   const { createFileDatabase } = await import('../../../src/server/db/index.ts')
-  const dbPath = join(fixture.dir, '.githuman-vue-test', 'reviews.db')
+  const dbPath = join(fixture.dir, '.githuman-test', 'reviews.db')
 
   const db1 = createFileDatabase(dbPath)
   const app1 = buildApp({ repositoryPath: fixture.dir, db: db1 })

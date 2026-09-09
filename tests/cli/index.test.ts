@@ -27,8 +27,8 @@ function waitForListeningUrl(
   })
 }
 
-test('githuman-vue serve boots a working HTTP server from the CLI entry point', async t => {
-  const repoDir = mkdtempSync(join(tmpdir(), 'githuman-vue-cli-'))
+test('githuman serve boots a working HTTP server from the CLI entry point', async t => {
+  const repoDir = mkdtempSync(join(tmpdir(), 'githuman-cli-'))
 
   const child = spawn(
     'node',

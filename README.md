@@ -41,7 +41,7 @@ staged/unstaged diff, сравнение веток и коммитов, бра�
 
 ```bash
 git clone <url-этого-репозитория>
-cd githuman-vue
+cd githuman
 pnpm install
 pnpm run build
 node dist/cli/index.js serve
@@ -75,14 +75,14 @@ pnpm run dev:server
 pnpm run dev
 ```
 
-Если backend должен анализировать *другой* репозиторий, а не сам
-githuman-vue — запустите `dev:server` из cwd того репозитория, указав
+Если backend должен анализировать _другой_ репозиторий, а не сам
+githuman — запустите `dev:server` из cwd того репозитория, указав
 абсолютный путь к скрипту:
 
 ```bash
 cd /path/to/other/repo
-node --watch-path=/path/to/githuman-vue/src \
-  /path/to/githuman-vue/src/cli/index.ts serve --no-open
+node --watch-path=/path/to/githuman/src \
+  /path/to/githuman/src/cli/index.ts serve --no-open
 ```
 
 Прочие команды:

@@ -7,7 +7,7 @@ const IGNORED_DIR_NAMES = new Set([
   'dist',
   'build',
   '.venv',
-  '.githuman-vue',
+  '.githuman',
   '.cache'
 ])
 

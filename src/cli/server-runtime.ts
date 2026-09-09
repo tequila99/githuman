@@ -56,7 +56,7 @@ export async function resolveRepositoryPath(cwd: string): Promise<string> {
 
 /** Path to the reviews SQLite file for a given repository, shared by `serve`, `list` and `export`. */
 export function resolveReviewsDbPath(repositoryPath: string): string {
-  return join(repositoryPath, '.githuman-vue', 'reviews.db')
+  return join(repositoryPath, '.githuman', 'reviews.db')
 }
 
 export async function startServer(

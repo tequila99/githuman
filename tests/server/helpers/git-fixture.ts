@@ -10,7 +10,7 @@ export interface GitFixture {
 }
 
 export async function createTempGitRepo(): Promise<GitFixture> {
-  const dir = mkdtempSync(join(tmpdir(), 'githuman-vue-git-'))
+  const dir = mkdtempSync(join(tmpdir(), 'githuman-git-'))
   const git = simpleGit(dir)
 
   await git.init(['--initial-branch=main'])

@@ -44,7 +44,7 @@ async function main(argv: string[]): Promise<void> {
     }
     default:
       console.error(`Unknown command: ${command ?? '(none)'}`)
-      console.error('Usage: githuman-vue serve|list|export [options]')
+      console.error('Usage: githuman serve|list|export [options]')
       process.exitCode = 1
   }
 }

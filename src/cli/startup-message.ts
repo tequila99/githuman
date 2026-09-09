@@ -1,5 +1,5 @@
 export function formatStartupMessage(url: string, host: string): string[] {
-  const lines = [`githuman-vue listening on ${url}`]
+  const lines = [`githuman listening on ${url}`]
 
   if (host !== 'localhost' && host !== '127.0.0.1') {
     lines.push(

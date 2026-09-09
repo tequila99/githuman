@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { buildApp } from '../../src/server/app.ts'
 
 function createFixtureStaticRoot(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'githuman-vue-static-'))
+  const dir = mkdtempSync(join(tmpdir(), 'githuman-static-'))
   writeFileSync(
     join(dir, 'index.html'),
     '<html><body>fixture-spa</body></html>'

@@ -31,7 +31,7 @@ export function parseExportArgs(argv: string[]): ExportArgs {
   const [id] = positionals
   if (!id) {
     throw new ExportCliError(
-      'Usage: githuman-vue export <id|last> [--format json|markdown] [-o <file>]'
+      'Usage: githuman export <id|last> [--format json|markdown] [-o <file>]'
     )
   }
 

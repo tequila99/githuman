@@ -11,7 +11,10 @@ export default defineConfig(ctx => {
     // app boot file (/src/boot)
     // --> boot files are part of "main.js"
     // https://v2.quasar.dev/quasar-cli-vite/boot-files
-    boot: ['i18n', 'theme', 'init-app'],
+    // 'pinia' must run before 'init-app', which reads from a Pinia store —
+    // see src/web/boot/pinia.ts for why Pinia is installed manually here
+    // instead of via sourceFiles.store.
+    boot: ['pinia', 'i18n', 'theme', 'init-app'],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
     css: ['app.scss'],
@@ -37,6 +40,15 @@ export default defineConfig(ctx => {
         // node: 'node22'
       },
 
+      // All frontend source lives under src/web/ (src/ also holds
+      // cli/server/shared, which are not part of this Vite app) — repoint
+      // the `@` alias there so every existing `@/...` import keeps working
+      // unchanged. User-defined aliases take precedence over Quasar's own
+      // default (`@` → src/), so this must be set explicitly.
+      alias: {
+        '@': ctx.appPaths.resolve.app('src/web')
+      },
+
       typescript: {
         strict: true,
         vueShim: true,
@@ -60,7 +72,7 @@ export default defineConfig(ctx => {
         }
       },
 
-      // Classic routing: routes are declared explicitly in src/router/routes.ts
+      // Classic routing: routes are declared explicitly in src/web/router/routes.ts
       // https://v2.quasar.dev/quasar-cli-vite/page-routing-with-vue-router#filename-based-routing
       filenameBasedRouting: false,
 
@@ -98,7 +110,7 @@ export default defineConfig(ctx => {
             ssr: ctx.mode.ssr || ctx.mode.ssg,
 
             // you need to set i18n resource including paths !
-            include: [ctx.appPaths.resolve.app('src/i18n')]
+            include: [ctx.appPaths.resolve.app('src/web/i18n')]
           }
         ]
       ]
@@ -138,17 +150,23 @@ export default defineConfig(ctx => {
     animations: [],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#sourcefiles
-    // sourceFiles: {
-    //   rootComponent: 'src/App.vue',
-    //   router: 'src/router/index',
-    //   store: 'src/store/index',
-    //   pwaRegisterServiceWorker: 'src-pwa/register-sw',
-    //   pwaServiceWorker: 'src-pwa/sw/custom-sw',
-    //   pwaManifestFile: 'src-pwa/manifest.json',
-    //   electronMain: 'src-electron/electron-main',
-    //   electronPreload: 'src-electron/electron-preload'
-    //   bexManifestFile: 'src-bex/manifest.json
-    // },
+    // Frontend entry points live under src/web/ (see build.alias above).
+    // Quasar internally resolves these via `@/../<value>` — since `@` now
+    // points at src/web (not src/, Quasar's own default), that lands one
+    // directory above src/web, i.e. src/ — so values here are given
+    // relative to src/, not the project root (hence 'web/...', not
+    // 'src/web/...' like Quasar's own src/-relative defaults).
+    //
+    // No `store` entry: Quasar resolves it through a *different*,
+    // project-root-relative rule than the one above (see
+    // `appPaths.resolve.app(cfg.sourceFiles.store)` in
+    // @quasar/app-vite/lib/quasar-config-file.js), which can't agree with
+    // the alias-relative rule the other two entries need — so Pinia is
+    // installed manually instead, in src/web/boot/pinia.ts.
+    sourceFiles: {
+      rootComponent: 'web/App.vue',
+      router: 'web/router/index'
+    },
 
     // https://v2.quasar.dev/quasar-cli-vite/developing-ssr/configuring-ssr
     ssr: {

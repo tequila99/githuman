@@ -1,10 +1,10 @@
 {
-  "name": "githuman-vue",
+  "name": "githuman",
   "version": "0.1.0",
   "description": "Review AI agent code changes before commit — Vue edition",
   "license": "MIT",
   "bin": {
-    "githuman-vue": "./dist/cli/index.js"
+    "githuman": "./dist/cli/index.js"
   },
   "files": [
     "dist/",

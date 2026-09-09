@@ -1,12 +1,14 @@
 node_modules/
 dist/
-.githuman-vue/
+.githuman/
 *.log
 .DS_Store
 .thumbs.db
 test-results/
 playwright-report/
 .playwright-mcp/
+.editorconfig
+.vscode/
 
 # Internal Claude Code planning/session directory — not part of the
 # published project (see .claude/docs/README.md for why ADR/plans live here).

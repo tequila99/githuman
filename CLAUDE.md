@@ -13,9 +13,14 @@ branch/commits) с браузером файлов и подсветкой си�
 - `src/cli/` — команды `serve`/`list`/`export`, парсинг аргументов
   (`node:util` `parseArgs`, не сторонняя библиотека).
 - `src/shared/types.ts` — типы, общие между backend и frontend.
-- `src/{components,pages,stores,composables,boot,router,api,i18n}` —
+- `src/web/{components,pages,stores,composables,boot,router,api,i18n}` —
   frontend на Quasar (Vue 3 + Composition API + `<script setup>`, Pinia,
-  vue-i18n).
+  vue-i18n). `@` в импортах указывает на `src/web` (алиас переопределён в
+  `quasar.config.ts`, т.к. `src/` также содержит `cli`/`server`/`shared`,
+  не относящиеся к веб-приложению). Pinia подключается вручную в
+  `src/web/boot/pinia.ts`, а не через `sourceFiles.store` — у Quasar два
+  несовместимых способа резолвить этот путь (через alias и от корня
+  проекта одновременно), и при нестандартном `@` они расходятся.
 - `tests/server/`, `tests/cli/` — `node:test`, зеркалируют структуру `src/`.
   **Нет тестов для Vue-компонентов** и `tests/e2e/` не существует (несмотря
   на `playwright.config.ts` и скрипт `test:e2e` — известный пробел, не
@@ -67,7 +72,7 @@ pnpm run build        # tsc (server) + quasar build (web) → dist/
   начинаться с `-` (иначе git трактует их как опции, см. историю
   git-инъекций, пофикшено 2026-09-08). Пути с диска (`WORKTREE`-чтения)
   обязаны идти через `resolveWithinRepo()` — не собирать `join(repoPath,
-  userPath)` напрямую.
+userPath)` напрямую.
 - **Тема**: `Dark.set('auto')` по умолчанию + ручной тумблер
   (`use-app-theme.ts`, персистентный в `localStorage`) — см. ADR 0015.
 - **Diff-файлы переиспользуют object identity** между рефетчами
@@ -77,6 +82,14 @@ pnpm run build        # tsc (server) + quasar build (web) → dist/
   2026-09-08).
 - **Подсветка синтаксиса — на уровне файла целиком**, не построчно (ADR
   0011, раздел Shiki, остаётся в силе несмотря на миграцию на Quasar).
+- **Pinia подключается вручную** (`app.use(createPinia())` в
+  `src/web/boot/pinia.ts`, первым в `boot`-массиве), не через
+  `sourceFiles.store` в `quasar.config.ts` — при переопределённом `@`-алиасе
+  (нужен из-за `src/web/`) Quasar резолвит `sourceFiles.store` двумя
+  несовместимыми способами одновременно (через alias — для рантайм-импорта,
+  и от корня проекта — для feature-флага `hasStore`), из-за чего
+  `app.use(store)` тихо не вызывается вообще, без ошибок сборки. Не
+  возвращать `sourceFiles.store` обратно без явного решения этой проблемы.
 
 ## Стиль кода
 
