@@ -8,6 +8,7 @@ import {
   ExportCliError,
   parseExportArgs
 } from '../../../src/cli/commands/export.ts'
+import { DEFAULT_DB_PREFIX } from '../../../src/cli/config.ts'
 import type { Review, Comment } from '../../../src/shared/types.ts'
 
 function makeReview(overrides: Partial<Review> = {}): Review {
@@ -106,22 +107,35 @@ test('parseExportArgs reads the positional id, --format and -o/--output', () => 
   assert.deepEqual(parseExportArgs(['abc-123']), {
     id: 'abc-123',
     format: 'markdown',
-    output: undefined
+    output: undefined,
+    dbPrefix: DEFAULT_DB_PREFIX
   })
   assert.deepEqual(parseExportArgs(['abc-123', '--format', 'json']), {
     id: 'abc-123',
     format: 'json',
-    output: undefined
+    output: undefined,
+    dbPrefix: DEFAULT_DB_PREFIX
   })
   assert.deepEqual(parseExportArgs(['last', '-o', 'out.md']), {
     id: 'last',
     format: 'markdown',
-    output: 'out.md'
+    output: 'out.md',
+    dbPrefix: DEFAULT_DB_PREFIX
   })
   assert.deepEqual(parseExportArgs(['last', '--output', 'out.md']), {
     id: 'last',
     format: 'markdown',
-    output: 'out.md'
+    output: 'out.md',
+    dbPrefix: DEFAULT_DB_PREFIX
+  })
+})
+
+test('parseExportArgs reads --db-prefix', () => {
+  assert.deepEqual(parseExportArgs(['abc-123', '--db-prefix', 'custom-']), {
+    id: 'abc-123',
+    format: 'markdown',
+    output: undefined,
+    dbPrefix: 'custom-'
   })
 })
 

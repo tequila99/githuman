@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../server/app.ts'
 import { createFileDatabase } from '../server/db/index.ts'
-import type { ServeOptions } from './config.ts'
+import { resolveDbPrefix, type ServeOptions } from './config.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -54,16 +54,28 @@ export async function resolveRepositoryPath(cwd: string): Promise<string> {
   }
 }
 
-/** Path to the reviews SQLite file for a given repository, shared by `serve`, `list` and `export`. */
-export function resolveReviewsDbPath(repositoryPath: string): string {
-  return join(repositoryPath, '.githuman', 'reviews.db')
+/**
+ * Path to the reviews SQLite file for a given repository, shared by `serve`,
+ * `list` and `export`. `dbPrefix` defaults (via `resolveDbPrefix`) the same
+ * way `parseServeArgs` does, so callers that don't care about it — like
+ * `serve`/`list`/`export` reading each other's file, or tests — land on the
+ * same path without having to thread the prefix through explicitly.
+ */
+export function resolveReviewsDbPath(
+  repositoryPath: string,
+  dbPrefix?: string
+): string {
+  const prefix = resolveDbPrefix(dbPrefix)
+  return join(repositoryPath, '.githuman', `${prefix}reviews.db`)
 }
 
 export async function startServer(
   options: ServeOptions
 ): Promise<RunningServer> {
   const repositoryPath = await resolveRepositoryPath(process.cwd())
-  const db = createFileDatabase(resolveReviewsDbPath(repositoryPath))
+  const db = createFileDatabase(
+    resolveReviewsDbPath(repositoryPath, options.dbPrefix)
+  )
 
   const app = buildApp({
     staticRoot: resolveStaticRoot(),

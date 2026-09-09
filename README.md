@@ -62,6 +62,27 @@ node dist/cli/index.js export last --format markdown -o review.md
 > аутентификации. Открывая его в локальной сети, любой в этой сети сможет
 > просматривать содержимое репозитория.
 
+### Данные и совместимость с оригинальным mcollina/githuman
+
+Ревью хранятся в `.githuman/ght-reviews.db` (SQLite) в корне анализируемого
+репозитория. Префикс `ght-` — сознательный выбор: оригинальный
+[mcollina/githuman](https://github.com/mcollina/githuman) хранит свои данные
+в том же `.githuman/reviews.db` с несовместимой схемой — без префикса оба
+инструмента затирали бы файлы друг друга при использовании в одном
+репозитории.
+
+Префикс настраивается флагом `--db-prefix` (доступен у `serve`, `list`,
+`export` — указывайте один и тот же для всех трёх) или переменной окружения
+`GITHUMAN_DB_PREFIX`; флаг имеет приоритет над переменной. Пустое значение
+(`--db-prefix ""`) — осознанный режим совместимости: работать с
+`.githuman/reviews.db` оригинального инструмента напрямую (миграция схем на
+вашей ответственности).
+
+```bash
+node dist/cli/index.js serve --db-prefix myteam-   # .githuman/myteam-reviews.db
+node dist/cli/index.js list --db-prefix ""         # .githuman/reviews.db (оригинальный githuman)
+```
+
 ## Разработка
 
 Два процесса нужны одновременно — backend (Fastify, автоперезапуск при

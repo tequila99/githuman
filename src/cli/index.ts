@@ -26,14 +26,18 @@ async function main(argv: string[]): Promise<void> {
     case 'list': {
       const options = parseListArgs(rest)
       const repositoryPath = await resolveRepositoryPath(process.cwd())
-      const db = createFileDatabase(resolveReviewsDbPath(repositoryPath))
+      const db = createFileDatabase(
+        resolveReviewsDbPath(repositoryPath, options.dbPrefix)
+      )
       console.log(runList(db, options))
       return
     }
     case 'export': {
       const options = parseExportArgs(rest)
       const repositoryPath = await resolveRepositoryPath(process.cwd())
-      const db = createFileDatabase(resolveReviewsDbPath(repositoryPath))
+      const db = createFileDatabase(
+        resolveReviewsDbPath(repositoryPath, options.dbPrefix)
+      )
       const output = runExport(db, options.id, options.format)
       if (options.output) {
         writeFileSync(options.output, output)

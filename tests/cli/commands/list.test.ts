@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { createTestDatabase } from '../../../src/server/db/index.ts'
 import { createReview } from '../../../src/server/repositories/review.repo.ts'
 import { runList, parseListArgs } from '../../../src/cli/commands/list.ts'
+import { DEFAULT_DB_PREFIX } from '../../../src/cli/config.ts'
 import type { Review } from '../../../src/shared/types.ts'
 
 function makeReview(overrides: Partial<Review> = {}): Review {
@@ -70,10 +71,27 @@ test('runList({status}) filters to only reviews with that status', () => {
 })
 
 test('parseListArgs reads --json and --status flags', () => {
-  assert.deepEqual(parseListArgs(['--json']), { json: true, status: undefined })
+  assert.deepEqual(parseListArgs(['--json']), {
+    json: true,
+    status: undefined,
+    dbPrefix: DEFAULT_DB_PREFIX
+  })
   assert.deepEqual(parseListArgs(['--status', 'approved']), {
     json: false,
-    status: 'approved'
+    status: 'approved',
+    dbPrefix: DEFAULT_DB_PREFIX
   })
-  assert.deepEqual(parseListArgs([]), { json: false, status: undefined })
+  assert.deepEqual(parseListArgs([]), {
+    json: false,
+    status: undefined,
+    dbPrefix: DEFAULT_DB_PREFIX
+  })
+})
+
+test('parseListArgs reads --db-prefix', () => {
+  assert.deepEqual(parseListArgs(['--db-prefix', 'custom-']), {
+    json: false,
+    status: undefined,
+    dbPrefix: 'custom-'
+  })
 })

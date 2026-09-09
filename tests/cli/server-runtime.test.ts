@@ -1,7 +1,33 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { networkInterfaces } from 'node:os'
-import { startServer } from '../../src/cli/server-runtime.ts'
+import { join } from 'node:path'
+import {
+  startServer,
+  resolveReviewsDbPath
+} from '../../src/cli/server-runtime.ts'
+import { DEFAULT_DB_PREFIX } from '../../src/cli/config.ts'
+
+test('resolveReviewsDbPath prefixes the filename with DEFAULT_DB_PREFIX by default', () => {
+  assert.equal(
+    resolveReviewsDbPath('/repo'),
+    join('/repo', '.githuman', `${DEFAULT_DB_PREFIX}reviews.db`)
+  )
+})
+
+test('resolveReviewsDbPath uses a custom prefix when given one', () => {
+  assert.equal(
+    resolveReviewsDbPath('/repo', 'custom-'),
+    join('/repo', '.githuman', 'custom-reviews.db')
+  )
+})
+
+test('resolveReviewsDbPath with an explicit empty prefix matches the original mcollina/githuman filename', () => {
+  assert.equal(
+    resolveReviewsDbPath('/repo', ''),
+    join('/repo', '.githuman', 'reviews.db')
+  )
+})
 
 function findLanAddress(): string | undefined {
   for (const addresses of Object.values(networkInterfaces())) {
@@ -69,7 +95,6 @@ test('startServer rejects when the requested port is already taken', async t => 
 test('startServer resolves the git repository root and persists reviews across restarts', async t => {
   const { createTempGitRepo } = await import('../server/helpers/git-fixture.ts')
   const { writeFileSync } = await import('node:fs')
-  const { join } = await import('node:path')
 
   const fixture = await createTempGitRepo()
   t.after(fixture.cleanup)

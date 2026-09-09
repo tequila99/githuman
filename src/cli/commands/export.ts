@@ -6,6 +6,7 @@ import {
   ExportNotFoundError
 } from '../../server/services/export.service.ts'
 import { getReviews } from '../../server/services/review.service.ts'
+import { resolveDbPrefix } from '../config.ts'
 
 export class ExportCliError extends Error {}
 
@@ -15,6 +16,7 @@ export interface ExportArgs {
   id: string
   format: ExportFormat
   output: string | undefined
+  dbPrefix: string
 }
 
 export function parseExportArgs(argv: string[]): ExportArgs {
@@ -22,7 +24,8 @@ export function parseExportArgs(argv: string[]): ExportArgs {
     args: argv,
     options: {
       format: { type: 'string', default: 'markdown' },
-      output: { type: 'string', short: 'o' }
+      output: { type: 'string', short: 'o' },
+      'db-prefix': { type: 'string' }
     },
     strict: false,
     allowPositionals: true
@@ -44,7 +47,10 @@ export function parseExportArgs(argv: string[]): ExportArgs {
   return {
     id,
     format: values.format,
-    output: typeof values.output === 'string' ? values.output : undefined
+    output: typeof values.output === 'string' ? values.output : undefined,
+    dbPrefix: resolveDbPrefix(
+      typeof values['db-prefix'] === 'string' ? values['db-prefix'] : undefined
+    )
   }
 }
 
