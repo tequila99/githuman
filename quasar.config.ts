@@ -54,8 +54,13 @@ export default defineConfig(ctx => {
         vueShim: true,
         // Quasar's generated .quasar/tsconfig.json recursively includes the
         // whole project root — carve out the server/cli codebase (which has
-        // its own tsconfig.server.json + typecheck:server script) so vue-tsc
-        // doesn't try to typecheck it as part of the frontend.
+        // its own tsconfig.server.json + typecheck:server script, and
+        // Node-specific globals that don't belong in a DOM lib typecheck)
+        // so vue-tsc doesn't try to typecheck it as part of the frontend.
+        // src/shared is deliberately NOT excluded here — it's plain
+        // dependency-free types with nothing Node-specific, and src/web
+        // imports it directly (via src/web/api/types.ts) instead of
+        // hand-duplicating it, so it needs to stay in vue-tsc's scope.
         extendTsConfig(tsConfig) {
           // Paths here resolve relative to .quasar/, not the project root
           // (matching the ./../dist etc. entries Quasar generates itself).
@@ -63,7 +68,6 @@ export default defineConfig(ctx => {
             ...(tsConfig.exclude ?? []),
             './../src/server',
             './../src/cli',
-            './../src/shared',
             './../tests/server',
             './../tests/cli',
             './../tests/e2e',
@@ -142,7 +146,7 @@ export default defineConfig(ctx => {
       // directives: [],
 
       // Quasar plugins
-      plugins: []
+      plugins: ['LocalStorage']
     },
 
     // animations: 'all', // --- includes all animations

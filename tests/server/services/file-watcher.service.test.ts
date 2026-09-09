@@ -84,3 +84,47 @@ test('watchRepository detects a new subdirectory created after startup', async t
 
   assert.ok(changes >= 1)
 })
+
+test('watchRepository ignores changes inside a .gitignore-d directory by default', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, '.gitignore'), 'ignored-dir/\n')
+  mkdirSync(join(fixture.dir, 'ignored-dir'))
+
+  let changes = 0
+  const watcher = watchRepository(fixture.dir, () => {
+    changes++
+  })
+  t.after(watcher.close)
+
+  writeFileSync(join(fixture.dir, 'ignored-dir', 'file.txt'), 'content')
+
+  await delay(500)
+
+  assert.equal(changes, 0)
+})
+
+test('watchRepository respectGitignore: false watches .gitignore-d directories too', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, '.gitignore'), 'ignored-dir/\n')
+  mkdirSync(join(fixture.dir, 'ignored-dir'))
+
+  let changes = 0
+  const watcher = watchRepository(
+    fixture.dir,
+    () => {
+      changes++
+    },
+    { respectGitignore: false }
+  )
+  t.after(watcher.close)
+
+  writeFileSync(join(fixture.dir, 'ignored-dir', 'file.txt'), 'content')
+
+  await delay(500)
+
+  assert.equal(changes, 1)
+})

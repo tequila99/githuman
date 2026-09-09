@@ -26,7 +26,9 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   py: 'python',
   go: 'go',
   rs: 'rust',
-  java: 'java'
+  java: 'java',
+  kt: 'kotlin',
+  kts: 'kotlin'
 }
 
 // Explicit per-language dynamic imports (not a template literal) so the
@@ -48,7 +50,8 @@ const LANG_LOADERS: Record<string, () => LanguageInput> = {
   python: () => import('shiki/langs/python.mjs'),
   go: () => import('shiki/langs/go.mjs'),
   rust: () => import('shiki/langs/rust.mjs'),
-  java: () => import('shiki/langs/java.mjs')
+  java: () => import('shiki/langs/java.mjs'),
+  kotlin: () => import('shiki/langs/kotlin.mjs')
 }
 
 const THEME_LOADERS = {

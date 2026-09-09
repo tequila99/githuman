@@ -1,35 +1,28 @@
+import { ref } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { apiGet } from '@/api/client'
 import type { RepositoryInfo } from '@/api/types'
 
-export interface RepositoryState {
-  info: RepositoryInfo | null
-  loading: boolean
-  error: string | null
-}
+export const useRepositoryStore = defineStore('repository', () => {
+  const info = ref<RepositoryInfo | null>(null)
+  const loading = ref(false)
+  const error = ref<string | null>(null)
 
-export const useRepositoryStore = defineStore('repository', {
-  state: (): RepositoryState => ({
-    info: null,
-    loading: false,
-    error: null
-  }),
+  async function fetchInfo() {
+    loading.value = true
+    error.value = null
 
-  actions: {
-    async fetchInfo() {
-      this.loading = true
-      this.error = null
-
-      try {
-        this.info = await apiGet<RepositoryInfo>('/api/git/info')
-      } catch (error) {
-        this.info = null
-        this.error = error instanceof Error ? error.message : String(error)
-      } finally {
-        this.loading = false
-      }
+    try {
+      info.value = await apiGet<RepositoryInfo>('/api/git/info')
+    } catch (err) {
+      info.value = null
+      error.value = err instanceof Error ? err.message : String(err)
+    } finally {
+      loading.value = false
     }
   }
+
+  return { info, loading, error, fetchInfo }
 })
 
 if (import.meta.hot) {

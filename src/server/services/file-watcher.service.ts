@@ -1,5 +1,6 @@
 import { watch, readdirSync, statSync, type FSWatcher } from 'node:fs'
-import { join, basename } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { join, basename, relative, sep } from 'node:path'
 
 const IGNORED_DIR_NAMES = new Set([
   'node_modules',
@@ -17,6 +18,54 @@ export interface FileWatcherHandle {
   close: () => void
 }
 
+export interface WatchRepositoryOptions {
+  /**
+   * Also skip directories `.gitignore` (plus `.git/info/exclude` and the
+   * user's global gitignore) marks as fully ignored, on top of
+   * `IGNORED_DIR_NAMES` — covers repo-specific heavy/generated directories
+   * (build output, virtualenvs, editor caches, ...) without hardcoding
+   * every project's conventions here. Asks git directly rather than
+   * re-implementing gitignore's pattern syntax (negation, anchoring,
+   * nested `.gitignore` files) by hand. Silently has no effect if
+   * `repoPath` isn't a git repository. Default `true`.
+   */
+  respectGitignore?: boolean
+}
+
+/**
+ * Directories git considers fully ignored, one level at a time — i.e. a
+ * directory appears here only if *everything* inside it is ignored (a
+ * partially-ignored directory still needs walking, for its non-ignored
+ * files), matching the granularity `IGNORED_DIR_NAMES` already works at.
+ * `git ls-files --directory` collapses such a directory into one entry
+ * instead of recursing into it, so this is cheap even for a huge ignored
+ * tree like `node_modules`.
+ */
+function listGitignoredDirs(repoPath: string): Set<string> {
+  try {
+    const stdout = execFileSync(
+      'git',
+      [
+        'ls-files',
+        '-z',
+        '--others',
+        '--ignored',
+        '--exclude-standard',
+        '--directory'
+      ],
+      { cwd: repoPath, encoding: 'utf-8' }
+    )
+    return new Set(
+      stdout
+        .split('\0')
+        .filter(entry => entry.endsWith('/'))
+        .map(entry => entry.slice(0, -1))
+    )
+  } catch {
+    return new Set() // Not a git repo, or git isn't available — IGNORED_DIR_NAMES still applies.
+  }
+}
+
 /**
  * Watches a repository's working tree for changes, so the app can tell
  * clients to refresh their diff/file-tree view.
@@ -31,10 +80,22 @@ export interface FileWatcherHandle {
  */
 export function watchRepository(
   repoPath: string,
-  onChange: () => void
+  onChange: () => void,
+  options: WatchRepositoryOptions = {}
 ): FileWatcherHandle {
+  const gitignoredDirs =
+    (options.respectGitignore ?? true)
+      ? listGitignoredDirs(repoPath)
+      : new Set<string>()
   const watchers: FSWatcher[] = []
   let debounceTimer: NodeJS.Timeout | undefined
+
+  function isIgnoredDir(path: string): boolean {
+    if (IGNORED_DIR_NAMES.has(basename(path))) {
+      return true
+    }
+    return gitignoredDirs.has(relative(repoPath, path).split(sep).join('/'))
+  }
 
   function scheduleChange() {
     clearTimeout(debounceTimer)
@@ -49,7 +110,7 @@ export function watchRepository(
       return // Already gone (e.g. a rapid create+delete) — nothing to watch.
     }
 
-    if (stat.isDirectory() && !IGNORED_DIR_NAMES.has(basename(path))) {
+    if (stat.isDirectory() && !isIgnoredDir(path)) {
       watchDir(path)
     }
   }
@@ -76,8 +137,9 @@ export function watchRepository(
     }
 
     for (const entry of entries) {
-      if (entry.isDirectory() && !IGNORED_DIR_NAMES.has(entry.name)) {
-        watchDir(join(dir, entry.name))
+      const entryPath = join(dir, entry.name)
+      if (entry.isDirectory() && !isIgnoredDir(entryPath)) {
+        watchDir(entryPath)
       }
     }
   }

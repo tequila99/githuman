@@ -43,7 +43,10 @@ export interface FileTreeNode {
   path: string
   type: 'file' | 'directory'
   isChanged: boolean
-  children?: FileTreeNode[]
+  /** `| undefined` (not just optional) because src/web's file-tree building
+   *  code assigns `undefined` explicitly, which `exactOptionalPropertyTypes`
+   *  (enabled for the web build only) treats as distinct from omitting it. */
+  children?: FileTreeNode[] | undefined
 }
 
 export interface FileTreeResponse {
@@ -51,7 +54,8 @@ export interface FileTreeResponse {
   files: string[]
 }
 
-export interface FileContentAtRef {
+/** Response shape of `GET /api/git/file/*` (see src/server/routes/git.ts). */
+export interface FileContentResponse {
   path: string
   ref: string
   content: string

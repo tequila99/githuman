@@ -10,6 +10,13 @@ import { formatStartupMessage } from './startup-message.ts'
 import { parseListArgs, runList } from './commands/list.ts'
 import { parseExportArgs, runExport } from './commands/export.ts'
 import { createFileDatabase } from '../server/db/index.ts'
+import type { DatabaseSync } from 'node:sqlite'
+
+/** Opens the reviews DB for the repo at cwd, shared by `list` and `export`. */
+async function openReviewsDb(dbPrefix: string): Promise<DatabaseSync> {
+  const repositoryPath = await resolveRepositoryPath(process.cwd())
+  return createFileDatabase(resolveReviewsDbPath(repositoryPath, dbPrefix))
+}
 
 async function main(argv: string[]): Promise<void> {
   const [command, ...rest] = argv
@@ -18,26 +25,18 @@ async function main(argv: string[]): Promise<void> {
     case 'serve': {
       const options = parseServeArgs(rest)
       const { url } = await startServer(options)
-      for (const line of formatStartupMessage(url, options.host)) {
-        console.log(line)
-      }
+      console.log(formatStartupMessage(url, options.host))
       return
     }
     case 'list': {
       const options = parseListArgs(rest)
-      const repositoryPath = await resolveRepositoryPath(process.cwd())
-      const db = createFileDatabase(
-        resolveReviewsDbPath(repositoryPath, options.dbPrefix)
-      )
+      const db = await openReviewsDb(options.dbPrefix)
       console.log(runList(db, options))
       return
     }
     case 'export': {
       const options = parseExportArgs(rest)
-      const repositoryPath = await resolveRepositoryPath(process.cwd())
-      const db = createFileDatabase(
-        resolveReviewsDbPath(repositoryPath, options.dbPrefix)
-      )
+      const db = await openReviewsDb(options.dbPrefix)
       const output = runExport(db, options.id, options.format)
       if (options.output) {
         writeFileSync(options.output, output)

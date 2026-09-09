@@ -1,3 +1,4 @@
+import { ref, computed } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { apiGet } from '@/api/client'
 import { decodeGitPath } from '@/utils/git-path'
@@ -35,56 +36,45 @@ function reconcileFiles(previous: DiffFile[], next: DiffFile[]): DiffFile[] {
 
 export type DiffSource = 'staged' | 'unstaged'
 
-export interface DiffState {
-  stagedFiles: DiffFile[]
-  unstagedFiles: DiffFile[]
-  loading: boolean
-  error: string | null
-}
+export const useDiffStore = defineStore('diff', () => {
+  const stagedFiles = ref<DiffFile[]>([])
+  const unstagedFiles = ref<DiffFile[]>([])
+  const loading = ref(false)
+  const error = ref<string | null>(null)
 
-export const useDiffStore = defineStore('diff', {
-  state: (): DiffState => ({
-    stagedFiles: [],
-    unstagedFiles: [],
-    loading: false,
-    error: null
-  }),
+  const changedPaths = computed(() =>
+    [...stagedFiles.value, ...unstagedFiles.value].map(
+      file => file.newPath || file.oldPath
+    )
+  )
 
-  getters: {
-    changedPaths(state): string[] {
-      return [...state.stagedFiles, ...state.unstagedFiles].map(
-        file => file.newPath || file.oldPath
+  async function fetchDiff() {
+    loading.value = true
+    error.value = null
+
+    try {
+      const [staged, unstaged] = await Promise.all([
+        apiGet<DiffFile[]>('/api/diff/staged'),
+        apiGet<DiffFile[]>('/api/diff/unstaged')
+      ])
+      stagedFiles.value = reconcileFiles(
+        stagedFiles.value,
+        staged.map(decodeDiffFile)
       )
-    }
-  },
-
-  actions: {
-    async fetchDiff() {
-      this.loading = true
-      this.error = null
-
-      try {
-        const [staged, unstaged] = await Promise.all([
-          apiGet<DiffFile[]>('/api/diff/staged'),
-          apiGet<DiffFile[]>('/api/diff/unstaged')
-        ])
-        this.stagedFiles = reconcileFiles(
-          this.stagedFiles,
-          staged.map(decodeDiffFile)
-        )
-        this.unstagedFiles = reconcileFiles(
-          this.unstagedFiles,
-          unstaged.map(decodeDiffFile)
-        )
-      } catch (error) {
-        this.stagedFiles = []
-        this.unstagedFiles = []
-        this.error = error instanceof Error ? error.message : String(error)
-      } finally {
-        this.loading = false
-      }
+      unstagedFiles.value = reconcileFiles(
+        unstagedFiles.value,
+        unstaged.map(decodeDiffFile)
+      )
+    } catch (err) {
+      stagedFiles.value = []
+      unstagedFiles.value = []
+      error.value = err instanceof Error ? err.message : String(err)
+    } finally {
+      loading.value = false
     }
   }
+
+  return { stagedFiles, unstagedFiles, loading, error, changedPaths, fetchDiff }
 })
 
 if (import.meta.hot) {

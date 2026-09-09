@@ -1,4 +1,4 @@
-export function formatStartupMessage(url: string, host: string): string[] {
+export function formatStartupMessage(url: string, host: string): string {
   const lines = [`githuman listening on ${url}`]
 
   if (host !== 'localhost' && host !== '127.0.0.1') {
@@ -7,5 +7,5 @@ export function formatStartupMessage(url: string, host: string): string[] {
     )
   }
 
-  return lines
+  return lines.join('\n')
 }

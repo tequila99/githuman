@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { copyToClipboard } from 'quasar'
 
 const props = defineProps<{ value: string; tooltip: string }>()
 
@@ -8,14 +9,19 @@ let resetTimer: ReturnType<typeof setTimeout> | undefined
 
 async function copy() {
   try {
-    await navigator.clipboard.writeText(props.value)
+    // Quasar's helper falls back to a hidden-textarea + execCommand('copy')
+    // when navigator.clipboard is unavailable — notably in an insecure
+    // context, which is exactly what `serve --host 0.0.0.0` (ADR 0008) is:
+    // plain http:// on the LAN. A bare navigator.clipboard.writeText() call
+    // would silently no-op for every LAN user.
+    await copyToClipboard(props.value)
     copied.value = true
     clearTimeout(resetTimer)
     resetTimer = setTimeout(() => {
       copied.value = false
     }, 1500)
   } catch {
-    // Clipboard API unavailable (e.g. insecure context) — nothing to recover.
+    // Clipboard unavailable even with the fallback — nothing to recover.
   }
 }
 </script>

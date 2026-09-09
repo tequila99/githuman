@@ -46,6 +46,23 @@ export function resolveDbPrefix(explicit?: string): string {
   return DEFAULT_DB_PREFIX
 }
 
+function resolvePort(explicit: string | undefined): number {
+  if (explicit === undefined) {
+    return DEFAULT_PORT
+  }
+  const parsed = Number(explicit)
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
+    throw new Error(
+      `Invalid --port value "${explicit}": must be an integer between 1 and 65535`
+    )
+  }
+  return parsed
+}
+
+function resolveHost(explicit: string | undefined): string {
+  return explicit !== undefined && explicit.length > 0 ? explicit : DEFAULT_HOST
+}
+
 export function parseServeArgs(argv: string[]): ServeOptions {
   const { values } = parseArgs({
     args: argv,
@@ -59,21 +76,12 @@ export function parseServeArgs(argv: string[]): ServeOptions {
     strict: false
   })
 
-  let port = DEFAULT_PORT
-  if (values.port !== undefined) {
-    const parsed = Number(values.port)
-    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 65535) {
-      throw new Error(
-        `Invalid --port value "${String(values.port)}": must be an integer between 1 and 65535`
-      )
-    }
-    port = parsed
-  }
-
-  const host =
-    typeof values.host === 'string' && values.host.length > 0
-      ? values.host
-      : DEFAULT_HOST
+  const port = resolvePort(
+    typeof values.port === 'string' ? values.port : undefined
+  )
+  const host = resolveHost(
+    typeof values.host === 'string' ? values.host : undefined
+  )
   const open = values['no-open'] === true ? false : values.open !== false
   const dbPrefix = resolveDbPrefix(
     typeof values['db-prefix'] === 'string' ? values['db-prefix'] : undefined
