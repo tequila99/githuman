@@ -1,0 +1,50 @@
+name: Branch guard
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, reopened, synchronize, edited]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate source and target branches
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          if [ "$BASE" = "main" ] && [ "$HEAD" != "develop" ]; then
+            echo "::error::PRs into main are only allowed from develop (got: $HEAD)"
+            exit 1
+          fi
+
+          if [ "$BASE" = "develop" ]; then
+            if [ "$HEAD" = "main" ]; then
+              echo "::error::PRs from main into develop are not allowed"
+              exit 1
+            fi
+            if [[ ! "$HEAD" =~ ^(feature|fix|chore)/[0-9]+-[a-z0-9-]+$ ]]; then
+              echo "::error::PRs into develop are only allowed from feature|fix|chore/<issue>-<slug> (got: $HEAD)"
+              exit 1
+            fi
+          fi
+
+      - name: Validate PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+          HEAD: ${{ github.head_ref }}
+        run: |
+          if [[ ! "$TITLE" =~ ^\[#[0-9]+\][[:space:]]+[^[:space:]].*$ ]]; then
+            echo "::error::PR title must match '[#<issue>] <name>' (got: $TITLE)"
+            exit 1
+          fi
+
+          if [[ "$HEAD" =~ ^(feature|fix|chore)/([0-9]+)- ]]; then
+            BRANCH_ISSUE="${BASH_REMATCH[2]}"
+            TITLE_ISSUE="$(echo "$TITLE" | grep -oP '^\[#\K[0-9]+')"
+            if [ "$TITLE_ISSUE" != "$BRANCH_ISSUE" ]; then
+              echo "::error::PR title references issue #$TITLE_ISSUE but branch $HEAD references #$BRANCH_ISSUE"
+              exit 1
+            fi
+          fi
