@@ -4,6 +4,8 @@ import type { FastifyInstance } from 'fastify'
 import {
   getRepositoryInfo,
   stagePaths,
+  unstagePaths,
+  discardPaths,
   getFilesAtRef,
   getFileAtRef
 } from '../services/git.service.ts'
@@ -12,16 +14,22 @@ export interface GitRoutesOptions {
   repositoryPath: string
 }
 
-interface StageRequestBody {
-  paths?: string[]
-}
-
 const TreeParams = Type.Object({
   ref: Type.String({ minLength: 1 })
 })
 
 const FileContentQuery = Type.Object({
   ref: Type.String({ minLength: 1 })
+})
+
+/** Body for `/stage` and `/unstage`: an omitted/empty `paths` means "all". */
+const OptionalPathsBody = Type.Object({
+  paths: Type.Optional(Type.Array(Type.String()))
+})
+
+/** Body for `/discard`: `paths` is required — no "discard everything". */
+const DiscardBody = Type.Object({
+  paths: Type.Array(Type.String(), { minItems: 1 })
 })
 
 export async function gitRoutes(
@@ -35,11 +43,49 @@ export async function gitRoutes(
     return getRepositoryInfo(repositoryPath)
   })
 
-  app.post<{ Body: StageRequestBody }>(
+  typedApp.post<{ Body: Static<typeof OptionalPathsBody> }>(
     '/api/git/stage',
+    { schema: { body: OptionalPathsBody } },
     async (request, reply) => {
-      await stagePaths(repositoryPath, request.body?.paths ?? [])
-      reply.send({ ok: true })
+      try {
+        await stagePaths(repositoryPath, request.body.paths ?? [])
+        return { ok: true }
+      } catch (err) {
+        reply.code(400)
+        const message = err instanceof Error ? err.message : 'Failed to stage'
+        return { error: 'Bad Request', message, statusCode: 400 }
+      }
+    }
+  )
+
+  typedApp.post<{ Body: Static<typeof OptionalPathsBody> }>(
+    '/api/git/unstage',
+    { schema: { body: OptionalPathsBody } },
+    async (request, reply) => {
+      try {
+        await unstagePaths(repositoryPath, request.body.paths ?? [])
+        return { ok: true }
+      } catch (err) {
+        reply.code(400)
+        const message = err instanceof Error ? err.message : 'Failed to unstage'
+        return { error: 'Bad Request', message, statusCode: 400 }
+      }
+    }
+  )
+
+  typedApp.post<{ Body: Static<typeof DiscardBody> }>(
+    '/api/git/discard',
+    { schema: { body: DiscardBody } },
+    async (request, reply) => {
+      try {
+        await discardPaths(repositoryPath, request.body.paths)
+        return { ok: true }
+      } catch (err) {
+        reply.code(400)
+        const message =
+          err instanceof Error ? err.message : 'Failed to discard changes'
+        return { error: 'Bad Request', message, statusCode: 400 }
+      }
     }
   )
 

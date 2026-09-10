@@ -44,6 +44,19 @@ export default {
       modified: 'Modified',
       deleted: 'Deleted',
       renamed: 'Renamed'
+    },
+    actions: {
+      stage: 'Stage file',
+      unstage: 'Unstage file',
+      discard: 'Discard changes',
+      discardConfirmTitle: 'Discard changes?',
+      discardConfirmMessage:
+        'This will permanently discard changes to "{path}". This cannot be undone.',
+      discardConfirmOk: 'Discard',
+      discardConfirmCancel: 'Cancel',
+      stageError: 'Failed to stage file',
+      unstageError: 'Failed to unstage file',
+      discardError: 'Failed to discard changes'
     }
   },
   browse: {

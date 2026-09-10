@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { writeFileSync } from 'node:fs'
+import { writeFileSync, unlinkSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createTempGitRepo } from '../helpers/git-fixture.ts'
 import {
@@ -10,6 +10,8 @@ import {
   listUntrackedPaths,
   getRepositoryInfo,
   stagePaths,
+  unstagePaths,
+  discardPaths,
   assertSafeRef
 } from '../../../src/server/services/git.service.ts'
 
@@ -319,6 +321,143 @@ test('stagePaths with no paths stages everything (tracked edits and untracked ne
   assert.deepEqual(staged.map(c => c.newPath).sort(), ['a.txt', 'new.txt'])
   assert.deepEqual(unstaged, [])
   assert.deepEqual(untracked, [])
+})
+
+test('unstagePaths unstages exactly the given paths, leaving other staged changes alone', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'a1\n')
+  writeFileSync(join(fixture.dir, 'b.txt'), 'b1\n')
+  await fixture.git.add(['a.txt', 'b.txt'])
+  await fixture.git.commit('initial')
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'a2\n')
+  writeFileSync(join(fixture.dir, 'b.txt'), 'b2\n')
+  await fixture.git.add(['a.txt', 'b.txt'])
+
+  await unstagePaths(fixture.dir, ['a.txt'])
+
+  const staged = await listChangedPaths(fixture.dir, ['--cached'])
+  const unstaged = await listChangedPaths(fixture.dir, [])
+
+  assert.deepEqual(
+    staged.map(c => c.newPath),
+    ['b.txt']
+  )
+  assert.deepEqual(
+    unstaged.map(c => c.newPath),
+    ['a.txt']
+  )
+})
+
+test('unstagePaths with no paths unstages everything', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'a1\n')
+  writeFileSync(join(fixture.dir, 'b.txt'), 'b1\n')
+  await fixture.git.add(['a.txt', 'b.txt'])
+  await fixture.git.commit('initial')
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'a2\n')
+  writeFileSync(join(fixture.dir, 'b.txt'), 'b2\n')
+  await fixture.git.add(['a.txt', 'b.txt'])
+
+  await unstagePaths(fixture.dir, [])
+
+  const staged = await listChangedPaths(fixture.dir, ['--cached'])
+  const unstaged = await listChangedPaths(fixture.dir, [])
+
+  assert.deepEqual(staged, [])
+  assert.deepEqual(unstaged.map(c => c.newPath).sort(), ['a.txt', 'b.txt'])
+})
+
+test('discardPaths restores a tracked modified file to its last-staged content', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'original\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('initial')
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'unstaged edit\n')
+
+  await discardPaths(fixture.dir, ['a.txt'])
+
+  const content = await getFileAtRef(fixture.dir, 'WORKTREE', 'a.txt')
+  assert.equal(content.content, 'original\n')
+})
+
+test('discardPaths restores a tracked deleted file', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'original\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('initial')
+
+  unlinkSync(join(fixture.dir, 'a.txt'))
+  assert.equal(existsSync(join(fixture.dir, 'a.txt')), false)
+
+  await discardPaths(fixture.dir, ['a.txt'])
+
+  assert.equal(existsSync(join(fixture.dir, 'a.txt')), true)
+  const content = await getFileAtRef(fixture.dir, 'WORKTREE', 'a.txt')
+  assert.equal(content.content, 'original\n')
+})
+
+test('discardPaths deletes an untracked new file', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'a\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('initial')
+
+  writeFileSync(join(fixture.dir, 'new.txt'), 'brand new\n')
+
+  await discardPaths(fixture.dir, ['new.txt'])
+
+  assert.equal(existsSync(join(fixture.dir, 'new.txt')), false)
+})
+
+test('discardPaths handles a mix of tracked-modified, tracked-deleted, and untracked-new paths in one call', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'modified.txt'), 'v1\n')
+  writeFileSync(join(fixture.dir, 'deleted.txt'), 'bye\n')
+  await fixture.git.add(['modified.txt', 'deleted.txt'])
+  await fixture.git.commit('initial')
+
+  writeFileSync(join(fixture.dir, 'modified.txt'), 'v2\n')
+  unlinkSync(join(fixture.dir, 'deleted.txt'))
+  writeFileSync(join(fixture.dir, 'new.txt'), 'brand new\n')
+
+  await discardPaths(fixture.dir, ['modified.txt', 'deleted.txt', 'new.txt'])
+
+  assert.equal(
+    (await getFileAtRef(fixture.dir, 'WORKTREE', 'modified.txt')).content,
+    'v1\n'
+  )
+  assert.equal(existsSync(join(fixture.dir, 'deleted.txt')), true)
+  assert.equal(existsSync(join(fixture.dir, 'new.txt')), false)
+})
+
+test('discardPaths does nothing when given an empty array', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'a1\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('initial')
+  writeFileSync(join(fixture.dir, 'a.txt'), 'a2\n')
+
+  await discardPaths(fixture.dir, [])
+
+  const content = await getFileAtRef(fixture.dir, 'WORKTREE', 'a.txt')
+  assert.equal(content.content, 'a2\n')
 })
 
 test("getFileAtRef('WORKTREE', ...) refuses to read a path that escapes the repository root", async t => {

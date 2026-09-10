@@ -30,13 +30,13 @@ const { isDark, toggleTheme } = useAppTheme()
         @click="emit('toggle-drawer')"
       />
 
-      <q-toolbar-title shrink class="text-weight-bold">
+      <q-toolbar-title shrink class="text-weight-bold gt-xs">
         {{ t('app.title') }}
       </q-toolbar-title>
 
       <div
         v-if="info"
-        class="row items-center q-gutter-x-sm text-body2 q-ml-md gt-xs repo-info"
+        class="row items-center q-gutter-x-sm text-body2 q-ml-md gt-sm repo-info"
         :class="isDark ? 'text-grey-5' : 'text-grey-7'"
       >
         <span class="text-weight-medium">{{ info.name }}</span>
@@ -50,7 +50,7 @@ const { isDark, toggleTheme } = useAppTheme()
 
       <q-space />
 
-      <div class="row items-center gt-xs">
+      <div class="row items-center gt-sm">
         <q-btn :to="{ path: '/' }" flat no-caps :label="t('nav.changes')" />
         <q-btn
           :to="{ path: '/reviews' }"
@@ -58,25 +58,25 @@ const { isDark, toggleTheme } = useAppTheme()
           no-caps
           :label="t('nav.reviews')"
         />
-
-        <q-btn
-          v-ripple
-          flat
-          round
-          dense
-          size="sm"
-          :icon="isDark ? 'light_mode' : 'dark_mode'"
-          :aria-label="
-            isDark ? t('theme.switchToLight') : t('theme.switchToDark')
-          "
-          class="q-ml-xs"
-          @click="toggleTheme"
-        >
-          <q-tooltip>{{
-            isDark ? t('theme.switchToLight') : t('theme.switchToDark')
-          }}</q-tooltip>
-        </q-btn>
       </div>
+
+      <q-btn
+        v-ripple
+        flat
+        round
+        dense
+        size="sm"
+        :icon="isDark ? 'light_mode' : 'dark_mode'"
+        :aria-label="
+          isDark ? t('theme.switchToLight') : t('theme.switchToDark')
+        "
+        class="q-ml-xs gt-xs"
+        @click="toggleTheme"
+      >
+        <q-tooltip>{{
+          isDark ? t('theme.switchToLight') : t('theme.switchToDark')
+        }}</q-tooltip>
+      </q-btn>
     </q-toolbar>
   </q-header>
 </template>
