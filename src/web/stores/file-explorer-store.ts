@@ -143,15 +143,39 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     })
   }
 
-  /** Refreshes diff/tree data after an external change (e.g. a 'files:changed' SSE event). */
-  async function refresh() {
-    await diffStore.fetchDiff()
-    if (browseMode.value) {
-      await fetchTree('WORKTREE', diffStore.changedPaths)
-      if (selectedPath.value) {
-        await fetchBrowseFileContent(selectedPath.value, 'WORKTREE')
+  // file-watcher.service.ts debounces this long before emitting `files:changed` after a git
+  // mutation, so an explicit refresh() is reliably followed by a same-mutation SSE echo within
+  // this window.
+  const REFRESH_ECHO_WINDOW_MS = 400
+
+  let pendingRefresh: Promise<void> | null = null
+  let refreshedAt = 0
+
+  /** Coalesces overlapping calls into a single in-flight fetch. */
+  function doRefresh(): Promise<void> {
+    return (pendingRefresh ??= (async () => {
+      await diffStore.fetchDiff()
+      if (browseMode.value) {
+        await fetchTree('WORKTREE', diffStore.changedPaths)
+        if (selectedPath.value) {
+          await fetchBrowseFileContent(selectedPath.value, 'WORKTREE')
+        }
       }
-    }
+    })().finally(() => {
+      pendingRefresh = null
+    }))
+  }
+
+  /** Always fetches. Call after anything the UI itself just did (mount, stage/unstage/discard). */
+  async function refresh() {
+    refreshedAt = Date.now()
+    await doRefresh()
+  }
+
+  /** Fetches on a 'files:changed' SSE event, unless it's an echo of our own recent refresh(). */
+  async function refreshFromServerEvent() {
+    if (Date.now() - refreshedAt < REFRESH_ECHO_WINDOW_MS) return
+    await doRefresh()
   }
 
   return {
@@ -177,7 +201,8 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     expandAllFiles,
     collapseAllFiles,
     selectFile,
-    refresh
+    refresh,
+    refreshFromServerEvent
   }
 })
 
