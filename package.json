@@ -1,8 +1,16 @@
 {
-  "name": "githuman",
+  "name": "@tequila99/githuman",
   "version": "0.1.0",
   "description": "Review AI agent code changes before commit — Vue edition",
+  "homepage": "https://github.com/tequila99/githuman#readme",
+  "bugs": {
+    "url": "https://github.com/tequila99/githuman/issues"
+  },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tequila99/githuman.git"
+  },
   "bin": {
     "githuman": "./dist/cli/index.js"
   },
@@ -11,6 +19,9 @@
     "README.md"
   ],
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "dev": "quasar dev",
     "dev:server": "node --watch-path=src src/cli/index.ts serve --no-open",
@@ -29,7 +40,7 @@
     "typecheck:web": "vue-tsc --noEmit",
     "lint": "oxfmt && oxlint --fix",
     "lint:check": "oxfmt --check && oxlint",
-    "postinstall": "quasar prepare --silent",
+    "postinstall": "node -e \"require('node:fs').existsSync('quasar.config.ts')&&require('node:child_process').execSync('quasar prepare --silent',{stdio:'inherit'})\"",
     "prepublishOnly": "npm run build && npm run typecheck && npm test"
   },
   "dependencies": {
@@ -40,34 +51,34 @@
     "@fastify/swagger": "^9.0.0",
     "@fastify/swagger-ui": "^5.0.0",
     "@fastify/type-provider-typebox": "^6.1.0",
-    "@fontsource/fira-code": "^5.3.0",
-    "@fontsource/jetbrains-mono": "^5.3.0",
-    "@fontsource/syne": "^5.3.0",
-    "@quasar/extras": "^2.0.4",
     "@sinclair/typebox": "^0.34.52",
     "diff": "^5.2.0",
     "fastify": "^5.0.0",
     "fastify-plugin": "^5.0.0",
-    "pinia": "^4.0.2",
-    "quasar": "^2.30.1",
     "shiki": "^4.4.3",
-    "simple-git": "^3.25.0",
-    "vue": "^3.5.22",
-    "vue-i18n": "^11.3.0",
-    "vue-router": "^5.0.6"
+    "simple-git": "^3.25.0"
   },
   "devDependencies": {
+    "@fontsource/fira-code": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/syne": "^5.3.0",
     "@intlify/unplugin-vue-i18n": "^11.0.0",
     "@playwright/test": "^1.57.0",
     "@quasar/app-vite": "^3.8.1",
+    "@quasar/extras": "^2.0.4",
     "@types/diff": "^5.2.0",
     "@types/node": "^22.19.11",
     "autoprefixer": "^10.4.27",
     "oxfmt": "^0.x",
     "oxlint": "^1.x",
     "oxlint-tsgolint": "^7.0.2001",
+    "pinia": "^4.0.2",
     "postcss": "^8.5.8",
+    "quasar": "^2.30.1",
     "typescript": "^6.0.0",
+    "vue": "^3.5.22",
+    "vue-i18n": "^11.3.0",
+    "vue-router": "^5.0.6",
     "vue-tsc": "^3.3.3"
   },
   "engines": {
