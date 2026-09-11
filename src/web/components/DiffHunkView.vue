@@ -30,6 +30,6 @@ const header = computed(
 <style scoped>
 .diff-hunk__header {
   padding: 2px 12px;
-  font-size: 12px;
+  font-size: var(--code-font-size);
 }
 </style>

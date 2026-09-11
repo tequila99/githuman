@@ -47,7 +47,7 @@ function tokenColor(token: HighlightedToken): string | undefined {
 
 <style scoped>
 .diff-line {
-  font-size: 12px;
+  font-size: var(--code-font-size);
   line-height: 20px;
 }
 

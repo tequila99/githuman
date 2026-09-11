@@ -37,7 +37,24 @@ staged/unstaged diff, сравнение веток и коммитов, бра�
 
 ## Установка и запуск
 
-Требуется Node.js ≥ 24 (используется нативный `node:sqlite`) и pnpm.
+Требуется Node.js ≥ 24 (используется нативный `node:sqlite`).
+
+### Быстрый старт (npx)
+
+Без клонирования и локальной установки — пакет опубликован на npm как
+[`@tequila99/githuman`](https://www.npmjs.com/package/@tequila99/githuman):
+
+```bash
+npx @tequila99/githuman serve
+```
+
+Запускать из корня того `git`-репозитория, изменения в котором нужно
+просматривать (определяется как `git rev-parse --show-toplevel` от текущей
+директории).
+
+### Из исходников
+
+Требуется pnpm.
 
 ```bash
 git clone <url-этого-репозитория>

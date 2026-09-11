@@ -34,7 +34,7 @@ function tokenColor(token: HighlightedToken): string | undefined {
 
 <style scoped>
 .file-content-line {
-  font-size: 12px;
+  font-size: var(--code-font-size);
   line-height: 20px;
 }
 
