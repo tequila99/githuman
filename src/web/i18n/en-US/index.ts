@@ -66,5 +66,64 @@ export default {
     noFiles: 'No files to display',
     noMatchingFiles: 'No matching files',
     selectFile: 'Select a file to view its contents'
+  },
+  reviews: {
+    startReview: 'New review',
+    status: {
+      in_progress: 'In progress',
+      approved: 'Approved',
+      changes_requested: 'Changes requested'
+    },
+    confirmStatusChange: {
+      title: 'Change review status?',
+      message: 'Do you really want to change the review status to "{status}"?',
+      ok: 'Change',
+      cancel: 'Cancel'
+    },
+    list: {
+      unnamed: 'Unnamed review',
+      unknownBranch: 'Unknown branch',
+      empty: 'No reviews yet on this branch.',
+      emptyAction: 'Go to Changes to start one'
+    },
+    filters: {
+      searchPlaceholder: 'Search by name...',
+      from: 'From',
+      to: 'To',
+      files: 'Files',
+      filesHint: 'Type a file path and press Enter'
+    },
+    create: {
+      title: 'New review',
+      nameLabel: 'Name (optional)',
+      nameHint: 'Auto-generated from the source and current time if left blank',
+      submit: 'Create'
+    },
+    detail: {
+      notFound: 'Review not found',
+      noComments: 'No commented files in this review yet',
+      download: 'Download review',
+      downloadError: 'Failed to download review'
+    },
+    comments: {
+      count: '{count} comments',
+      line: 'Line {line}',
+      lineRange: 'Lines {start}-{end}',
+      placeholder: 'Leave a comment...',
+      submit: 'Comment',
+      save: 'Save',
+      cancel: 'Cancel',
+      edit: 'Edit',
+      delete: 'Delete',
+      deleteConfirmTitle: 'Delete comment?',
+      deleteConfirmMessage:
+        'This will permanently delete this comment. This cannot be undone.',
+      deleteConfirmOk: 'Delete',
+      deleteConfirmCancel: 'Cancel',
+      resolve: 'Resolve',
+      unresolve: 'Unresolve',
+      resolved: 'Resolved',
+      error: 'Failed to save comment'
+    }
   }
 }

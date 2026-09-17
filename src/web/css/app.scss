@@ -17,6 +17,9 @@
 :root {
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --code-font-size: 14px;
+  // Comment UI text is intentionally smaller than the surrounding code —
+  // derived from --code-font-size so it stays proportional if that changes.
+  --comment-font-size: calc(var(--code-font-size) - 1px);
 }
 
 // Switchable code/monospace font (default: JetBrains Mono). A future

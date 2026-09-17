@@ -132,6 +132,25 @@ test('PATCH /api/comments/:id for an unknown id returns 404', async t => {
   assert.equal(response.statusCode, 404)
 })
 
+test('POST /api/reviews/:id/comments accepts an optional lineNumberEnd for a range comment', async t => {
+  const { app, reviewId } = await setupAppWithReview(t)
+
+  const response = await app.inject({
+    method: 'POST',
+    url: `/api/reviews/${reviewId}/comments`,
+    payload: {
+      filePath: 'a.txt',
+      lineNumber: 5,
+      lineNumberEnd: 8,
+      lineType: 'added',
+      content: 'range comment'
+    }
+  })
+
+  assert.equal(response.statusCode, 201)
+  assert.equal(response.json().lineNumberEnd, 8)
+})
+
 test('POST /api/reviews/:id/comments accepts an optional suggestion', async t => {
   const { app, reviewId } = await setupAppWithReview(t)
 

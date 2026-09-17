@@ -16,6 +16,8 @@ function makeReview(overrides: Partial<Review> = {}): Review {
     sourceRef: null,
     snapshotData: '[]',
     status: 'in_progress',
+    name: null,
+    branch: null,
     createdAt: now,
     updatedAt: now,
     ...overrides

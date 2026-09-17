@@ -6,6 +6,18 @@ import type { HighlightedToken } from '@/composables/use-syntax-highlighting'
 const props = defineProps<{
   line: DiffLine
   tokens?: HighlightedToken[] | null | undefined
+  /** Review-mode gutter selection highlight — omitted (default false) outside a review's diff view. */
+  oldSelected?: boolean
+  newSelected?: boolean
+  /** Review-mode gutter cells become clickable/draggable only when a listener is attached to these. */
+  selectable?: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'old-mousedown'): void
+  (e: 'old-mouseenter'): void
+  (e: 'new-mousedown'): void
+  (e: 'new-mouseenter'): void
 }>()
 
 const prefix = computed(
@@ -28,8 +40,26 @@ function tokenColor(token: HighlightedToken): string | undefined {
 
 <template>
   <div class="diff-line row no-wrap text-mono" :class="rowClass">
-    <span class="diff-line__gutter">{{ line.oldLineNumber ?? '' }}</span>
-    <span class="diff-line__gutter">{{ line.newLineNumber ?? '' }}</span>
+    <span
+      class="diff-line__gutter"
+      :class="{
+        'diff-line__gutter--selectable': selectable && line.oldLineNumber,
+        'diff-line__gutter--selected': oldSelected
+      }"
+      @mousedown="line.oldLineNumber && emit('old-mousedown')"
+      @mouseenter="line.oldLineNumber && emit('old-mouseenter')"
+      >{{ line.oldLineNumber ?? '' }}</span
+    >
+    <span
+      class="diff-line__gutter"
+      :class="{
+        'diff-line__gutter--selectable': selectable && line.newLineNumber,
+        'diff-line__gutter--selected': newSelected
+      }"
+      @mousedown="line.newLineNumber && emit('new-mousedown')"
+      @mouseenter="line.newLineNumber && emit('new-mouseenter')"
+      >{{ line.newLineNumber ?? '' }}</span
+    >
     <span class="diff-line__prefix">{{ prefix }}</span>
     <span class="diff-line__content">
       <template v-if="tokens">
@@ -66,6 +96,18 @@ function tokenColor(token: HighlightedToken): string | undefined {
   padding-right: 8px;
   user-select: none;
   color: var(--diff-gutter-color);
+}
+
+.diff-line__gutter--selectable {
+  cursor: pointer;
+}
+
+.diff-line__gutter--selectable:hover {
+  background: color-mix(in srgb, var(--q-primary) 15%, transparent);
+}
+
+.diff-line__gutter--selected {
+  background: color-mix(in srgb, var(--q-primary) 30%, transparent);
 }
 
 .diff-line__prefix {

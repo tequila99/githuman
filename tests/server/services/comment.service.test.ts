@@ -24,6 +24,8 @@ function makeReview(id: string): Review {
     sourceRef: null,
     snapshotData: '[]',
     status: 'in_progress',
+    name: null,
+    branch: null,
     createdAt: now,
     updatedAt: now
   }
