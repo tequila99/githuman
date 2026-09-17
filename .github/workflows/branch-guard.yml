@@ -33,8 +33,18 @@ jobs:
       - name: Validate PR title
         env:
           TITLE: ${{ github.event.pull_request.title }}
+          BASE: ${{ github.base_ref }}
           HEAD: ${{ github.head_ref }}
         run: |
+          # Release PR (develop -> main): the title is the release version.
+          if [ "$BASE" = "main" ]; then
+            if [[ ! "$TITLE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Release PR title must be a version like 'v1.1.1' (got: $TITLE)"
+              exit 1
+            fi
+            exit 0
+          fi
+
           if [[ ! "$TITLE" =~ ^\[#[0-9]+\][[:space:]]+[^[:space:]].*$ ]]; then
             echo "::error::PR title must match '[#<issue>] <name>' (got: $TITLE)"
             exit 1
