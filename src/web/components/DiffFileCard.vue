@@ -1,27 +1,65 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { DiffFile, DiffFileStatus } from '@/api/types'
+import type {
+  Comment,
+  DiffFile,
+  DiffFileStatus,
+  DiffLineType
+} from '@/api/types'
 import type { DiffSource } from '@/stores/diff-store'
 import DiffHunkView from '@/components/DiffHunkView.vue'
 import DiffFileFullView from '@/components/DiffFileFullView.vue'
 import FileCardFrame from '@/components/FileCardFrame.vue'
 import FileCardHeader from '@/components/FileCardHeader.vue'
+import CommentCountBadge from '@/components/CommentCountBadge.vue'
 import {
   highlightFile,
   type HighlightedToken
 } from '@/composables/use-syntax-highlighting'
 import { pathOf } from '@/utils/diff-file'
 
-const props = defineProps<{
-  file: DiffFile
-  source: DiffSource
-  expanded: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    file: DiffFile
+    source: DiffSource
+    expanded: boolean
+    /**
+     * Overrides the source-derived full-file ref. Set by ReviewDetailPage.vue
+     * (always 'WORKTREE' — see DiffFileFullView.vue for why); omitted on the
+     * Changes page, where `source` alone decides it.
+     */
+    targetRef?: 'INDEX' | 'WORKTREE'
+    /** Active review for the current branch — enables gutter drag-select and comment threads (see ADR 0018). */
+    commentable?: boolean
+    comments?: Comment[]
+    /** Read-only review view (ReviewDetailPage.vue) — diff hunks show only commented lines instead of the full file diff. */
+    commentsOnly?: boolean
+    /** Whether existing comments show edit/delete/resolve controls — see DiffHunkView.vue. */
+    commentsEditable?: boolean
+    /** Hides the "show full file" toggle (e.g. in review views where only the diff makes sense). */
+    noFullFile?: boolean
+  }>(),
+  { commentable: false, comments: () => [], noFullFile: false }
+)
 
 const emit = defineEmits<{
   (e: 'toggle'): void
   (e: 'expand'): void
+  (
+    e: 'create-comment',
+    input: {
+      filePath: string
+      lineNumber: number
+      lineNumberEnd: number
+      lineType: DiffLineType | null
+      content: string
+    }
+  ): void
+  (e: 'edit-comment', id: string, content: string): void
+  (e: 'delete-comment', id: string): void
+  (e: 'resolve-comment', id: string): void
+  (e: 'unresolve-comment', id: string): void
 }>()
 
 const { t } = useI18n()
@@ -34,6 +72,18 @@ const STATUS_COLOR: Record<DiffFileStatus, string> = {
 }
 
 const path = computed(() => pathOf(props.file))
+
+// A file's comments span both diff-mode and full-file-mode ranges — split
+// by lineType (null = full-file, see ADR 0017) so each view only sees its
+// own comments; otherwise a diff comment whose lineNumberEnd happens to
+// match a full-file line number (or vice versa) would bleed into the wrong
+// view.
+const diffComments = computed(() =>
+  (props.comments ?? []).filter(c => c.lineType !== null)
+)
+const fullFileComments = computed(() =>
+  (props.comments ?? []).filter(c => c.lineType === null)
+)
 
 const viewMode = ref<'diff' | 'full'>('diff')
 
@@ -81,6 +131,23 @@ function tokensForHunk(
     offset + props.file.hunks[hunkIndex]!.lines.length
   )
 }
+
+function createDiffComment(input: {
+  lineNumber: number
+  lineNumberEnd: number
+  lineType: DiffLineType
+  content: string
+}) {
+  emit('create-comment', { filePath: path.value, ...input })
+}
+
+function createFullFileComment(input: {
+  lineNumber: number
+  lineNumberEnd: number
+  content: string
+}) {
+  emit('create-comment', { filePath: path.value, lineType: null, ...input })
+}
 </script>
 
 <template>
@@ -103,7 +170,15 @@ function tokensForHunk(
             />
           </template>
 
-          <div class="diff-file-card__toggle-section" @click.stop>
+          <template #badges>
+            <CommentCountBadge :count="comments.length" />
+          </template>
+
+          <div
+            v-if="!noFullFile"
+            class="diff-file-card__toggle-section"
+            @click.stop
+          >
             <q-toggle
               v-model="showFullFile"
               left-label
@@ -132,6 +207,15 @@ function tokensForHunk(
         v-if="viewMode === 'full'"
         :path="path"
         :source="source"
+        :target-ref="targetRef"
+        :commentable="commentable"
+        :comments-editable="commentsEditable"
+        :comments="fullFileComments"
+        @create-comment="createFullFileComment"
+        @edit-comment="(id, content) => emit('edit-comment', id, content)"
+        @delete-comment="id => emit('delete-comment', id)"
+        @resolve-comment="id => emit('resolve-comment', id)"
+        @unresolve-comment="id => emit('unresolve-comment', id)"
       />
       <template v-else>
         <p
@@ -151,6 +235,15 @@ function tokensForHunk(
           :key="index"
           :hunk="hunk"
           :line-tokens="tokensForHunk(index)"
+          :commentable="commentable"
+          :comments-editable="commentsEditable"
+          :comments="diffComments"
+          :comments-only="commentsOnly"
+          @create-comment="createDiffComment"
+          @edit-comment="(id, content) => emit('edit-comment', id, content)"
+          @delete-comment="id => emit('delete-comment', id)"
+          @resolve-comment="id => emit('resolve-comment', id)"
+          @unresolve-comment="id => emit('unresolve-comment', id)"
         />
       </template>
     </div>
@@ -194,7 +287,13 @@ function tokensForHunk(
 }
 
 .diff-file-card__body {
+  /* overflow-y must be set explicitly alongside overflow-x here (not left
+     at its 'visible' default) — otherwise the UA auto-coerces it to 'auto'
+     too (CSS Overflow §3), which would create an unintended second
+     vertical scroll container nested inside the page's own
+     <q-scroll-area>. */
   overflow-x: auto;
+  overflow-y: hidden;
   border-top: 1px solid rgba(128, 128, 128, 0.2);
 }
 </style>

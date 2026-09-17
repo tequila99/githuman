@@ -10,11 +10,13 @@ import {
   removeReview,
   ValidationError
 } from '../services/review.service.ts'
+import { getRepositoryInfo } from '../services/git.service.ts'
 import type { EventBus } from '../event-bus.ts'
 
 const CreateReviewBody = Type.Object({
   sourceType: Type.Optional(
     Type.Union([
+      Type.Literal('local'),
       Type.Literal('staged'),
       Type.Literal('unstaged'),
       Type.Literal('branch'),
@@ -22,7 +24,17 @@ const CreateReviewBody = Type.Object({
     ])
   ),
   sourceRef: Type.Optional(Type.String()),
-  baseRef: Type.Optional(Type.String())
+  baseRef: Type.Optional(Type.String()),
+  name: Type.Optional(Type.String())
+})
+
+const ReviewsQuery = Type.Object({
+  branch: Type.Optional(Type.String()),
+  search: Type.Optional(Type.String()),
+  createdFrom: Type.Optional(Type.String()),
+  createdTo: Type.Optional(Type.String()),
+  /** Comma-separated file paths — reviews matching any of them are returned. */
+  files: Type.Optional(Type.String())
 })
 
 const UpdateReviewBody = Type.Object({
@@ -77,9 +89,25 @@ export async function reviewRoutes(
     }
   )
 
-  typedApp.get('/api/reviews', async () => {
-    return getReviews(db)
-  })
+  typedApp.get(
+    '/api/reviews',
+    { schema: { querystring: ReviewsQuery } },
+    async request => {
+      const { branch, search, createdFrom, createdTo, files } = request.query
+      const resolvedBranch =
+        branch ?? (await getRepositoryInfo(repositoryPath)).branch
+
+      return getReviews(db, {
+        branch: resolvedBranch,
+        search,
+        createdFrom,
+        createdTo,
+        filePaths: files
+          ? files.split(',').filter(path => path.length > 0)
+          : undefined
+      })
+    }
+  )
 
   typedApp.get(
     '/api/reviews/:id',

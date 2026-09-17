@@ -5,6 +5,13 @@ defineProps<{
   lineNumber: number
   content: string
   tokens?: HighlightedToken[] | null | undefined
+  selected?: boolean
+  selectable?: boolean
+}>()
+
+const emit = defineEmits<{
+  (e: 'gutter-mousedown'): void
+  (e: 'gutter-mouseenter'): void
 }>()
 
 function tokenColor(token: HighlightedToken): string | undefined {
@@ -17,7 +24,16 @@ function tokenColor(token: HighlightedToken): string | undefined {
 
 <template>
   <div class="file-content-line row no-wrap text-mono">
-    <span class="file-content-line__gutter">{{ lineNumber }}</span>
+    <span
+      class="file-content-line__gutter"
+      :class="{
+        'file-content-line__gutter--selectable': selectable,
+        'file-content-line__gutter--selected': selected
+      }"
+      @mousedown="emit('gutter-mousedown')"
+      @mouseenter="emit('gutter-mouseenter')"
+      >{{ lineNumber }}</span
+    >
     <span class="file-content-line__content">
       <template v-if="tokens">
         <span
@@ -45,6 +61,18 @@ function tokenColor(token: HighlightedToken): string | undefined {
   padding-right: 8px;
   user-select: none;
   color: var(--diff-gutter-color);
+}
+
+.file-content-line__gutter--selectable {
+  cursor: pointer;
+}
+
+.file-content-line__gutter--selectable:hover {
+  background: color-mix(in srgb, var(--q-primary) 15%, transparent);
+}
+
+.file-content-line__gutter--selected {
+  background: color-mix(in srgb, var(--q-primary) 30%, transparent);
 }
 
 .file-content-line__content {

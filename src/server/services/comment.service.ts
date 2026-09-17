@@ -28,6 +28,7 @@ export function createComment(
     reviewId,
     filePath: input.filePath,
     lineNumber: input.lineNumber ?? null,
+    lineNumberEnd: input.lineNumberEnd ?? input.lineNumber ?? null,
     lineType: input.lineType ?? null,
     content: input.content,
     createdAt: now,

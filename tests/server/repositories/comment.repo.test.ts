@@ -21,6 +21,8 @@ function makeReview(id: string): Review {
     sourceRef: null,
     snapshotData: '[]',
     status: 'in_progress',
+    name: null,
+    branch: null,
     createdAt: now,
     updatedAt: now
   }
@@ -33,6 +35,7 @@ function makeComment(overrides: Partial<Comment> = {}): Comment {
     reviewId: 'review-1',
     filePath: 'a.txt',
     lineNumber: 10,
+    lineNumberEnd: 10,
     lineType: 'added',
     content: 'hello',
     createdAt: now,

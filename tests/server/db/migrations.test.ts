@@ -22,9 +22,93 @@ test('createTestDatabase applies migrations: the reviews table exists with expec
       'source_ref',
       'snapshot_data',
       'status',
+      'name',
+      'branch',
       'created_at',
       'updated_at'
     ].sort()
+  )
+
+  db.close()
+})
+
+test('createTestDatabase applies migrations: the review_files table exists', () => {
+  const db = createTestDatabase()
+
+  const columns = db.prepare('PRAGMA table_info(review_files)').all() as Array<{
+    name: string
+  }>
+  assert.deepEqual(
+    columns.map(c => c.name).sort(),
+    ['review_id', 'file_path'].sort()
+  )
+
+  db.close()
+})
+
+test('reviews(name, branch) is unique, but multiple NULL/NULL rows are allowed', () => {
+  const db = createTestDatabase()
+  const base = {
+    repository_path: '/repo',
+    source_type: 'staged',
+    snapshot_data: '[]',
+    status: 'in_progress',
+    created_at: 'x',
+    updated_at: 'x'
+  }
+  const insert = db.prepare(
+    `INSERT INTO reviews (id, repository_path, source_type, snapshot_data, status, name, branch, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+
+  insert.run(
+    'r1',
+    base.repository_path,
+    base.source_type,
+    base.snapshot_data,
+    base.status,
+    null,
+    null,
+    base.created_at,
+    base.updated_at
+  )
+  assert.doesNotThrow(() =>
+    insert.run(
+      'r2',
+      base.repository_path,
+      base.source_type,
+      base.snapshot_data,
+      base.status,
+      null,
+      null,
+      base.created_at,
+      base.updated_at
+    )
+  )
+
+  insert.run(
+    'r3',
+    base.repository_path,
+    base.source_type,
+    base.snapshot_data,
+    base.status,
+    'My review',
+    'main',
+    base.created_at,
+    base.updated_at
+  )
+  assert.throws(() =>
+    insert.run(
+      'r4',
+      base.repository_path,
+      base.source_type,
+      base.snapshot_data,
+      base.status,
+      'My review',
+      'main',
+      base.created_at,
+      base.updated_at
+    )
   )
 
   db.close()
@@ -45,6 +129,7 @@ test('createTestDatabase applies migrations: the comments table exists with expe
       'review_id',
       'file_path',
       'line_number',
+      'line_number_end',
       'line_type',
       'content',
       'created_at',

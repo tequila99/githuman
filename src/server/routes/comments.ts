@@ -17,6 +17,7 @@ import type { EventBus } from '../event-bus.ts'
 const CreateCommentBody = Type.Object({
   filePath: Type.String({ minLength: 1 }),
   lineNumber: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
+  lineNumberEnd: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
   lineType: Type.Optional(
     Type.Union([
       Type.Literal('added'),

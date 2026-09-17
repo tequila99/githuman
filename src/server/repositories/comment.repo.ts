@@ -6,6 +6,7 @@ interface CommentRow {
   review_id: string
   file_path: string
   line_number: number | null
+  line_number_end: number | null
   line_type: DiffLineType | null
   content: string
   created_at: string
@@ -20,6 +21,7 @@ function rowToComment(row: CommentRow): Comment {
     reviewId: row.review_id,
     filePath: row.file_path,
     lineNumber: row.line_number,
+    lineNumberEnd: row.line_number_end,
     lineType: row.line_type,
     content: row.content,
     createdAt: row.created_at,
@@ -38,13 +40,14 @@ export function findCommentById(db: DatabaseSync, id: string): Comment | null {
 
 export function createComment(db: DatabaseSync, comment: Comment): Comment {
   db.prepare(
-    `INSERT INTO comments (id, review_id, file_path, line_number, line_type, content, created_at, updated_at, suggestion)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO comments (id, review_id, file_path, line_number, line_number_end, line_type, content, created_at, updated_at, suggestion)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     comment.id,
     comment.reviewId,
     comment.filePath,
     comment.lineNumber,
+    comment.lineNumberEnd,
     comment.lineType,
     comment.content,
     comment.createdAt,

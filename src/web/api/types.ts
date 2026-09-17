@@ -13,5 +13,13 @@ export type {
   FileTreeNode,
   FileTreeResponse,
   FileContentResponse,
-  ApiError
+  ApiError,
+  ReviewStatus,
+  ReviewSourceType,
+  Review,
+  CreateReviewRequest,
+  UpdateReviewRequest,
+  Comment,
+  CreateCommentRequest,
+  UpdateCommentRequest
 } from '../../shared/types.ts'
