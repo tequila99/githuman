@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { createTempGitRepo } from '../helpers/git-fixture.ts'
 import { buildApp } from '../../../src/server/app.ts'
@@ -75,6 +75,131 @@ test('POST /api/git/stage with no paths stages everything', async t => {
   assert.equal(response.statusCode, 200)
   const status = await fixture.git.status()
   assert.deepEqual(status.staged.sort(), ['a.txt', 'new.txt'])
+})
+
+test('POST /api/git/unstage with paths unstages exactly those files', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'a1\n')
+  writeFileSync(join(fixture.dir, 'b.txt'), 'b1\n')
+  await fixture.git.add(['a.txt', 'b.txt'])
+  await fixture.git.commit('initial')
+  writeFileSync(join(fixture.dir, 'a.txt'), 'a2\n')
+  writeFileSync(join(fixture.dir, 'b.txt'), 'b2\n')
+  await fixture.git.add(['a.txt', 'b.txt'])
+
+  const app = buildApp({ repositoryPath: fixture.dir })
+  t.after(async () => {
+    await app.close()
+  })
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/git/unstage',
+    payload: { paths: ['a.txt'] }
+  })
+
+  assert.equal(response.statusCode, 200)
+  const status = await fixture.git.status()
+  assert.deepEqual(status.staged, ['b.txt'])
+})
+
+test('POST /api/git/unstage with no paths unstages everything', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'a1\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('initial')
+  writeFileSync(join(fixture.dir, 'a.txt'), 'a2\n')
+  await fixture.git.add('a.txt')
+
+  const app = buildApp({ repositoryPath: fixture.dir })
+  t.after(async () => {
+    await app.close()
+  })
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/git/unstage',
+    payload: {}
+  })
+
+  assert.equal(response.statusCode, 200)
+  const status = await fixture.git.status()
+  assert.deepEqual(status.staged, [])
+})
+
+test('POST /api/git/discard discards a tracked modified file back to its last-staged content', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'original\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('initial')
+  writeFileSync(join(fixture.dir, 'a.txt'), 'unstaged edit\n')
+
+  const app = buildApp({ repositoryPath: fixture.dir })
+  t.after(async () => {
+    await app.close()
+  })
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/git/discard',
+    payload: { paths: ['a.txt'] }
+  })
+
+  assert.equal(response.statusCode, 200)
+  const status = await fixture.git.status()
+  assert.deepEqual(status.modified, [])
+})
+
+test('POST /api/git/discard deletes an untracked file', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'a\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('initial')
+  writeFileSync(join(fixture.dir, 'new.txt'), 'brand new\n')
+
+  const app = buildApp({ repositoryPath: fixture.dir })
+  t.after(async () => {
+    await app.close()
+  })
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/git/discard',
+    payload: { paths: ['new.txt'] }
+  })
+
+  assert.equal(response.statusCode, 200)
+  assert.equal(existsSync(join(fixture.dir, 'new.txt')), false)
+})
+
+test('POST /api/git/discard with an empty paths array returns 400', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'a\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('initial')
+
+  const app = buildApp({ repositoryPath: fixture.dir })
+  t.after(async () => {
+    await app.close()
+  })
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/git/discard',
+    payload: { paths: [] }
+  })
+
+  assert.equal(response.statusCode, 400)
 })
 
 test('GET /api/git/tree/:ref lists files at that ref', async t => {

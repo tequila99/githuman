@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   test:
@@ -37,3 +37,54 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+  publish:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for npm OIDC trusted publishing
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Trusted publishing (OIDC) requires npm >= 11.5.1 — don't rely on
+      # whatever version ships with the runner's Node 24.
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Check if version changed
+        id: version
+        run: |
+          LOCAL_VERSION="$(node -p "require('./package.json').version")"
+          PUBLISHED_VERSION="$(npm view @tequila99/githuman version 2>/dev/null || echo none)"
+          if [ "$LOCAL_VERSION" = "$PUBLISHED_VERSION" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Version $LOCAL_VERSION already published — skipping."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Publishing version $LOCAL_VERSION (currently published: $PUBLISHED_VERSION)."
+          fi
+
+      - name: Build
+        if: steps.version.outputs.skip != 'true'
+        run: pnpm run build
+
+      - name: Publish
+        if: steps.version.outputs.skip != 'true'
+        run: npm publish --access public

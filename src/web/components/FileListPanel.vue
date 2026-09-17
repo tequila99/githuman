@@ -100,6 +100,7 @@ const {
         :key="pathOf(file)"
         :file="file"
         :selected="selectedPath === pathOf(file)"
+        :source="source"
         @click="explorer.selectFile(pathOf(file))"
       />
     </template>

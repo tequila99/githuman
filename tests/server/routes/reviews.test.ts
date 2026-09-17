@@ -245,6 +245,144 @@ test('DELETE /api/reviews/:id removes the review and its comments', async t => {
   assert.equal(refetched.statusCode, 404)
 })
 
+test('POST /api/reviews with a custom name persists it, and rejects a duplicate on the same branch with 400', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+  await stageOneChange(fixture.dir, fixture.git)
+
+  const db = createTestDatabase()
+  const app = buildApp({ repositoryPath: fixture.dir, db })
+  t.after(async () => {
+    await app.close()
+  })
+
+  const first = await app.inject({
+    method: 'POST',
+    url: '/api/reviews',
+    payload: { sourceType: 'staged', name: 'My review' }
+  })
+  assert.equal(first.statusCode, 201)
+  assert.equal(first.json().name, 'My review')
+  assert.equal(first.json().branch, 'main')
+
+  const duplicate = await app.inject({
+    method: 'POST',
+    url: '/api/reviews',
+    payload: { sourceType: 'staged', name: 'My review' }
+  })
+  assert.equal(duplicate.statusCode, 400)
+})
+
+test('POST /api/reviews without a name auto-generates one', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+  await stageOneChange(fixture.dir, fixture.git)
+
+  const db = createTestDatabase()
+  const app = buildApp({ repositoryPath: fixture.dir, db })
+  t.after(async () => {
+    await app.close()
+  })
+
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/reviews',
+    payload: { sourceType: 'staged' }
+  })
+
+  assert.equal(created.statusCode, 201)
+  assert.match(created.json().name, /^Staged — /)
+})
+
+test("GET /api/reviews defaults to the repository's current branch", async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+  await stageOneChange(fixture.dir, fixture.git)
+
+  const db = createTestDatabase()
+  const app = buildApp({ repositoryPath: fixture.dir, db })
+  t.after(async () => {
+    await app.close()
+  })
+
+  await app.inject({
+    method: 'POST',
+    url: '/api/reviews',
+    payload: { sourceType: 'staged' }
+  })
+  // A review from an unrelated branch shouldn't show up.
+  db.prepare(
+    `INSERT INTO reviews (id, repository_path, source_type, snapshot_data, status, name, branch, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    'other-branch-review',
+    fixture.dir,
+    'staged',
+    '[]',
+    'in_progress',
+    'On another branch',
+    'some-other-branch',
+    new Date().toISOString(),
+    new Date().toISOString()
+  )
+
+  const list = await app.inject({ method: 'GET', url: '/api/reviews' })
+
+  assert.equal(list.statusCode, 200)
+  const reviews = list.json()
+  assert.equal(reviews.length, 1)
+  assert.equal(reviews[0].branch, 'main')
+})
+
+test('GET /api/reviews supports search, date-range and files filters', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+  await stageOneChange(fixture.dir, fixture.git)
+
+  const db = createTestDatabase()
+  const app = buildApp({ repositoryPath: fixture.dir, db })
+  t.after(async () => {
+    await app.close()
+  })
+
+  await app.inject({
+    method: 'POST',
+    url: '/api/reviews',
+    payload: { sourceType: 'staged', name: 'Findable review' }
+  })
+  await app.inject({
+    method: 'POST',
+    url: '/api/reviews',
+    payload: { sourceType: 'staged', name: 'Unrelated' }
+  })
+
+  const bySearch = await app.inject({
+    method: 'GET',
+    url: '/api/reviews?search=findable'
+  })
+  assert.equal(bySearch.json().length, 1)
+  assert.equal(bySearch.json()[0].name, 'Findable review')
+
+  const byFile = await app.inject({
+    method: 'GET',
+    url: '/api/reviews?files=a.txt'
+  })
+  assert.equal(byFile.json().length, 2)
+
+  const byMissingFile = await app.inject({
+    method: 'GET',
+    url: '/api/reviews?files=does-not-exist.txt'
+  })
+  assert.equal(byMissingFile.json().length, 0)
+
+  const future = new Date(Date.now() + 60_000).toISOString()
+  const byDate = await app.inject({
+    method: 'GET',
+    url: `/api/reviews?createdFrom=${encodeURIComponent(future)}`
+  })
+  assert.equal(byDate.json().length, 0)
+})
+
 test('DELETE /api/reviews/:id for an unknown id returns 404', async t => {
   const fixture = await createTempGitRepo()
   t.after(fixture.cleanup)

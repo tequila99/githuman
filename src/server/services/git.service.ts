@@ -227,6 +227,54 @@ export async function stagePaths(
   await execFileAsync('git', args, { cwd: repoPath })
 }
 
+/**
+ * Unstages the given paths (`git restore --staged -- <paths>`), leaving
+ * their working-tree content untouched. With an empty array, unstages
+ * everything, matching `stagePaths`'s "empty = everything" convention.
+ */
+export async function unstagePaths(
+  repoPath: string,
+  paths: string[]
+): Promise<void> {
+  const args =
+    paths.length > 0
+      ? ['restore', '--staged', '--', ...paths]
+      : ['restore', '--staged', '.']
+  await execFileAsync('git', args, { cwd: repoPath })
+}
+
+/**
+ * Discards unstaged working-tree changes for the given paths: an untracked
+ * file is deleted outright (`git clean`), a tracked file is restored to its
+ * last-staged content (`git restore`). Paths are classified before either
+ * git command runs, rather than running `restore` and swallowing a "not
+ * found" error for the ones `clean` already removed — `git restore`
+ * validates every pathspec up front, so if the batch mixed tracked and
+ * untracked paths, an already-removed untracked path would abort the whole
+ * call and silently no-op the legitimate tracked restores too.
+ */
+export async function discardPaths(
+  repoPath: string,
+  paths: string[]
+): Promise<void> {
+  if (paths.length === 0) return
+
+  const untrackedPaths = new Set(await listUntrackedPaths(repoPath))
+  const toClean = paths.filter(path => untrackedPaths.has(path))
+  const toRestore = paths.filter(path => !untrackedPaths.has(path))
+
+  if (toClean.length > 0) {
+    await execFileAsync('git', ['clean', '-f', '-d', '--', ...toClean], {
+      cwd: repoPath
+    })
+  }
+  if (toRestore.length > 0) {
+    await execFileAsync('git', ['restore', '--', ...toRestore], {
+      cwd: repoPath
+    })
+  }
+}
+
 export async function getRepositoryInfo(
   repoPath: string
 ): Promise<RepositoryInfo> {

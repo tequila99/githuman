@@ -29,6 +29,8 @@ function makeReview(overrides: Partial<Review> = {}): Review {
       }
     ]),
     status: 'in_progress',
+    name: null,
+    branch: null,
     createdAt: now,
     updatedAt: now,
     ...overrides
@@ -45,6 +47,7 @@ function makeComment(
     reviewId,
     filePath: 'a.txt',
     lineNumber: null,
+    lineNumberEnd: null,
     lineType: null,
     content: 'looks good',
     createdAt: now,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import CopyButton from './CopyButton.vue'
+import CopyButton from './buttons/CopyButton.vue'
 
 defineProps<{ path: string }>()
 
@@ -13,6 +13,7 @@ const { t } = useI18n()
     <div class="file-card-header__name row items-center no-wrap">
       <span class="ellipsis text-mono file-card-header__path">{{ path }}</span>
       <CopyButton :value="path" :tooltip="t('common.copyPath')" />
+      <slot name="badges" />
     </div>
     <q-space />
     <slot />

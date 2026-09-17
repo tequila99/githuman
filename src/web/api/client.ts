@@ -17,8 +17,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
 
   if (!response.ok) {
+    // The server's JSON error body (see src/shared/types.ts ApiError) carries
+    // a human-readable `message` (e.g. a ValidationError's text) — surface
+    // it instead of a generic "status N" string whenever the body has one.
+    const message = await response
+      .clone()
+      .json()
+      .then((body: unknown) =>
+        body && typeof body === 'object' && 'message' in body
+          ? String(body.message)
+          : null
+      )
+      .catch(() => null)
+
     throw new ApiRequestError(
-      `Request failed with status ${response.status}`,
+      message ?? `Request failed with status ${response.status}`,
       response.status
     )
   }
