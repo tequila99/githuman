@@ -8,9 +8,11 @@ import type {
 import {
   assertSafeRef,
   getFileAtRef,
+  getFilesAtRefBatch,
   listChangedPaths,
   listUntrackedPaths
 } from './git.service.ts'
+import type { FileAtRef } from './git.service.ts'
 
 export interface DiffFileMeta {
   oldPath: string
@@ -139,6 +141,34 @@ export function computeFileDiff(
   return { ...base, additions, deletions, hunks }
 }
 
+/**
+ * Reads one diff side's content for every changed path, batching all
+ * git-ref reads into a single `git cat-file --batch` process instead of one
+ * `git show` per file (see ADR 0019) — `WORKTREE` still reads straight off
+ * disk (already process-free) since it isn't a git object. Falls back to
+ * per-file `getFileAtRef` if the batch process fails to spawn or crashes
+ * mid-read, so a batching problem degrades performance rather than
+ * correctness.
+ */
+async function readDiffSide(
+  repoPath: string,
+  ref: string,
+  paths: string[]
+): Promise<FileAtRef[]> {
+  if (ref === 'WORKTREE' || paths.length === 0) {
+    return Promise.all(paths.map(path => getFileAtRef(repoPath, ref, path)))
+  }
+
+  try {
+    return await getFilesAtRefBatch(
+      repoPath,
+      paths.map(path => ({ ref, path }))
+    )
+  } catch {
+    return Promise.all(paths.map(path => getFileAtRef(repoPath, ref, path)))
+  }
+}
+
 async function buildDiffFiles(
   repoPath: string,
   diffArgs: string[],
@@ -147,19 +177,25 @@ async function buildDiffFiles(
 ): Promise<DiffFile[]> {
   const changes = await listChangedPaths(repoPath, diffArgs)
 
-  return Promise.all(
-    changes.map(async change => {
-      const [oldFile, newFile] = await Promise.all([
-        getFileAtRef(repoPath, oldRef, change.oldPath),
-        getFileAtRef(repoPath, newRef, change.newPath)
-      ])
+  const [oldFiles, newFiles] = await Promise.all([
+    readDiffSide(
+      repoPath,
+      oldRef,
+      changes.map(change => change.oldPath)
+    ),
+    readDiffSide(
+      repoPath,
+      newRef,
+      changes.map(change => change.newPath)
+    )
+  ])
 
-      return computeFileDiff(oldFile.content, newFile.content, {
-        oldPath: change.oldPath,
-        newPath: change.newPath,
-        status: change.status,
-        isBinary: oldFile.isBinary || newFile.isBinary
-      })
+  return changes.map((change, i) =>
+    computeFileDiff(oldFiles[i].content, newFiles[i].content, {
+      oldPath: change.oldPath,
+      newPath: change.newPath,
+      status: change.status,
+      isBinary: oldFiles[i].isBinary || newFiles[i].isBinary
     })
   )
 }

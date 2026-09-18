@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { readFile } from 'node:fs/promises'
 import { basename, resolve, sep } from 'node:path'
@@ -47,6 +47,24 @@ export interface ChangedPath {
 }
 
 /**
+ * Builds the `git show`/`cat-file` object spec for a file at a ref (e.g.
+ * `HEAD:src/foo.ts`, or `:src/foo.ts` for the INDEX/staged form). Shared by
+ * `getFileAtRef` and `getFilesAtRefBatch` so both single-file and batched
+ * reads resolve refs identically.
+ */
+function objectSpecFor(ref: string, path: string): string {
+  if (ref !== 'INDEX') {
+    assertSafeRef(ref)
+  }
+  // No `--` before the spec: for the INDEX form (`:path`) it would make git
+  // treat the pathspec-looking `:path` as a plain path instead of the
+  // special "file staged in the index" syntax, silently changing meaning
+  // (falls back to showing HEAD). assertSafeRef above already rules out
+  // the injection this would otherwise guard against.
+  return ref === 'INDEX' ? `:${path}` : `${ref}:${path}`
+}
+
+/**
  * Reads a file's content at a given git ref.
  *
  * `ref` may be any git ref/SHA, or the literal string 'INDEX' to read the
@@ -74,17 +92,9 @@ export async function getFileAtRef(
     }
   }
 
-  if (ref !== 'INDEX') {
-    assertSafeRef(ref)
-  }
-  const gitRef = ref === 'INDEX' ? `:${path}` : `${ref}:${path}`
+  const gitRef = objectSpecFor(ref, path)
 
   try {
-    // No `--` before gitRef: for the INDEX form (`:path`) it would make git
-    // treat the pathspec-looking `:path` as a plain path instead of the
-    // special "file staged in the index" syntax, silently changing meaning
-    // (falls back to showing HEAD). assertSafeRef above already rules out
-    // the injection this would otherwise guard against.
     const { stdout } = await execFileAsync('git', ['show', gitRef], {
       cwd: repoPath,
       encoding: 'buffer',
@@ -100,6 +110,107 @@ export async function getFileAtRef(
   } catch {
     return { content: '', isBinary: false }
   }
+}
+
+/**
+ * Parses `git cat-file --batch`'s output for `count` requested objects, in
+ * request order. Each entry is either `<sha> SP <type> SP <size> LF`
+ * followed by exactly `size` bytes of content and a trailing LF, or
+ * `<object> SP missing LF` (or another non-numeric-size error line, e.g.
+ * `ambiguous`/`notdir`) for a request that didn't resolve — treated the
+ * same as a missing file, matching `getFileAtRef`'s catch-all behavior.
+ *
+ * Parses by the announced byte size, not line-by-line — file content can
+ * itself contain arbitrary bytes, including `\n`.
+ */
+function parseCatFileBatchOutput(buffer: Buffer, count: number): FileAtRef[] {
+  const results: FileAtRef[] = []
+  let offset = 0
+
+  for (let i = 0; i < count; i++) {
+    const headerEnd = buffer.indexOf(0x0a, offset)
+    if (headerEnd === -1) {
+      throw new Error('git cat-file --batch: truncated output (missing header)')
+    }
+    const header = buffer.toString('utf-8', offset, headerEnd)
+    offset = headerEnd + 1
+
+    const size = Number(header.slice(header.lastIndexOf(' ') + 1))
+    if (!Number.isInteger(size) || size < 0) {
+      results.push({ content: '', isBinary: false })
+      continue
+    }
+
+    const content = buffer.subarray(offset, offset + size)
+    if (content.length < size) {
+      throw new Error('git cat-file --batch: truncated output (short content)')
+    }
+    offset += size + 1 // skip content + its trailing LF
+
+    const isBinary = content.includes(0)
+    results.push({
+      content: isBinary ? '' : content.toString('utf-8'),
+      isBinary
+    })
+  }
+
+  return results
+}
+
+/**
+ * Reads many files' content at git refs in one `git cat-file --batch`
+ * process, instead of one `git show` process per file (see ADR 0019) —
+ * used by `buildDiffFiles` to avoid spawning `2 × changed files` processes
+ * for a single diff. Results come back in the same order as `requests`.
+ *
+ * Does not accept `ref: 'WORKTREE'` — worktree content isn't a git object;
+ * callers read it directly off disk instead (as `getFileAtRef` already
+ * does for that ref).
+ */
+export async function getFilesAtRefBatch(
+  repoPath: string,
+  requests: { ref: string; path: string }[]
+): Promise<FileAtRef[]> {
+  if (requests.length === 0) return []
+
+  const specs = requests.map(({ ref, path }) => {
+    if (ref === 'WORKTREE') {
+      throw new Error(
+        "getFilesAtRefBatch does not support ref 'WORKTREE' — read worktree files directly instead"
+      )
+    }
+    return objectSpecFor(ref, path)
+  })
+
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn('git', ['cat-file', '--batch'], { cwd: repoPath })
+    const chunks: Buffer[] = []
+    let stderr = ''
+
+    child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString('utf-8')
+    })
+    child.on('error', reject)
+    child.on('close', code => {
+      if (code !== 0) {
+        reject(
+          new Error(`git cat-file --batch exited with code ${code}: ${stderr}`)
+        )
+        return
+      }
+      try {
+        resolvePromise(
+          parseCatFileBatchOutput(Buffer.concat(chunks), requests.length)
+        )
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)))
+      }
+    })
+
+    child.stdin.write(specs.join('\n') + '\n')
+    child.stdin.end()
+  })
 }
 
 /**
