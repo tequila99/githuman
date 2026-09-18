@@ -6,6 +6,7 @@ import { createTempGitRepo } from '../helpers/git-fixture.ts'
 import {
   getFileAtRef,
   getFilesAtRef,
+  getFilesAtRefBatch,
   listChangedPaths,
   listUntrackedPaths,
   getRepositoryInfo,
@@ -108,6 +109,167 @@ test("getFileAtRef('WORKTREE', ...) flags a binary file on disk without decoding
   const result = await getFileAtRef(fixture.dir, 'WORKTREE', 'image.png')
 
   assert.equal(result.isBinary, true)
+})
+
+test('getFilesAtRefBatch matches getFileAtRef for each request, in request order', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'hello\n')
+  writeFileSync(join(fixture.dir, 'b.txt'), 'world\n')
+  writeFileSync(join(fixture.dir, 'c.txt'), 'third\n')
+  await fixture.git.add(['a.txt', 'b.txt', 'c.txt'])
+  await fixture.git.commit('add three files')
+
+  const requests = [
+    { ref: 'HEAD', path: 'c.txt' },
+    { ref: 'HEAD', path: 'a.txt' },
+    { ref: 'HEAD', path: 'b.txt' }
+  ]
+
+  const batched = await getFilesAtRefBatch(fixture.dir, requests)
+  const individually = await Promise.all(
+    requests.map(({ ref, path }) => getFileAtRef(fixture.dir, ref, path))
+  )
+
+  assert.deepEqual(batched, individually)
+  assert.equal(batched[0].content, 'third\n')
+  assert.equal(batched[1].content, 'hello\n')
+  assert.equal(batched[2].content, 'world\n')
+})
+
+test('getFilesAtRefBatch resolves each entry against its own ref (HEAD and INDEX mixed in one call)', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'hello\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('add a.txt')
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'hello\nworld\n')
+  await fixture.git.add('a.txt')
+
+  const [atHead, atIndex] = await getFilesAtRefBatch(fixture.dir, [
+    { ref: 'HEAD', path: 'a.txt' },
+    { ref: 'INDEX', path: 'a.txt' }
+  ])
+
+  assert.equal(atHead.content, 'hello\n')
+  assert.equal(atIndex.content, 'hello\nworld\n')
+})
+
+test('getFilesAtRefBatch returns empty content for a path missing at that ref, without failing the rest of the batch', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'hello\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('add a.txt')
+
+  writeFileSync(join(fixture.dir, 'b.txt'), 'new file\n')
+  await fixture.git.add('b.txt')
+
+  const [missing, present] = await getFilesAtRefBatch(fixture.dir, [
+    { ref: 'HEAD', path: 'b.txt' },
+    { ref: 'HEAD', path: 'a.txt' }
+  ])
+
+  assert.equal(missing.content, '')
+  assert.equal(missing.isBinary, false)
+  assert.equal(present.content, 'hello\n')
+})
+
+test('getFilesAtRefBatch flags binary content the same way getFileAtRef does', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  const binaryBuffer = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x00, 0x01, 0x02, 0x00, 0xff
+  ])
+  writeFileSync(join(fixture.dir, 'image.png'), binaryBuffer)
+  await fixture.git.add('image.png')
+
+  const [result] = await getFilesAtRefBatch(fixture.dir, [
+    { ref: 'INDEX', path: 'image.png' }
+  ])
+
+  assert.equal(result.isBinary, true)
+  assert.equal(result.content, '')
+})
+
+test('getFilesAtRefBatch reads multi-line content byte-for-byte, parsing by announced size rather than by line', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  const lines = Array.from({ length: 50 }, (_, i) => `line ${i}`)
+  const content = lines.join('\n') + '\n'
+  writeFileSync(join(fixture.dir, 'big.txt'), content)
+  await fixture.git.add('big.txt')
+  await fixture.git.commit('add big.txt')
+
+  const [result] = await getFilesAtRefBatch(fixture.dir, [
+    { ref: 'HEAD', path: 'big.txt' }
+  ])
+
+  assert.equal(result.content, content)
+})
+
+test('getFilesAtRefBatch resolves duplicate (ref, path) requests independently, at their own positions', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'hello\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('add a.txt')
+
+  const results = await getFilesAtRefBatch(fixture.dir, [
+    { ref: 'HEAD', path: 'a.txt' },
+    { ref: 'HEAD', path: 'a.txt' }
+  ])
+
+  assert.equal(results.length, 2)
+  assert.deepEqual(results[0], results[1])
+  assert.equal(results[0].content, 'hello\n')
+})
+
+test('getFilesAtRefBatch returns an empty array for an empty request list, without spawning git', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  const result = await getFilesAtRefBatch(fixture.dir, [])
+
+  assert.deepEqual(result, [])
+})
+
+test("getFilesAtRefBatch rejects ref 'WORKTREE' rather than silently treating it as a git object", async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  await assert.rejects(
+    getFilesAtRefBatch(fixture.dir, [{ ref: 'WORKTREE', path: 'a.txt' }])
+  )
+})
+
+test('getFilesAtRefBatch rejects a ref starting with "-" instead of passing it to git', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  await assert.rejects(
+    getFilesAtRefBatch(fixture.dir, [
+      { ref: '--output=/tmp/pwned', path: 'a.txt' }
+    ])
+  )
+})
+
+test('getFilesAtRefBatch rejects when the underlying git process exits non-zero (not a git repository) — the failure buildDiffFiles falls back on', async t => {
+  const { mkdtempSync, rmSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const notARepo = mkdtempSync(join(tmpdir(), 'githuman-not-a-repo-'))
+  t.after(() => rmSync(notARepo, { recursive: true, force: true }))
+
+  await assert.rejects(
+    getFilesAtRefBatch(notARepo, [{ ref: 'HEAD', path: 'a.txt' }])
+  )
 })
 
 test("getFilesAtRef('HEAD', ...) lists the files committed at that ref", async t => {
