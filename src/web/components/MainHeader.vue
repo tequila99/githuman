@@ -2,6 +2,7 @@
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useRepositoryStore } from '@/stores/repository-store'
+import { useAppInfoStore } from '@/stores/app-info-store'
 import { useAppTheme } from '@/composables/use-app-theme'
 
 const emit = defineEmits<{
@@ -10,6 +11,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { info } = storeToRefs(useRepositoryStore())
+const { version } = storeToRefs(useAppInfoStore())
 const { isDark, toggleTheme } = useAppTheme()
 </script>
 
@@ -33,6 +35,10 @@ const { isDark, toggleTheme } = useAppTheme()
       <q-toolbar-title shrink class="text-weight-bold gt-xs">
         {{ t('app.title') }}
       </q-toolbar-title>
+
+      <q-badge v-if="version" outline rounded class="text-primary q-ml-xs">
+        v{{ version }}
+      </q-badge>
 
       <div
         v-if="info"
