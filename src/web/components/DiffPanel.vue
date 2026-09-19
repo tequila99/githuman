@@ -64,8 +64,8 @@ function unresolveComment(id: string) {
     <q-separator />
     <q-scroll-area
       class="col"
-      content-style="padding: 8px"
-      content-active-style="padding: 8px"
+      content-style="padding: 8px; width: 100%; max-width: 100%"
+      content-active-style="padding: 8px; width: 100%; max-width: 100%"
     >
       <DiffFileCard
         v-for="file in diffFiles"

@@ -22,6 +22,7 @@ const props = withDefaults(
     comments?: Comment[]
     /** Whether existing comments show edit/delete/resolve controls — see DiffHunkView.vue. */
     commentsEditable?: boolean
+    wrap?: boolean
   }>(),
   { commentable: false, comments: () => [] }
 )
@@ -67,6 +68,7 @@ watch(
     :commentable="commentable"
     :comments-editable="commentsEditable"
     :comments="comments"
+    :wrap="wrap"
     @create-comment="input => emit('create-comment', input)"
     @edit-comment="(id, content) => emit('edit-comment', id, content)"
     @delete-comment="id => emit('delete-comment', id)"
