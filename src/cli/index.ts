@@ -10,6 +10,7 @@ import { formatStartupMessage } from './startup-message.ts'
 import { parseListArgs, runList } from './commands/list.ts'
 import { parseExportArgs, runExport } from './commands/export.ts'
 import { createFileDatabase } from '../server/db/index.ts'
+import { getAppVersion } from '../server/app-version.ts'
 import type { DatabaseSync } from 'node:sqlite'
 
 /** Opens the reviews DB for the repo at cwd, shared by `list` and `export`. */
@@ -19,6 +20,8 @@ async function openReviewsDb(dbPrefix: string): Promise<DatabaseSync> {
 }
 
 async function main(argv: string[]): Promise<void> {
+  console.log(`githuman v${getAppVersion()}`)
+
   const [command, ...rest] = argv
 
   switch (command) {
