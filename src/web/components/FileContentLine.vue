@@ -7,6 +7,7 @@ defineProps<{
   tokens?: HighlightedToken[] | null | undefined
   selected?: boolean
   selectable?: boolean
+  wrap?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -23,7 +24,10 @@ function tokenColor(token: HighlightedToken): string | undefined {
 </script>
 
 <template>
-  <div class="file-content-line row no-wrap text-mono">
+  <div
+    class="file-content-line row no-wrap text-mono"
+    :class="{ 'file-content-line--wrap': wrap }"
+  >
     <span
       class="file-content-line__gutter"
       :class="{
@@ -78,5 +82,14 @@ function tokenColor(token: HighlightedToken): string | undefined {
 .file-content-line__content {
   flex: 1;
   white-space: pre;
+}
+
+.file-content-line--wrap {
+  align-items: flex-start;
+}
+
+.file-content-line--wrap .file-content-line__content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 </style>

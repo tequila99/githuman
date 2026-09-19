@@ -1,16 +1,29 @@
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useFileExplorerStore } from '@/stores/file-explorer-store'
 import FileCardFrame from './FileCardFrame.vue'
 import FileCardHeader from './FileCardHeader.vue'
+import FileHeaderMenu from './FileHeaderMenu.vue'
 import FileContentView from './FileContentView.vue'
+import { isMarkdown } from '@/utils/file-wrap'
 
 const { t } = useI18n()
 
 const explorer = useFileExplorerStore()
 const { selectedPath, browseFileLines, browseFileIsBinary, browseFileLoading } =
   storeToRefs(explorer)
+
+const wrap = ref(false)
+
+watch(
+  selectedPath,
+  path => {
+    wrap.value = path ? isMarkdown(path) : false
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
@@ -20,7 +33,9 @@ const { selectedPath, browseFileLines, browseFileIsBinary, browseFileLoading } =
 
   <FileCardFrame v-else class="col">
     <template #header>
-      <FileCardHeader :path="selectedPath" />
+      <FileCardHeader :path="selectedPath">
+        <FileHeaderMenu v-model="wrap" />
+      </FileCardHeader>
     </template>
 
     <div v-if="browseFileLoading" class="row justify-center q-pa-lg">
@@ -37,7 +52,11 @@ const { selectedPath, browseFileLines, browseFileIsBinary, browseFileLoading } =
       content-style="padding: 8px"
       content-active-style="padding: 8px"
     >
-      <FileContentView :path="selectedPath" :lines="browseFileLines" />
+      <FileContentView
+        :path="selectedPath"
+        :lines="browseFileLines"
+        :wrap="wrap"
+      />
     </q-scroll-area>
   </FileCardFrame>
 </template>

@@ -20,6 +20,7 @@ const props = defineProps<{
   comments?: Comment[]
   /** Whether *existing* comments show edit/delete/resolve controls — independent of `commentable`. See DiffHunkView.vue. */
   commentsEditable?: boolean
+  wrap?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -119,6 +120,7 @@ function cancelNewComment() {
         :tokens="highlightedLines?.[index]"
         :selectable="commentable"
         :selected="isSelected(index + 1)"
+        :wrap="wrap"
         @gutter-mousedown="handleGutterMousedown(index + 1)"
         @gutter-mouseenter="handleGutterMouseenter(index + 1)"
       />
