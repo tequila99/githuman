@@ -12,12 +12,14 @@ import DiffHunkView from '@/components/DiffHunkView.vue'
 import DiffFileFullView from '@/components/DiffFileFullView.vue'
 import FileCardFrame from '@/components/FileCardFrame.vue'
 import FileCardHeader from '@/components/FileCardHeader.vue'
+import FileHeaderMenu from '@/components/FileHeaderMenu.vue'
 import CommentCountBadge from '@/components/CommentCountBadge.vue'
 import {
   highlightFile,
   type HighlightedToken
 } from '@/composables/use-syntax-highlighting'
 import { pathOf } from '@/utils/diff-file'
+import { isMarkdown } from '@/utils/file-wrap'
 
 const props = withDefaults(
   defineProps<{
@@ -72,6 +74,10 @@ const STATUS_COLOR: Record<DiffFileStatus, string> = {
 }
 
 const path = computed(() => pathOf(props.file))
+
+// Component instance is keyed by path (:key="pathOf(file)" in
+// DiffPanel.vue), so this initializes once per file — no watcher needed.
+const wrap = ref(isMarkdown(path.value))
 
 // A file's comments span both diff-mode and full-file-mode ranges — split
 // by lineType (null = full-file, see ADR 0017) so each view only sees its
@@ -198,6 +204,10 @@ function createFullFileComment(input: {
             <span class="text-positive">+{{ file.additions }}</span>
             <span class="text-negative q-ml-xs">-{{ file.deletions }}</span>
           </span>
+
+          <div @click.stop>
+            <FileHeaderMenu v-model="wrap" />
+          </div>
         </FileCardHeader>
       </q-item>
     </template>
@@ -211,6 +221,7 @@ function createFullFileComment(input: {
         :commentable="commentable"
         :comments-editable="commentsEditable"
         :comments="fullFileComments"
+        :wrap="wrap"
         @create-comment="createFullFileComment"
         @edit-comment="(id, content) => emit('edit-comment', id, content)"
         @delete-comment="id => emit('delete-comment', id)"
@@ -239,6 +250,7 @@ function createFullFileComment(input: {
           :comments-editable="commentsEditable"
           :comments="diffComments"
           :comments-only="commentsOnly"
+          :wrap="wrap"
           @create-comment="createDiffComment"
           @edit-comment="(id, content) => emit('edit-comment', id, content)"
           @delete-comment="id => emit('delete-comment', id)"

@@ -38,6 +38,10 @@ export interface RepositoryInfo {
   path: string
 }
 
+export interface AppInfo {
+  version: string
+}
+
 export interface FileTreeNode {
   name: string
   path: string

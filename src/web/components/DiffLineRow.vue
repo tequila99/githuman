@@ -11,6 +11,7 @@ const props = defineProps<{
   newSelected?: boolean
   /** Review-mode gutter cells become clickable/draggable only when a listener is attached to these. */
   selectable?: boolean
+  wrap?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -39,7 +40,10 @@ function tokenColor(token: HighlightedToken): string | undefined {
 </script>
 
 <template>
-  <div class="diff-line row no-wrap text-mono" :class="rowClass">
+  <div
+    class="diff-line row no-wrap text-mono"
+    :class="[rowClass, { 'diff-line--wrap': wrap }]"
+  >
     <span
       class="diff-line__gutter"
       :class="{
@@ -129,5 +133,14 @@ function tokenColor(token: HighlightedToken): string | undefined {
 .diff-line__content {
   flex: 1;
   white-space: pre;
+}
+
+.diff-line--wrap {
+  align-items: flex-start;
+}
+
+.diff-line--wrap .diff-line__content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 </style>

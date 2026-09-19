@@ -19,6 +19,7 @@ const props = defineProps<{
   commentsOnly?: boolean
   /** Whether *existing* comments show edit/delete/resolve controls — independent of `commentable` (which only gates new-comment drag-select). DiffPanel.vue passes the same value as `commentable`; ReviewDetailPage.vue sets this without `commentable`, to allow managing comments on a review that isn't itself commentable. */
   commentsEditable?: boolean
+  wrap?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -187,6 +188,7 @@ function cancelNewComment() {
         :line="line"
         :tokens="lineTokens?.[index]"
         :selectable="commentable"
+        :wrap="wrap"
         :old-selected="isSelected('old', line.oldLineNumber)"
         :new-selected="isSelected('new', line.newLineNumber)"
         @old-mousedown="handleMousedown('old', line.oldLineNumber)"

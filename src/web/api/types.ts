@@ -5,6 +5,7 @@
  */
 export type {
   RepositoryInfo,
+  AppInfo,
   DiffFileStatus,
   DiffLineType,
   DiffLine,

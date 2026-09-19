@@ -8,6 +8,7 @@ import fastifyStatic from '@fastify/static'
 // namespace under NodeNext — cast it back to the plugin function type.
 import fastifySseImport from '@fastify/sse'
 import { healthRoutes } from './routes/health.ts'
+import { appInfoRoutes } from './routes/app-info.ts'
 import { diffRoutes } from './routes/diff.ts'
 import { gitRoutes } from './routes/git.ts'
 import { reviewRoutes } from './routes/reviews.ts'
@@ -41,6 +42,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   app.register(fastifySse)
   app.register(healthRoutes)
+  app.register(appInfoRoutes)
   app.register(diffRoutes, { repositoryPath })
   app.register(gitRoutes, { repositoryPath })
   app.register(reviewRoutes, { repositoryPath, db, eventBus })

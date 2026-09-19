@@ -39,6 +39,8 @@ export default {
     binaryFile: 'Binary file not shown',
     noTextChanges: 'No text changes',
     showFullFile: 'Show full file',
+    fileActions: 'File actions',
+    wrapLines: 'Wrap long lines',
     fileStatus: {
       added: 'Added',
       modified: 'Modified',
