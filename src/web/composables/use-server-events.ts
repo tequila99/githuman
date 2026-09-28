@@ -1,4 +1,8 @@
-import { SERVER_EVENT_TYPES, type ServerEventType } from '@/api/types'
+import {
+  SERVER_EVENT_TYPES,
+  type ServerEventType,
+  type ServerHello
+} from '@/api/types'
 
 type Subscriber = { eventTypes: Set<ServerEventType>; onChange: () => void }
 
@@ -8,6 +12,7 @@ type Subscriber = { eventTypes: Set<ServerEventType>; onChange: () => void }
 const RECONNECT_DELAY_MS = 2000
 
 const subscribers = new Set<Subscriber>()
+const helloHandlers = new Set<(hello: ServerHello) => void>()
 let source: EventSource | null = null
 // An error since the last 'open' means events may have been missed while
 // the connection was down.
@@ -33,6 +38,11 @@ function connect() {
   for (const type of SERVER_EVENT_TYPES) {
     es.addEventListener(type, () => notify(s => s.eventTypes.has(type)))
   }
+  es.addEventListener('connected', event => {
+    if (!(event instanceof MessageEvent)) return
+    const hello = parseHello(event.data)
+    if (hello) for (const handler of helloHandlers) handler(hello)
+  })
   es.addEventListener('open', () => {
     if (missedEvents) notify(() => true)
     missedEvents = false
@@ -44,6 +54,34 @@ function connect() {
     }
   })
   source = es
+}
+
+/** Tolerates an older server that sent `connected` without a payload. */
+function parseHello(data: unknown): ServerHello | null {
+  if (typeof data !== 'string') return null
+  try {
+    const parsed: unknown = JSON.parse(data)
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'instanceId' in parsed &&
+      typeof parsed.instanceId === 'string'
+    ) {
+      return { instanceId: parsed.instanceId }
+    }
+  } catch {
+    // Not JSON — treat like a missing payload.
+  }
+  return null
+}
+
+/**
+ * Calls `handler` with the server's `connected` greeting on every (re)connect
+ * of the shared connection. Doesn't open the connection by itself — pages do,
+ * via useServerEvents().
+ */
+export function onServerHello(handler: (hello: ServerHello) => void): void {
+  helloHandlers.add(handler)
 }
 
 /**

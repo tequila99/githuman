@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
@@ -32,6 +33,8 @@ export interface BuildAppOptions {
   eventBus?: EventBus
   /** Watches the repository's working tree and publishes 'files:changed' SSE events on change. Off by default — the real server enables it; tests don't need it and it would otherwise watch process.cwd() by default. */
   watchFiles?: boolean
+  /** Sent to SSE clients on connect, so open pages can tell the server restarted (see ServerHello). Defaults to a fresh random id per app instance. */
+  instanceId?: string
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -48,7 +51,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(reviewRoutes, { repositoryPath, db, eventBus })
   app.register(commentRoutes, { db, eventBus })
   app.register(exportRoutes, { db })
-  app.register(eventRoutes, { eventBus })
+  app.register(eventRoutes, {
+    eventBus,
+    instanceId: options.instanceId ?? randomUUID()
+  })
 
   if (options.watchFiles) {
     const watcher = watchRepository(repositoryPath, () => {

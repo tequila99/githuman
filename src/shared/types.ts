@@ -162,3 +162,12 @@ export const SERVER_EVENT_TYPES = [
 ] as const
 
 export type ServerEventType = (typeof SERVER_EVENT_TYPES)[number]
+
+/**
+ * Payload of the `connected` event the server sends first on every SSE
+ * connection. `instanceId` is new for every server process, so a page that
+ * reconnects and sees a different one knows the server restarted.
+ */
+export interface ServerHello {
+  instanceId: string
+}

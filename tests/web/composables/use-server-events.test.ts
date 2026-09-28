@@ -1,6 +1,6 @@
 import { test, beforeEach, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
-import type { useServerEvents as UseServerEvents } from '@/composables/use-server-events'
+import type * as ServerEventsModule from '@/composables/use-server-events'
 
 // Node has no EventSource; this fake records instances so tests can drive
 // open/error/named events by hand.
@@ -28,8 +28,8 @@ class FakeEventSource extends EventTarget {
     this.dispatchEvent(new Event('open'))
   }
 
-  emit(type: string) {
-    this.dispatchEvent(new Event(type))
+  emit(type: string, data?: string) {
+    this.dispatchEvent(new MessageEvent(type, { data }))
   }
 
   fail(permanently: boolean) {
@@ -41,7 +41,8 @@ class FakeEventSource extends EventTarget {
 }
 
 const originalEventSource = globalThis.EventSource
-let useServerEvents: typeof UseServerEvents
+let useServerEvents: typeof ServerEventsModule.useServerEvents
+let onServerHello: typeof ServerEventsModule.onServerHello
 let moduleVersion = 0
 
 function latest(): FakeEventSource {
@@ -58,8 +59,9 @@ beforeEach(async () => {
   // each test imports a fresh copy of the module.
   const module = (await import(
     `../../../src/web/composables/use-server-events.ts?v=${++moduleVersion}`
-  )) as { useServerEvents: typeof UseServerEvents }
+  )) as typeof ServerEventsModule
   useServerEvents = module.useServerEvents
+  onServerHello = module.onServerHello
 })
 
 afterEach(() => {
@@ -176,4 +178,36 @@ test('subscribing while a reconnect is pending joins the next connection', () =>
   assert.equal(FakeEventSource.instances.length, 2)
   latest().emit('review:created')
   assert.equal(onChange.mock.callCount(), 1)
+})
+
+test('onServerHello receives the server greeting on every (re)connect', () => {
+  const hello = mock.fn()
+  onServerHello(hello)
+  useServerEvents(['files:changed'], () => {})
+
+  latest().emit('connected', JSON.stringify({ instanceId: 'a' }))
+  latest().fail(false)
+  latest().emit('connected', JSON.stringify({ instanceId: 'b' }))
+
+  assert.deepEqual(
+    hello.mock.calls.map(call => call.arguments[0]),
+    [{ instanceId: 'a' }, { instanceId: 'b' }]
+  )
+})
+
+test('onServerHello ignores a greeting without an instanceId (older server)', () => {
+  const hello = mock.fn()
+  onServerHello(hello)
+  useServerEvents(['files:changed'], () => {})
+
+  latest().emit('connected', '{}')
+  latest().emit('connected', 'not json')
+
+  assert.equal(hello.mock.callCount(), 0)
+})
+
+test('onServerHello alone does not open a connection', () => {
+  onServerHello(() => {})
+
+  assert.equal(FakeEventSource.instances.length, 0)
 })
