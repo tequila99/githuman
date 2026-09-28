@@ -162,3 +162,18 @@ test('a throwing subscriber does not stop the others from being notified', t => 
 
   assert.equal(other.mock.callCount(), 1)
 })
+
+test('subscribing while a reconnect is pending joins the next connection', () => {
+  useServerEvents(['files:changed'], () => {})
+  latest().emitOpen()
+  latest().fail(true)
+
+  const onChange = mock.fn()
+  useServerEvents(['review:created'], onChange)
+  assert.equal(FakeEventSource.instances.length, 1, 'no second connection')
+
+  mock.timers.tick(2000)
+  assert.equal(FakeEventSource.instances.length, 2)
+  latest().emit('review:created')
+  assert.equal(onChange.mock.callCount(), 1)
+})

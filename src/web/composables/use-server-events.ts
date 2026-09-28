@@ -12,6 +12,7 @@ let source: EventSource | null = null
 // An error since the last 'open' means events may have been missed while
 // the connection was down.
 let missedEvents = false
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined
 
 function notify(matches: (subscriber: Subscriber) => boolean) {
   for (const subscriber of subscribers) {
@@ -39,7 +40,7 @@ function connect() {
   es.addEventListener('error', () => {
     missedEvents = true
     if (es.readyState === EventSource.CLOSED) {
-      setTimeout(connect, RECONNECT_DELAY_MS)
+      reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS)
     }
   })
   source = es
@@ -49,7 +50,8 @@ function connect() {
  * Subscribes to the backend's SSE stream (`GET /api/events`), calling
  * `onChange` whenever one of `eventTypes` arrives — and once after a
  * reconnect, to catch up on anything missed while the connection was down.
- * Not on the first connect: callers do their own initial fetch on mount.
+ * Not on the first connect: callers do their own initial fetch on mount. A
+ * subscriber added while a reconnect is pending gets that catch-up call too.
  *
  * All subscribers share one EventSource, opened on first use and kept for
  * the lifetime of the tab (every page but the 404 subscribes anyway).
@@ -58,6 +60,8 @@ export function useServerEvents(
   eventTypes: ServerEventType[],
   onChange: () => void
 ): { close: () => void } {
+  // `source` stays set (to the dead EventSource) while a reconnect is
+  // pending, so this doesn't open a second connection alongside it.
   if (!source) connect()
 
   const subscriber: Subscriber = { eventTypes: new Set(eventTypes), onChange }
@@ -72,5 +76,8 @@ export function useServerEvents(
 
 if (import.meta.hot) {
   // A reloaded copy of this module opens its own connection.
-  import.meta.hot.dispose(() => source?.close())
+  import.meta.hot.dispose(() => {
+    clearTimeout(reconnectTimer)
+    source?.close()
+  })
 }
