@@ -75,8 +75,12 @@ export const useDiffStore = defineStore('diff', () => {
         unstaged.map(decodeDiffFile)
       )
     } catch (err) {
-      stagedFiles.value = []
-      unstagedFiles.value = []
+      // A failed refetch keeps the last good lists: clearing them would
+      // unmount the file list and reset its scroll position (#26).
+      if (!loaded.value) {
+        stagedFiles.value = []
+        unstagedFiles.value = []
+      }
       error.value = err instanceof Error ? err.message : String(err)
     } finally {
       loading.value = false

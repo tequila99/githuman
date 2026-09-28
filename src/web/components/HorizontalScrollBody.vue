@@ -78,6 +78,7 @@ function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
     <div
       ref="viewport"
       class="horizontal-scroll-body__viewport"
+      :tabindex="overflowing ? 0 : undefined"
       @scroll="syncScroll(viewport, bar)"
     >
       <slot />

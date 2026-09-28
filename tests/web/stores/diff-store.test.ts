@@ -55,7 +55,7 @@ test('fetchDiff populates staged/unstaged from the API', async () => {
   assert.equal(store.error, null)
 })
 
-test('fetchDiff clears both lists and records the error on failure', async () => {
+test('a failed first fetchDiff clears both lists and records the error', async () => {
   globalThis.fetch = async () => new Response('nope', { status: 500 })
 
   const store = useDiffStore()
@@ -69,6 +69,27 @@ test('fetchDiff clears both lists and records the error on failure', async () =>
   assert.deepEqual(store.stagedFiles, [])
   assert.deepEqual(store.unstagedFiles, [])
   assert.equal(store.loading, false)
+  assert.ok(store.error)
+})
+
+test('a failed refetch keeps the last good lists and records the error', async () => {
+  // Clearing them would unmount the sidebar list and reset its scroll
+  // position on any transient error during an SSE refresh (#26).
+  const staged = [file({ newPath: 's.txt' })]
+  const unstaged = [file({ newPath: 'u.txt' })]
+  globalThis.fetch = (async (input: string | URL) =>
+    jsonResponse(
+      input.toString().includes('/unstaged') ? unstaged : staged
+    )) as typeof fetch
+
+  const store = useDiffStore()
+  await store.fetchDiff()
+
+  globalThis.fetch = async () => new Response('nope', { status: 500 })
+  await store.fetchDiff()
+
+  assert.deepEqual(store.stagedFiles, staged)
+  assert.deepEqual(store.unstagedFiles, unstaged)
   assert.ok(store.error)
 })
 
