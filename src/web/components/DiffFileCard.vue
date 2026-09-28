@@ -213,7 +213,11 @@ function createFullFileComment(input: {
       </q-item>
     </template>
 
-    <HorizontalScrollBody v-if="expanded" class="diff-file-card__body">
+    <HorizontalScrollBody
+      v-if="expanded"
+      class="diff-file-card__body"
+      :label="path"
+    >
       <DiffFileFullView
         v-if="viewMode === 'full'"
         :path="path"

@@ -11,6 +11,11 @@ import { onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
  * width is kept in sync with it. Shift+wheel works natively on either.
  */
 
+defineProps<{
+  /** Accessible name for the focusable scroll region, e.g. the file path. */
+  label?: string
+}>()
+
 const viewport = useTemplateRef<HTMLDivElement>('viewport')
 const bar = useTemplateRef<HTMLDivElement>('bar')
 
@@ -79,6 +84,8 @@ function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
       ref="viewport"
       class="horizontal-scroll-body__viewport"
       :tabindex="overflowing ? 0 : undefined"
+      role="group"
+      :aria-label="label"
       @scroll="syncScroll(viewport, bar)"
     >
       <slot />
@@ -112,6 +119,12 @@ function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
+}
+
+.horizontal-scroll-body__viewport:focus-visible {
+  /* Inset: FileCardFrame's overflow: clip would cut off an outside outline. */
+  outline: 2px solid var(--q-primary);
+  outline-offset: -2px;
 }
 
 .horizontal-scroll-body__viewport::-webkit-scrollbar {
