@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import ReviewCreateDialog from '@/components/ReviewCreateDialog.vue'
 import { useActiveReviewStore } from '@/stores/active-review-store'
 import { useDiffStore } from '@/stores/diff-store'
-import { useServerEvents } from '@/composables/use-server-events'
 import type { Review } from '@/api/types'
 import type { TouchPanValue } from 'quasar'
 
@@ -21,25 +20,16 @@ const openFab = ref(false)
 const fabPos = ref<[number, number]>([18, 18])
 const draggingFab = ref(false)
 
+// Only reads diff/active-review state — the hosting page keeps it fresh
+// (FileExplorer.vue on Changes, ReviewsPage.vue). Fetching here too
+// duplicated those requests on every change (#28).
+//
 // Disabled with nothing to review (no staged or unstaged changes — a
 // 'local' review snapshots both, see ADR 0018) or while a review is already
 // in progress on this branch (only one active review at a time).
 const disabled = computed(
   () => changedPaths.value.length === 0 || activeReview.value !== null
 )
-
-function refresh() {
-  void diffStore.fetchDiff()
-  void activeReviewStore.refresh()
-}
-
-onMounted(refresh)
-
-const events = useServerEvents(
-  ['files:changed', 'review:created', 'review:updated', 'review:deleted'],
-  refresh
-)
-onUnmounted(() => events.close())
 
 function moveFab(ev: TouchPanDetails) {
   draggingFab.value = ev.isFirst !== true && ev.isFinal !== true

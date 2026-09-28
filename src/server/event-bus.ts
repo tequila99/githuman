@@ -1,11 +1,6 @@
-export type ServerEventType =
-  | 'review:created'
-  | 'review:updated'
-  | 'review:deleted'
-  | 'comment:created'
-  | 'comment:updated'
-  | 'comment:deleted'
-  | 'files:changed'
+import type { ServerEventType } from '../shared/types.ts'
+
+export type { ServerEventType }
 
 export interface ServerEvent {
   type: ServerEventType

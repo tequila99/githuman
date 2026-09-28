@@ -57,7 +57,20 @@ export const useDiffStore = defineStore('diff', () => {
     )
   )
 
-  async function fetchDiff() {
+  let pendingFetch: Promise<void> | null = null
+
+  /**
+   * Overlapping calls share one in-flight request pair: callers outside
+   * file-explorer-store (e.g. ReviewsPage.vue on SSE events) would otherwise
+   * fire parallel fetches whose responses can land out of order (#28).
+   */
+  function fetchDiff(): Promise<void> {
+    return (pendingFetch ??= doFetchDiff().finally(() => {
+      pendingFetch = null
+    }))
+  }
+
+  async function doFetchDiff() {
     loading.value = true
     error.value = null
 
