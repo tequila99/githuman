@@ -1,9 +1,9 @@
 import { test, beforeEach, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
-import { useServerEvents } from '@/composables/use-server-events'
+import type { useServerEvents as UseServerEvents } from '@/composables/use-server-events'
 
 // Node has no EventSource; this fake records instances so tests can drive
-// open/error/message events by hand.
+// open/error/named events by hand.
 class FakeEventSource extends EventTarget {
   static readonly CONNECTING = 0
   static readonly OPEN = 1
@@ -41,13 +41,8 @@ class FakeEventSource extends EventTarget {
 }
 
 const originalEventSource = globalThis.EventSource
-const openHandles: Array<{ close: () => void }> = []
-
-function subscribe(types: string[], onChange: () => void) {
-  const handle = useServerEvents(types, onChange)
-  openHandles.push(handle)
-  return handle
-}
+let useServerEvents: typeof UseServerEvents
+let moduleVersion = 0
 
 function latest(): FakeEventSource {
   const source = FakeEventSource.instances.at(-1)
@@ -55,23 +50,28 @@ function latest(): FakeEventSource {
   return source
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   mock.timers.enable({ apis: ['setTimeout'] })
   FakeEventSource.instances = []
   globalThis.EventSource = FakeEventSource as unknown as typeof EventSource
+  // The connection lives in module state for the lifetime of the tab, so
+  // each test imports a fresh copy of the module.
+  const module = (await import(
+    `../../../src/web/composables/use-server-events.ts?v=${++moduleVersion}`
+  )) as { useServerEvents: typeof UseServerEvents }
+  useServerEvents = module.useServerEvents
 })
 
 afterEach(() => {
-  // The composable keeps module-level state; fully close it between tests.
-  for (const handle of openHandles.splice(0)) handle.close()
-  mock.timers.tick(10_000)
   mock.timers.reset()
   globalThis.EventSource = originalEventSource
 })
 
-test('subscribers share one EventSource connection', () => {
-  subscribe(['files:changed'], () => {})
-  subscribe(['review:created'], () => {})
+test('subscribers share one EventSource, opened on first use', () => {
+  assert.equal(FakeEventSource.instances.length, 0)
+
+  useServerEvents(['files:changed'], () => {})
+  useServerEvents(['review:created'], () => {})
 
   assert.equal(FakeEventSource.instances.length, 1)
   assert.equal(latest().url, '/api/events')
@@ -80,8 +80,8 @@ test('subscribers share one EventSource connection', () => {
 test('events reach only the subscribers of that type', () => {
   const files = mock.fn()
   const reviews = mock.fn()
-  subscribe(['files:changed'], files)
-  subscribe(['review:created', 'review:deleted'], reviews)
+  useServerEvents(['files:changed'], files)
+  useServerEvents(['review:created', 'review:deleted'], reviews)
 
   latest().emit('files:changed')
   latest().emit('review:deleted')
@@ -90,26 +90,47 @@ test('events reach only the subscribers of that type', () => {
   assert.equal(reviews.mock.callCount(), 1)
 })
 
+test('close() unsubscribes without closing the shared connection', () => {
+  const onChange = mock.fn()
+  const handle = useServerEvents(['files:changed'], onChange)
+
+  handle.close()
+  latest().emit('files:changed')
+
+  assert.equal(onChange.mock.callCount(), 0)
+  assert.notEqual(latest().readyState, FakeEventSource.CLOSED)
+})
+
 test('the first open does not call onChange, a reconnect calls every subscriber', () => {
   const first = mock.fn()
   const second = mock.fn()
-  subscribe(['files:changed'], first)
-  subscribe(['review:created'], second)
+  useServerEvents(['files:changed'], first)
+  useServerEvents(['review:created'], second)
 
   latest().emitOpen()
   assert.equal(first.mock.callCount(), 0)
   assert.equal(second.mock.callCount(), 0)
 
-  latest().fail(false) // transient drop, browser reconnects on its own
+  latest().fail(false) // transient drop, the browser reconnects on its own
   latest().emitOpen()
   assert.equal(first.mock.callCount(), 1)
   assert.equal(second.mock.callCount(), 1)
   assert.equal(FakeEventSource.instances.length, 1)
 })
 
-test('a permanently closed connection is recreated and treated as a reconnect', () => {
+test('a first connect after failed attempts catches up (backend was down on load)', () => {
   const onChange = mock.fn()
-  subscribe(['files:changed'], onChange)
+  useServerEvents(['files:changed'], onChange)
+
+  latest().fail(false)
+  latest().emitOpen()
+
+  assert.equal(onChange.mock.callCount(), 1)
+})
+
+test('a permanently closed connection is recreated after a delay, then catches up', () => {
+  const onChange = mock.fn()
+  useServerEvents(['files:changed'], onChange)
   latest().emitOpen()
 
   latest().fail(true)
@@ -120,133 +141,24 @@ test('a permanently closed connection is recreated and treated as a reconnect', 
 
   latest().emitOpen()
   assert.equal(onChange.mock.callCount(), 1)
-})
 
-test('the connection closes once the last subscriber leaves', () => {
-  const a = subscribe(['files:changed'], () => {})
-  const b = subscribe(['review:created'], () => {})
-  const source = latest()
-
-  a.close()
-  mock.timers.tick(0)
-  assert.notEqual(source.readyState, FakeEventSource.CLOSED)
-
-  b.close()
-  mock.timers.tick(0)
-  assert.equal(source.readyState, FakeEventSource.CLOSED)
-})
-
-test('unsubscribe then subscribe in the same tick (route change) keeps the connection', () => {
-  const oldPage = subscribe(['review:created'], () => {})
-  const source = latest()
-
-  oldPage.close()
-  const onChange = mock.fn()
-  subscribe(['files:changed'], onChange)
-  mock.timers.tick(0)
-
-  assert.equal(FakeEventSource.instances.length, 1)
-  assert.notEqual(source.readyState, FakeEventSource.CLOSED)
-  source.emit('files:changed')
-  assert.equal(onChange.mock.callCount(), 1)
-})
-
-test('a new subscriber after a full close gets a fresh connection whose first open is silent', () => {
-  subscribe(['files:changed'], () => {}).close()
-  mock.timers.tick(0)
-
-  const onChange = mock.fn()
-  subscribe(['files:changed'], onChange)
-  assert.equal(FakeEventSource.instances.length, 2)
-
-  latest().emitOpen()
-  assert.equal(onChange.mock.callCount(), 0)
-})
-
-test('a first connect after failed attempts catches up (backend was down on load)', () => {
-  const onChange = mock.fn()
-  subscribe(['files:changed'], onChange)
-
-  latest().fail(true)
-  mock.timers.tick(2000)
-  latest().emitOpen()
-
-  assert.equal(onChange.mock.callCount(), 1)
-})
-
-test('subscribing while a reconnect is pending waits for it and gets its event types', () => {
-  subscribe(['files:changed'], () => {})
-  latest().emitOpen()
-  latest().fail(true)
-
-  const onChange = mock.fn()
-  subscribe(['review:created'], onChange)
-  assert.equal(FakeEventSource.instances.length, 1)
-
-  mock.timers.tick(2000)
-  assert.equal(FakeEventSource.instances.length, 2)
-  latest().emit('review:created')
-  assert.equal(onChange.mock.callCount(), 1)
-})
-
-test('no reconnect once every subscriber left during the reconnect delay', () => {
-  const handle = subscribe(['files:changed'], () => {})
-  latest().emitOpen()
-  latest().fail(true)
-
-  handle.close()
-  mock.timers.tick(2000)
-
-  assert.equal(FakeEventSource.instances.length, 1)
-})
-
-test('closing the same handle twice does not close a connection others still use', () => {
-  const a = subscribe(['files:changed'], () => {})
-  subscribe(['review:created'], () => {})
-  const source = latest()
-
-  a.close()
-  a.close()
-  mock.timers.tick(0)
-
-  assert.notEqual(source.readyState, FakeEventSource.CLOSED)
+  latest().emit('files:changed')
+  assert.equal(
+    onChange.mock.callCount(),
+    2,
+    'events flow on the new connection'
+  )
 })
 
 test('a throwing subscriber does not stop the others from being notified', t => {
   t.mock.method(console, 'error', () => {})
   const other = mock.fn()
-  subscribe(['files:changed'], () => {
+  useServerEvents(['files:changed'], () => {
     throw new Error('boom')
   })
-  subscribe(['files:changed'], other)
+  useServerEvents(['files:changed'], other)
 
   latest().emit('files:changed')
 
   assert.equal(other.mock.callCount(), 1)
-})
-
-test('events from a superseded connection are ignored', () => {
-  const onChange = mock.fn()
-  subscribe(['files:changed'], onChange)
-  const stale = latest()
-  stale.emitOpen()
-  stale.fail(true)
-  mock.timers.tick(2000)
-  const live = latest()
-  assert.notEqual(live, stale)
-
-  stale.emit('files:changed')
-  stale.emitOpen()
-  stale.fail(true)
-  assert.equal(onChange.mock.callCount(), 0)
-  assert.equal(
-    FakeEventSource.instances.length,
-    2,
-    'stale error must not schedule a reconnect'
-  )
-  mock.timers.tick(2000)
-  assert.equal(FakeEventSource.instances.length, 2)
-
-  live.emit('files:changed')
-  assert.equal(onChange.mock.callCount(), 1)
 })

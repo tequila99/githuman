@@ -1,129 +1,76 @@
-type Listener = { eventTypes: Set<string>; onChange: () => void }
+import { SERVER_EVENT_TYPES, type ServerEventType } from '@/api/types'
 
-// A browser gives up on an EventSource for good (readyState CLOSED) after an
-// HTTP error or a wrong content type, e.g. while the server restarts.
+type Subscriber = { eventTypes: Set<ServerEventType>; onChange: () => void }
+
+// A browser only gives up on an EventSource for good (readyState CLOSED)
+// after an HTTP error, e.g. the dev proxy answering 500 while the backend
+// restarts. A refused connection (production restart) it retries by itself.
 const RECONNECT_DELAY_MS = 2000
 
-const listeners = new Set<Listener>()
-const attachedTypes = new Set<string>()
+const subscribers = new Set<Subscriber>()
 let source: EventSource | null = null
-let connectedOnce = false
-// Set when the connection errors before ever opening (e.g. the backend was
-// down during page load, so callers' initial fetches failed too).
+// An error since the last 'open' means events may have been missed while
+// the connection was down.
 let missedEvents = false
-let closeTimer: ReturnType<typeof setTimeout> | undefined
-let reconnectTimer: ReturnType<typeof setTimeout> | undefined
 
-// One subscriber throwing must not starve the others — it couldn't back
-// when each had its own EventSource.
-function notify(listener: Listener) {
-  try {
-    listener.onChange()
-  } catch (err) {
-    console.error(err)
-  }
-}
-
-function dispatch(type: string) {
-  for (const listener of listeners) {
-    if (listener.eventTypes.has(type)) notify(listener)
-  }
-}
-
-function attach(type: string) {
-  const es = source
-  if (!es || attachedTypes.has(type)) return
-  attachedTypes.add(type)
-  es.addEventListener(type, () => {
-    if (source === es) dispatch(type)
-  })
-}
-
-function open() {
-  const es = new EventSource('/api/events')
-  source = es
-  attachedTypes.clear()
-  for (const listener of listeners) {
-    for (const type of listener.eventTypes) attach(type)
-  }
-
-  // Handlers check they still belong to the live connection, rather than
-  // relying on a closed EventSource never firing again.
-  es.addEventListener('open', () => {
-    if (source !== es) return
-    // The first connect is covered by every caller's own initial fetch on
-    // mount; only a *re*connect (or a first connect after failed attempts)
-    // needs a catch-up for what was missed.
-    if (connectedOnce || missedEvents) {
-      for (const listener of listeners) notify(listener)
+function notify(matches: (subscriber: Subscriber) => boolean) {
+  for (const subscriber of subscribers) {
+    if (!matches(subscriber)) continue
+    // One subscriber throwing must not keep the others from being notified.
+    try {
+      subscriber.onChange()
+    } catch (err) {
+      console.error(err)
     }
-    connectedOnce = true
+  }
+}
+
+function connect() {
+  const es = new EventSource('/api/events')
+  // These listeners live exactly as long as this EventSource — subscribers
+  // come and go through the `subscribers` set instead.
+  for (const type of SERVER_EVENT_TYPES) {
+    es.addEventListener(type, () => notify(s => s.eventTypes.has(type)))
+  }
+  es.addEventListener('open', () => {
+    if (missedEvents) notify(() => true)
     missedEvents = false
   })
-
   es.addEventListener('error', () => {
-    if (source !== es) return
-    if (!connectedOnce) missedEvents = true
-    if (es.readyState !== EventSource.CLOSED) return // Browser retries itself.
-    source = null
-    reconnectTimer = setTimeout(() => {
-      reconnectTimer = undefined
-      if (listeners.size > 0) open()
-    }, RECONNECT_DELAY_MS)
+    missedEvents = true
+    if (es.readyState === EventSource.CLOSED) {
+      setTimeout(connect, RECONNECT_DELAY_MS)
+    }
   })
-}
-
-function shutdown() {
-  source?.close()
-  source = null
-  connectedOnce = false
-  missedEvents = false
-  clearTimeout(reconnectTimer)
-  reconnectTimer = undefined
-  clearTimeout(closeTimer)
-  closeTimer = undefined
+  source = es
 }
 
 /**
- * Subscribes to the backend's SSE stream (`GET /api/events`) for the given
- * event types, calling `onChange` whenever one arrives — and once more after
- * a reconnect, to catch up on anything missed while the connection was down.
- * Callers do their own initial fetch on mount; the first connect doesn't
- * trigger `onChange` (it would only duplicate that fetch). A subscriber added
- * while a reconnect is in flight may get one catch-up call on top of it.
+ * Subscribes to the backend's SSE stream (`GET /api/events`), calling
+ * `onChange` whenever one of `eventTypes` arrives — and once after a
+ * reconnect, to catch up on anything missed while the connection was down.
+ * Not on the first connect: callers do their own initial fetch on mount.
  *
- * All subscribers in a tab share one EventSource. Closing is deferred a tick
- * so a route change (old page unmounts, then the new one mounts) reuses the
- * connection instead of dropping and reopening it.
+ * All subscribers share one EventSource, opened on first use and kept for
+ * the lifetime of the tab (every page but the 404 subscribes anyway).
  */
 export function useServerEvents(
-  eventTypes: string[],
+  eventTypes: ServerEventType[],
   onChange: () => void
 ): { close: () => void } {
-  const listener: Listener = { eventTypes: new Set(eventTypes), onChange }
-  listeners.add(listener)
+  if (!source) connect()
 
-  clearTimeout(closeTimer)
-  closeTimer = undefined
-  if (source) {
-    for (const type of listener.eventTypes) attach(type)
-  } else if (!reconnectTimer) {
-    open()
-  }
+  const subscriber: Subscriber = { eventTypes: new Set(eventTypes), onChange }
+  subscribers.add(subscriber)
 
   return {
     close() {
-      if (!listeners.delete(listener) || listeners.size > 0) return
-      closeTimer = setTimeout(() => {
-        closeTimer = undefined
-        if (listeners.size === 0) shutdown()
-      }, 0)
+      subscribers.delete(subscriber)
     }
   }
 }
 
 if (import.meta.hot) {
-  // Module state would otherwise leak its EventSource past an HMR update of
-  // this file if some importer isn't remounted.
-  import.meta.hot.dispose(shutdown)
+  // A reloaded copy of this module opens its own connection.
+  import.meta.hot.dispose(() => source?.close())
 }
