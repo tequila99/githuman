@@ -224,3 +224,29 @@ test('a throwing subscriber does not stop the others from being notified', t => 
 
   assert.equal(other.mock.callCount(), 1)
 })
+
+test('events from a superseded connection are ignored', () => {
+  const onChange = mock.fn()
+  subscribe(['files:changed'], onChange)
+  const stale = latest()
+  stale.emitOpen()
+  stale.fail(true)
+  mock.timers.tick(2000)
+  const live = latest()
+  assert.notEqual(live, stale)
+
+  stale.emit('files:changed')
+  stale.emitOpen()
+  stale.fail(true)
+  assert.equal(onChange.mock.callCount(), 0)
+  assert.equal(
+    FakeEventSource.instances.length,
+    2,
+    'stale error must not schedule a reconnect'
+  )
+  mock.timers.tick(2000)
+  assert.equal(FakeEventSource.instances.length, 2)
+
+  live.emit('files:changed')
+  assert.equal(onChange.mock.callCount(), 1)
+})
