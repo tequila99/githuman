@@ -213,7 +213,7 @@ test('onServerHello alone does not open a connection', () => {
 })
 
 test('a throwing hello handler does not stop the others', t => {
-  t.mock.method(console, 'error', () => {})
+  const logged = t.mock.method(console, 'error', () => {})
   const other = mock.fn()
   onServerHello(() => {
     throw new Error('boom')
@@ -224,4 +224,5 @@ test('a throwing hello handler does not stop the others', t => {
   latest().emit('connected', JSON.stringify({ instanceId: 'a' }))
 
   assert.equal(other.mock.callCount(), 1)
+  assert.equal(logged.mock.callCount(), 1, 'the error is logged, not swallowed')
 })
