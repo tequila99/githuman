@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
+import { onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 
 /**
  * Horizontal scroll container whose scrollbar stays visible at the bottom of
@@ -22,12 +22,18 @@ function measure() {
   if (!el) return
   scrollWidth.value = el.scrollWidth
   overflowing.value = el.scrollWidth > el.clientWidth + 1
-  if (bar.value) bar.value.scrollLeft = el.scrollLeft
 }
 
-// Rows are block children as wide as the viewport, so a ResizeObserver alone
-// misses scrollWidth changes from new content (late syntax highlighting,
-// diff/full-file switch, wrap toggle) — hence the MutationObserver too.
+// After the DOM update, so the bar already has its new spacer width and is
+// no longer display:none when its scrollLeft is set.
+watch([scrollWidth, overflowing], () => syncScroll(viewport.value, bar.value), {
+  flush: 'post'
+})
+
+// A ResizeObserver alone misses scrollWidth changes that don't change the
+// viewport's own box (new/longer lines, diff/full-file switch) — hence the
+// MutationObserver too. 'style' is deliberately not watched: token colors
+// change on every theme switch/highlight pass and never affect width.
 let frame = 0
 function scheduleMeasure() {
   if (frame) return
@@ -50,9 +56,8 @@ onMounted(() => {
     subtree: true,
     characterData: true,
     attributes: true,
-    attributeFilter: ['class', 'style']
+    attributeFilter: ['class']
   })
-  measure()
 })
 
 onBeforeUnmount(() => {
@@ -82,6 +87,7 @@ function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
       ref="bar"
       class="horizontal-scroll-body__bar"
       aria-hidden="true"
+      tabindex="-1"
       @scroll="syncScroll(bar, viewport)"
     >
       <div :style="{ width: `${scrollWidth}px`, height: '1px' }" />
