@@ -74,10 +74,17 @@ export function useServerEvents(
   }
 }
 
+// Not exported: in the app the connection lives as long as the tab, and the
+// browser closes it on unload. Only HMR needs an explicit teardown.
+function disconnect() {
+  clearTimeout(reconnectTimer) // or the pending reconnect would revive it
+  reconnectTimer = undefined
+  source?.close()
+  source = null
+  missedEvents = false
+}
+
 if (import.meta.hot) {
   // A reloaded copy of this module opens its own connection.
-  import.meta.hot.dispose(() => {
-    clearTimeout(reconnectTimer)
-    source?.close()
-  })
+  import.meta.hot.dispose(disconnect)
 }
