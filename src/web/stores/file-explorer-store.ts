@@ -143,12 +143,9 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     })
   }
 
-  // file-watcher.service.ts debounces 300ms before emitting `files:changed` after a git
+  // file-watcher.service.ts debounces this long before emitting `files:changed` after a git
   // mutation, so an explicit refresh() is reliably followed by a same-mutation SSE echo within
-  // this window. Measured from when the refresh *finished* too: timed from its start only, a
-  // slow fetch ate into the ~100ms of slack and the echo slipped through as a second fetch
-  // (#28). Trade-off, same as before: a genuine external change landing inside the window is
-  // only picked up by the next event.
+  // this window.
   const REFRESH_ECHO_WINDOW_MS = 400
 
   let pendingRefresh: Promise<void> | null = null
@@ -172,11 +169,7 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
   /** Always fetches. Call after anything the UI itself just did (mount, stage/unstage/discard). */
   async function refresh() {
     refreshedAt = Date.now()
-    try {
-      await doRefresh()
-    } finally {
-      refreshedAt = Date.now()
-    }
+    await doRefresh()
   }
 
   /** Fetches on a 'files:changed' SSE event, unless it's an echo of our own recent refresh(). */

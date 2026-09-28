@@ -1,4 +1,4 @@
-import { test, beforeEach, afterEach } from 'node:test'
+import { test, beforeEach, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { setActivePinia, createPinia } from 'pinia'
 import { useDiffStore } from '@/stores/diff-store'
@@ -130,4 +130,28 @@ test('changedPaths combines staged and unstaged paths', async () => {
   await store.fetchDiff()
 
   assert.deepEqual(new Set(store.changedPaths), new Set(['s.txt', 'u.txt']))
+})
+
+test('overlapping fetchDiff calls share a single in-flight request pair', async () => {
+  const pendingResolvers: Array<(r: Response) => void> = []
+  const fetchSpy = mock.fn(
+    () =>
+      new Promise<Response>(resolve => {
+        pendingResolvers.push(resolve)
+      })
+  )
+  globalThis.fetch = fetchSpy
+
+  const store = useDiffStore()
+  const first = store.fetchDiff()
+  const second = store.fetchDiff()
+  for (const resolve of pendingResolvers) resolve(jsonResponse([]))
+  await Promise.all([first, second])
+
+  assert.equal(fetchSpy.mock.callCount(), 2) // staged + unstaged, once
+
+  const third = store.fetchDiff()
+  for (const resolve of pendingResolvers.splice(2)) resolve(jsonResponse([]))
+  await third
+  assert.equal(fetchSpy.mock.callCount(), 4, 'a later call fetches again')
 })

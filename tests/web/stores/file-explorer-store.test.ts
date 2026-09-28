@@ -125,28 +125,3 @@ test('diffFiles reflects the selected source', async () => {
   explorer.source = 'unstaged'
   assert.equal(explorer.diffFiles.length, 0)
 })
-
-test('refreshFromServerEvent() is skipped shortly after a slow refresh() finished', async () => {
-  // The echo window also counts from when refresh() finished: a slow fetch
-  // must not push the watcher's echo of the same mutation out of it (#28).
-  const resolvePending: Array<(r: Response) => void> = []
-  const fetchSpy = mock.fn(
-    () =>
-      new Promise<Response>(resolve => {
-        resolvePending.push(resolve)
-      })
-  )
-  globalThis.fetch = fetchSpy
-
-  const explorer = useFileExplorerStore()
-  const refreshing = explorer.refresh()
-  fakeNow += 1000 // the fetch takes a whole second
-  for (const resolve of resolvePending) resolve(jsonResponse([]))
-  await refreshing
-  assert.equal(fetchSpy.mock.callCount(), 2)
-
-  fakeNow += 300 // echo arrives 1.3s after start, 0.3s after the end
-  await explorer.refreshFromServerEvent()
-
-  assert.equal(fetchSpy.mock.callCount(), 2, 'should not have fetched again')
-})

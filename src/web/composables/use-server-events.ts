@@ -31,19 +31,26 @@ function dispatch(type: string) {
 }
 
 function attach(type: string) {
-  if (!source || attachedTypes.has(type)) return
+  const es = source
+  if (!es || attachedTypes.has(type)) return
   attachedTypes.add(type)
-  source.addEventListener(type, () => dispatch(type))
+  es.addEventListener(type, () => {
+    if (source === es) dispatch(type)
+  })
 }
 
 function open() {
-  source = new EventSource('/api/events')
+  const es = new EventSource('/api/events')
+  source = es
   attachedTypes.clear()
   for (const listener of listeners) {
     for (const type of listener.eventTypes) attach(type)
   }
 
-  source.addEventListener('open', () => {
+  // Handlers check they still belong to the live connection, rather than
+  // relying on a closed EventSource never firing again.
+  es.addEventListener('open', () => {
+    if (source !== es) return
     // The first connect is covered by every caller's own initial fetch on
     // mount; only a *re*connect (or a first connect after failed attempts)
     // needs a catch-up for what was missed.
@@ -54,9 +61,10 @@ function open() {
     missedEvents = false
   })
 
-  source.addEventListener('error', () => {
+  es.addEventListener('error', () => {
+    if (source !== es) return
     if (!connectedOnce) missedEvents = true
-    if (source?.readyState !== EventSource.CLOSED) return // Browser retries itself.
+    if (es.readyState !== EventSource.CLOSED) return // Browser retries itself.
     source = null
     reconnectTimer = setTimeout(() => {
       reconnectTimer = undefined
@@ -72,6 +80,8 @@ function shutdown() {
   missedEvents = false
   clearTimeout(reconnectTimer)
   reconnectTimer = undefined
+  clearTimeout(closeTimer)
+  closeTimer = undefined
 }
 
 /**
