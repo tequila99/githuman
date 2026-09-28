@@ -162,3 +162,65 @@ test('a new subscriber after a full close gets a fresh connection whose first op
   latest().emitOpen()
   assert.equal(onChange.mock.callCount(), 0)
 })
+
+test('a first connect after failed attempts catches up (backend was down on load)', () => {
+  const onChange = mock.fn()
+  subscribe(['files:changed'], onChange)
+
+  latest().fail(true)
+  mock.timers.tick(2000)
+  latest().emitOpen()
+
+  assert.equal(onChange.mock.callCount(), 1)
+})
+
+test('subscribing while a reconnect is pending waits for it and gets its event types', () => {
+  subscribe(['files:changed'], () => {})
+  latest().emitOpen()
+  latest().fail(true)
+
+  const onChange = mock.fn()
+  subscribe(['review:created'], onChange)
+  assert.equal(FakeEventSource.instances.length, 1)
+
+  mock.timers.tick(2000)
+  assert.equal(FakeEventSource.instances.length, 2)
+  latest().emit('review:created')
+  assert.equal(onChange.mock.callCount(), 1)
+})
+
+test('no reconnect once every subscriber left during the reconnect delay', () => {
+  const handle = subscribe(['files:changed'], () => {})
+  latest().emitOpen()
+  latest().fail(true)
+
+  handle.close()
+  mock.timers.tick(2000)
+
+  assert.equal(FakeEventSource.instances.length, 1)
+})
+
+test('closing the same handle twice does not close a connection others still use', () => {
+  const a = subscribe(['files:changed'], () => {})
+  subscribe(['review:created'], () => {})
+  const source = latest()
+
+  a.close()
+  a.close()
+  mock.timers.tick(0)
+
+  assert.notEqual(source.readyState, FakeEventSource.CLOSED)
+})
+
+test('a throwing subscriber does not stop the others from being notified', t => {
+  t.mock.method(console, 'error', () => {})
+  const other = mock.fn()
+  subscribe(['files:changed'], () => {
+    throw new Error('boom')
+  })
+  subscribe(['files:changed'], other)
+
+  latest().emit('files:changed')
+
+  assert.equal(other.mock.callCount(), 1)
+})

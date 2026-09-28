@@ -8,12 +8,25 @@ const listeners = new Set<Listener>()
 const attachedTypes = new Set<string>()
 let source: EventSource | null = null
 let connectedOnce = false
+// Set when the connection errors before ever opening (e.g. the backend was
+// down during page load, so callers' initial fetches failed too).
+let missedEvents = false
 let closeTimer: ReturnType<typeof setTimeout> | undefined
 let reconnectTimer: ReturnType<typeof setTimeout> | undefined
 
+// One subscriber throwing must not starve the others — it couldn't back
+// when each had its own EventSource.
+function notify(listener: Listener) {
+  try {
+    listener.onChange()
+  } catch (err) {
+    console.error(err)
+  }
+}
+
 function dispatch(type: string) {
   for (const listener of listeners) {
-    if (listener.eventTypes.has(type)) listener.onChange()
+    if (listener.eventTypes.has(type)) notify(listener)
   }
 }
 
@@ -32,14 +45,17 @@ function open() {
 
   source.addEventListener('open', () => {
     // The first connect is covered by every caller's own initial fetch on
-    // mount; only a *re*connect needs a catch-up for what was missed.
-    if (connectedOnce) {
-      for (const listener of listeners) listener.onChange()
+    // mount; only a *re*connect (or a first connect after failed attempts)
+    // needs a catch-up for what was missed.
+    if (connectedOnce || missedEvents) {
+      for (const listener of listeners) notify(listener)
     }
     connectedOnce = true
+    missedEvents = false
   })
 
   source.addEventListener('error', () => {
+    if (!connectedOnce) missedEvents = true
     if (source?.readyState !== EventSource.CLOSED) return // Browser retries itself.
     source = null
     reconnectTimer = setTimeout(() => {
@@ -53,6 +69,7 @@ function shutdown() {
   source?.close()
   source = null
   connectedOnce = false
+  missedEvents = false
   clearTimeout(reconnectTimer)
   reconnectTimer = undefined
 }
@@ -93,4 +110,10 @@ export function useServerEvents(
       }, 0)
     }
   }
+}
+
+if (import.meta.hot) {
+  // Module state would otherwise leak its EventSource past an HMR update of
+  // this file if some importer isn't remounted.
+  import.meta.hot.dispose(shutdown)
 }

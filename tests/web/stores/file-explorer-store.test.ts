@@ -129,7 +129,7 @@ test('diffFiles reflects the selected source', async () => {
 test('refreshFromServerEvent() is skipped shortly after a slow refresh() finished', async () => {
   // The echo window also counts from when refresh() finished: a slow fetch
   // must not push the watcher's echo of the same mutation out of it (#28).
-  let resolvePending: Array<(r: Response) => void> = []
+  const resolvePending: Array<(r: Response) => void> = []
   const fetchSpy = mock.fn(
     () =>
       new Promise<Response>(resolve => {
@@ -142,7 +142,6 @@ test('refreshFromServerEvent() is skipped shortly after a slow refresh() finishe
   const refreshing = explorer.refresh()
   fakeNow += 1000 // the fetch takes a whole second
   for (const resolve of resolvePending) resolve(jsonResponse([]))
-  resolvePending = []
   await refreshing
   assert.equal(fetchSpy.mock.callCount(), 2)
 
