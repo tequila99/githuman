@@ -56,7 +56,7 @@ function connect() {
   source = es
 }
 
-/** Tolerates an older server that sent `connected` without a payload. */
+/** Anything but a well-formed ServerHello is ignored rather than trusted. */
 function parseHello(data: unknown): ServerHello | null {
   if (typeof data !== 'string') return null
   try {

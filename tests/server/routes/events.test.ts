@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { buildApp } from '../../../src/server/app.ts'
 import { createEventBus } from '../../../src/server/event-bus.ts'
 import { createTempGitRepo } from '../helpers/git-fixture.ts'
+import type { ServerHello } from '../../../src/shared/types.ts'
 
 test('GET /api/events sets the SSE content-type and delivers a published event', async t => {
   const eventBus = createEventBus()
@@ -70,7 +71,10 @@ test('GET /api/events delivers files:changed when watchFiles is enabled and a fi
   assert.match(text, /event: files:changed/)
 })
 
-async function readHello(app: ReturnType<typeof buildApp>, t: TestContext) {
+async function readHello(
+  app: ReturnType<typeof buildApp>,
+  t: TestContext
+): Promise<ServerHello> {
   const address = await app.listen({ port: 0, host: '127.0.0.1' })
   const controller = new AbortController()
   t.after(() => controller.abort())
@@ -83,7 +87,7 @@ async function readHello(app: ReturnType<typeof buildApp>, t: TestContext) {
   const text = Buffer.from(value!).toString('utf-8')
   const dataLine = text.split('\n').find(line => line.startsWith('data:'))
   assert.ok(dataLine, `no data line in: ${text}`)
-  return JSON.parse(dataLine.slice('data:'.length)) as unknown
+  return JSON.parse(dataLine.slice('data:'.length)) as ServerHello
 }
 
 test('the connected greeting carries the instanceId passed to buildApp', async t => {
@@ -103,8 +107,8 @@ test('each app instance gets its own random instanceId by default', async t => {
     await second.close()
   })
 
-  const a = (await readHello(first, t)) as { instanceId: string }
-  const b = (await readHello(second, t)) as { instanceId: string }
+  const a = await readHello(first, t)
+  const b = await readHello(second, t)
 
   assert.equal(typeof a.instanceId, 'string')
   assert.ok(a.instanceId.length > 0)
