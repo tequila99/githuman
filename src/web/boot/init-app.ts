@@ -2,7 +2,7 @@ import { defineBoot } from '#q-app'
 import { useRepositoryStore } from '@/stores/repository-store'
 import { useAppInfoStore } from '@/stores/app-info-store'
 import { onServerHello } from '@/composables/use-server-events'
-import { detectServerRestart } from '@/composables/reload-on-server-restart'
+import { detectServerRestart } from '@/utils/detect-server-restart'
 
 export default defineBoot(() => {
   const repositoryStore = useRepositoryStore()

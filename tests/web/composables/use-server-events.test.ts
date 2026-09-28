@@ -211,3 +211,17 @@ test('onServerHello alone does not open a connection', () => {
 
   assert.equal(FakeEventSource.instances.length, 0)
 })
+
+test('a throwing hello handler does not stop the others', t => {
+  t.mock.method(console, 'error', () => {})
+  const other = mock.fn()
+  onServerHello(() => {
+    throw new Error('boom')
+  })
+  onServerHello(other)
+  useServerEvents(['files:changed'], () => {})
+
+  latest().emit('connected', JSON.stringify({ instanceId: 'a' }))
+
+  assert.equal(other.mock.callCount(), 1)
+})

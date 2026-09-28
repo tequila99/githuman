@@ -41,8 +41,20 @@ function connect() {
   es.addEventListener('connected', event => {
     if (!(event instanceof MessageEvent)) return
     const hello = parseHello(event.data)
-    if (hello) for (const handler of helloHandlers) handler(hello)
+    if (!hello) return
+    for (const handler of helloHandlers) {
+      // Same isolation as notify(): one handler throwing must not skip the
+      // others (e.g. the restart detector).
+      try {
+        handler(hello)
+      } catch (err) {
+        console.error(err)
+      }
+    }
   })
+  // 'open' comes before 'connected'. On a reconnect to a *restarted* server
+  // this catch-up still fires refetches that the page reload right after
+  // throws away — one batch per tab per restart, not worth reordering for.
   es.addEventListener('open', () => {
     if (missedEvents) notify(() => true)
     missedEvents = false

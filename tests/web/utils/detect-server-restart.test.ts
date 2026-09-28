@@ -1,6 +1,6 @@
 import { test, mock } from 'node:test'
 import assert from 'node:assert/strict'
-import { detectServerRestart } from '@/composables/reload-on-server-restart'
+import { detectServerRestart } from '@/utils/detect-server-restart'
 
 test('the first greeting only records the server instance', () => {
   const onRestart = mock.fn()
