@@ -82,6 +82,16 @@ watch(
     <div v-else-if="browseFileError" class="q-pa-md text-grey-6">
       {{ t('changes.fullFileLoadError') }}
       <div class="text-caption">{{ browseFileError }}</div>
+      <!-- Re-selecting the same file doesn't refetch it; refresh() does. -->
+      <q-btn
+        flat
+        dense
+        color="primary"
+        class="q-mt-sm"
+        :label="t('changes.retry')"
+        :loading="refreshing"
+        @click="explorer.refresh()"
+      />
     </div>
 
     <div v-else-if="browseFileIsBinary" class="q-pa-md text-grey-6">

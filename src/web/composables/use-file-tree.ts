@@ -122,5 +122,13 @@ export function useFileTree() {
     }
   }
 
-  return { tree, loading, initialLoading, error, fetchTree }
+  function reset() {
+    ++latestRequestId // an answer still in flight must not refill the state
+    tree.value = []
+    loading.value = false
+    loaded.value = false
+    error.value = null
+  }
+
+  return { tree, loading, initialLoading, error, fetchTree, reset }
 }

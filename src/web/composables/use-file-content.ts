@@ -13,14 +13,15 @@ export function useFileContent() {
   // allowed to commit into state — an earlier, slower request landing after
   // it would otherwise overwrite the correct content with a stale file's.
   let latestRequestId = 0
-  let lastPath: string | null = null
+  let lastKey: string | null = null
 
   async function fetchContent(filePath: string, targetRef: string) {
-    // Another file: drop the old one's lines and error. The same file (a
+    // Another file or ref: drop the old lines and error. The same one (a
     // refetch): keep both until the answer, so nothing blinks (#43).
-    if (filePath !== lastPath) {
+    const key = `${targetRef}:${filePath}`
+    if (key !== lastKey) {
       reset()
-      lastPath = filePath
+      lastKey = key
     }
     const requestId = ++latestRequestId
     loading.value = true
@@ -47,7 +48,7 @@ export function useFileContent() {
   function reset() {
     ++latestRequestId // an answer still in flight must not refill the state
     loading.value = false
-    lastPath = null
+    lastKey = null
     lines.value = []
     isBinary.value = false
     error.value = null

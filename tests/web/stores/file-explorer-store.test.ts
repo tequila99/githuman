@@ -277,3 +277,25 @@ test('browse: the tree shows a spinner, not "No files", until its first answer (
   await explorer.refresh()
   assert.equal(explorer.treeInitialLoading, false)
 })
+
+test("browse: re-entering doesn't show last session's tree error (#43)", async () => {
+  let treeFails = true
+  routeFetch({
+    tree: () => (treeFails ? failure() : jsonResponse({ files: ['a.txt'] }))
+  })
+  const explorer = useFileExplorerStore()
+  explorer.browseMode = true
+  await explorer.refresh()
+  assert.equal(explorer.treeError, 'boom')
+
+  explorer.browseMode = false
+  await settle()
+  assert.equal(explorer.treeError, null)
+
+  treeFails = false
+  explorer.browseMode = true
+  assert.equal(explorer.treeError, null, 'no stale banner while reloading')
+  assert.equal(explorer.treeInitialLoading, true, 'spinner, not the old tree')
+  await explorer.refresh()
+  assert.equal(explorer.totalTreeFiles, 1)
+})

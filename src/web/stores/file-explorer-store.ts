@@ -18,7 +18,8 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     tree,
     initialLoading: treeInitialLoading,
     error: treeError,
-    fetchTree
+    fetchTree,
+    reset: resetTree
   } = useFileTree()
   const {
     lines: browseFileLines,
@@ -175,7 +176,11 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     // Through doRefresh: a fresh diff for the highlighting, and no tree fetch
     // racing one already running for an SSE event.
     if (enabled) void doRefresh()
-    else resetBrowseFileContent()
+    else {
+      // Re-entering must not show last session's tree and error as current.
+      resetTree()
+      resetBrowseFileContent()
+    }
   })
 
   /** Always fetches. Call after anything the UI itself just did (mount, stage/unstage/discard). */
