@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { ref, useTemplateRef, watch } from 'vue'
 
 /**
  * Horizontal scroll container whose scrollbar stays visible at the bottom of
  * the page's scroll area while any part of it is on screen (#27). A plain
  * `overflow-x: auto` draws its scrollbar at the very bottom of the element —
  * for a file longer than the screen that's out of view until you reach the
- * end of the file. So the content scrolls in a viewport with its native
- * scrollbar hidden, and a separate `position: sticky` bar of the same scroll
- * width is kept in sync with it. Shift+wheel works natively on either.
+ * end of the file. QScrollArea has the same limitation (its bars are
+ * absolute-bottom of the area, which also needs a fixed height). So the
+ * content scrolls in a viewport with its native scrollbar hidden, and a
+ * separate `position: sticky` bar of the same scroll width is kept in sync
+ * with it. Shift+wheel works natively on either.
  */
 
 defineProps<{
@@ -22,6 +24,16 @@ const bar = useTemplateRef<HTMLDivElement>('bar')
 const scrollWidth = ref(0)
 const overflowing = ref(false)
 
+/**
+ * Called by QResizeObserver (the viewport's own box changed: width, or
+ * height when wrap is toggled — overflowing lines re-wrap thanks to
+ * `overflow-wrap: anywhere` in DiffLineRow/FileContentLine, which is what
+ * makes a wrap toggle visible here) and by v-mutation (new/longer lines,
+ * diff/full-file switch, late syntax highlighting — scrollWidth changes the
+ * viewport's box doesn't show). Attributes are deliberately not watched:
+ * token colors change on every theme switch/highlight pass and never affect
+ * width, and v-mutation has no attribute filter.
+ */
 function measure() {
   const el = viewport.value
   if (!el) return
@@ -35,42 +47,6 @@ watch([scrollWidth, overflowing], () => syncScroll(viewport.value, bar.value), {
   flush: 'post'
 })
 
-// A ResizeObserver alone misses scrollWidth changes that don't change the
-// viewport's own box (new/longer lines, diff/full-file switch) — hence the
-// MutationObserver too. 'style' is deliberately not watched: token colors
-// change on every theme switch/highlight pass and never affect width.
-let frame = 0
-function scheduleMeasure() {
-  if (frame) return
-  frame = requestAnimationFrame(() => {
-    frame = 0
-    measure()
-  })
-}
-
-let resizeObserver: ResizeObserver | null = null
-let mutationObserver: MutationObserver | null = null
-
-onMounted(() => {
-  if (!viewport.value) return
-  resizeObserver = new ResizeObserver(scheduleMeasure)
-  resizeObserver.observe(viewport.value)
-  mutationObserver = new MutationObserver(scheduleMeasure)
-  mutationObserver.observe(viewport.value, {
-    childList: true,
-    subtree: true,
-    characterData: true,
-    attributes: true,
-    attributeFilter: ['class']
-  })
-})
-
-onBeforeUnmount(() => {
-  resizeObserver?.disconnect()
-  mutationObserver?.disconnect()
-  cancelAnimationFrame(frame)
-})
-
 function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
   if (from && to && to.scrollLeft !== from.scrollLeft) {
     to.scrollLeft = from.scrollLeft
@@ -82,6 +58,7 @@ function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
   <div class="horizontal-scroll-body">
     <div
       ref="viewport"
+      v-mutation.childList.subtree.characterData="measure"
       class="horizontal-scroll-body__viewport"
       :tabindex="overflowing ? 0 : undefined"
       role="group"
@@ -89,6 +66,7 @@ function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
       @scroll="syncScroll(viewport, bar)"
     >
       <slot />
+      <q-resize-observer :debounce="0" @resize="measure" />
     </div>
     <div
       v-show="overflowing"
