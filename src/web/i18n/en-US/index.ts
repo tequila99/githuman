@@ -37,6 +37,8 @@ export default {
     expandAll: 'Expand all',
     collapseAll: 'Collapse all',
     binaryFile: 'Binary file not shown',
+    fullFileDeleted: 'The file no longer exists on disk',
+    fullFileLoadError: 'Could not read the file from disk',
     noTextChanges: 'No text changes',
     showFullFile: 'Show full file',
     fileActions: 'File actions',

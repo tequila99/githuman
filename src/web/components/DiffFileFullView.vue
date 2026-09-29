@@ -1,23 +1,16 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Comment } from '@/api/types'
 import { useFileContent } from '@/composables/use-file-content'
+import { useServerEvents } from '@/composables/use-server-events'
+import { useDiffStore } from '@/stores/diff-store'
+import { pathOf } from '@/utils/diff-file'
 import FileContentView from './FileContentView.vue'
-import type { DiffSource } from '@/stores/diff-store'
 
 const props = withDefaults(
   defineProps<{
     path: string
-    source: DiffSource
-    /**
-     * Overrides the source-derived ref. Used by ReviewDetailPage.vue, whose
-     * full-file mode is a deliberate exception to "review = frozen snapshot"
-     * (ADR 0003/0017) — it always reads the *current* disk content
-     * (WORKTREE) regardless of which source the review's diff snapshot was
-     * taken from.
-     */
-    targetRef: 'INDEX' | 'WORKTREE' | undefined
     commentable?: boolean
     comments?: Comment[]
     /** Whether existing comments show edit/delete/resolve controls — see DiffHunkView.vue. */
@@ -39,24 +32,51 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { lines, isBinary, loading, fetchContent } = useFileContent()
+const { lines, isBinary, loading, error, fetchContent } = useFileContent()
 
-const resolvedTargetRef = computed(
-  () => props.targetRef ?? (props.source === 'staged' ? 'INDEX' : 'WORKTREE')
-)
-
+// Always the file on disk, even on the Staged tab: full-file comments are
+// numbered against one version everywhere, the markdown export included (#39).
 watch(
-  () => [props.path, resolvedTargetRef.value] as const,
-  ([path, ref]) => {
-    void fetchContent(path, ref)
+  () => props.path,
+  path => {
+    void fetchContent(path, 'WORKTREE')
   },
   { immediate: true }
+)
+
+// On the Staged tab an unstaged edit leaves the diff (and so this view) as is,
+// yet changes the lines comments here are numbered against.
+const events = useServerEvents(['files:changed'], () => {
+  void fetchContent(props.path, 'WORKTREE')
+})
+onUnmounted(() => events.close())
+
+// The API reads a missing file as empty, so tell it apart via the unstaged diff.
+const diffStore = useDiffStore()
+const deletedOnDisk = computed(() =>
+  diffStore.unstagedFiles.some(
+    f => f.status === 'deleted' && pathOf(f) === props.path
+  )
 )
 </script>
 
 <template>
-  <div v-if="loading" class="row justify-center q-pa-lg">
+  <!-- Spinner on first load only: a refetch keeps the lines on screen. -->
+  <div
+    v-if="loading && lines.length === 0 && !error"
+    class="row justify-center q-pa-lg"
+  >
     <q-spinner color="primary" size="2em" />
+  </div>
+  <p
+    v-else-if="deletedOnDisk"
+    class="text-caption text-grey-6 q-pa-md q-mb-none"
+  >
+    {{ t('changes.fullFileDeleted') }}
+  </p>
+  <div v-else-if="error" class="text-caption text-grey-6 q-pa-md">
+    {{ t('changes.fullFileLoadError') }}
+    <div>{{ error }}</div>
   </div>
   <p v-else-if="isBinary" class="text-caption text-grey-6 q-pa-md q-mb-none">
     {{ t('changes.binaryFile') }}

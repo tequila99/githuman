@@ -146,8 +146,6 @@ function goBack() {
         v-for="file in commentedFiles"
         :key="pathOf(file)"
         :file="file"
-        source="unstaged"
-        target-ref="WORKTREE"
         :expanded="expandedFiles.has(pathOf(file))"
         :comments="commentsByFile.get(pathOf(file)) ?? []"
         comments-only
