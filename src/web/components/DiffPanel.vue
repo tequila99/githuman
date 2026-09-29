@@ -10,6 +10,7 @@ import type { CreateCommentRequest } from '@/api/types'
 import DiffStatusBar from './DiffStatusBar.vue'
 import DiffFileCard from './DiffFileCard.vue'
 import ActiveReviewBar from './ActiveReviewBar.vue'
+import LoadErrorBanner from './LoadErrorBanner.vue'
 import CreateReviewFabButton from './buttons/CreateReviewFabButton.vue'
 
 const { t } = useI18n()
@@ -52,23 +53,13 @@ function unresolveComment(id: string) {
 
 <template>
   <!-- Here rather than in the sidebar: that one can be collapsed. -->
-  <q-banner v-if="loadError" dense class="bg-negative text-white">
-    <!-- Only the text is live: the Retry spinner would be re-announced. -->
-    <div role="alert">
-      {{ t('changes.loadError') }}
-      <div class="text-caption">{{ loadError }}</div>
-    </div>
-    <template #action>
-      <q-btn
-        flat
-        dense
-        color="white"
-        :label="t('changes.retry')"
-        :loading="diffLoading"
-        @click="explorer.refresh()"
-      />
-    </template>
-  </q-banner>
+  <LoadErrorBanner
+    v-if="loadError"
+    :title="t('changes.loadError')"
+    :message="loadError"
+    :loading="diffLoading"
+    @retry="explorer.refresh()"
+  />
 
   <!-- With a load error, "no changes" would be a claim we can't make. -->
   <div v-if="diffFiles.length === 0 && !loadError" class="q-pa-md text-grey-6">

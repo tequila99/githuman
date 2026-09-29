@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { apiGet } from '@/api/client'
 import { decodeGitPath } from '@/utils/git-path'
 import type { FileTreeNode, FileTreeResponse } from '@/api/types'
@@ -85,27 +85,40 @@ export function filterTree(
 export function useFileTree() {
   const tree = ref<FileTreeNode[]>([])
   const loading = ref(false)
+  const loaded = ref(false)
   const error = ref<string | null>(null)
+  // Spinner only until the first answer: a refetch keeps the tree on screen.
+  const initialLoading = computed(() => loading.value && !loaded.value)
+
+  // A slower, older request must not overwrite a newer answer.
+  let latestRequestId = 0
 
   async function fetchTree(targetRef: string, changedFilePaths: string[] = []) {
+    const requestId = ++latestRequestId
     loading.value = true
-    error.value = null
 
     try {
       const data = await apiGet<FileTreeResponse>(
         `/api/git/tree/${encodeURIComponent(targetRef)}`
       )
+      if (requestId !== latestRequestId) return
       tree.value = buildTree(
         data.files.map(decodeGitPath),
         new Set(changedFilePaths)
       )
+      // Cleared only on success, and the old tree kept on failure: a retry
+      // must not blink the error away or empty the sidebar (#43, as #35).
+      error.value = null
     } catch (e) {
+      if (requestId !== latestRequestId) return
       error.value = e instanceof Error ? e.message : String(e)
-      tree.value = []
     } finally {
-      loading.value = false
+      if (requestId === latestRequestId) {
+        loading.value = false
+        loaded.value = true
+      }
     }
   }
 
-  return { tree, loading, error, fetchTree }
+  return { tree, loading, initialLoading, error, fetchTree }
 }

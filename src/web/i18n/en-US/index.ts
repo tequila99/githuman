@@ -70,6 +70,7 @@ export default {
     allFiles: 'All files',
     searchPlaceholder: 'Search files...',
     noFiles: 'No files to display',
+    treeLoadError: 'Could not load the file tree',
     noMatchingFiles: 'No matching files',
     selectFile: 'Select a file to view its contents'
   },
