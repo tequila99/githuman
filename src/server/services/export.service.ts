@@ -217,8 +217,11 @@ export function formatReviewAsMarkdown(
   const byFile = new Map<string, Comment[]>()
   for (const comment of open) {
     const list = byFile.get(comment.filePath)
-    if (list) list.push(comment)
-    else byFile.set(comment.filePath, [comment])
+    if (list) {
+      list.push(comment)
+    } else {
+      byFile.set(comment.filePath, [comment])
+    }
   }
   // Snapshot order first; a commented file missing from the snapshot still
   // gets its section rather than silently dropping the comment.

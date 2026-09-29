@@ -27,6 +27,10 @@ export default defineConfig({
 
   plugins: ['typescript', 'vue', 'import', 'eslint', 'promise', 'unicorn'],
 
+  // Project rules the built-ins can't express. oxlint's JS plugin API is
+  // alpha (not semver-stable), hence oxlint pinned with ~ in package.json.
+  jsPlugins: ['./lint-rules/curly-if-else.js'],
+
   // correctness/suspicious catch real bugs and are safe to blanket-enable.
   // oxlint's "style"/"pedantic"/"restriction" categories were tried and
   // rejected: they pull in rules with no equivalent in JavaScript Standard
@@ -80,7 +84,9 @@ export default defineConfig({
     // (.filter()/.map() output or a literal), so in-place mutation is safe.
     // `.toSorted()` isn't usable as the replacement: this toolchain's
     // type-aware checker doesn't see the ES2023 lib target it needs.
-    'unicorn/no-array-sort': 'off'
+    'unicorn/no-array-sort': 'off',
+    // An if with an else gets braces on every branch (lint-rules/).
+    'local/curly-if-else': 'error'
   },
 
   env: {
