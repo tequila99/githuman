@@ -69,11 +69,6 @@ function submit() {
 .comment-form {
   background: var(--diff-header-bg);
   border-radius: 4px;
-  /* Aligns the form with the code column, leaving the line-number gutter(s)
-     visible to its left — width supplied by the ancestor hunk/file view via
-     --comment-form-indent (diff mode has two gutters + a +/- prefix column,
-     full-file mode has a single gutter, so the indent differs by context). */
-  /*margin-left: var(--comment-form-indent, 0);*/
 }
 
 .comment-form :deep(.q-field__control),

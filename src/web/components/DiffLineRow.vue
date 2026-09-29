@@ -136,8 +136,7 @@ function tokenColor(token: HighlightedToken): string | undefined {
 }
 
 /* Without wrap, grow past the scroll viewport so the added/removed
-   background spans the whole line when scrolled horizontally. Only the row
-   itself — comment threads between rows keep the viewport width. */
+   background spans the whole line when scrolled horizontally. */
 .diff-line:not(.diff-line--wrap) {
   min-width: max-content;
 }

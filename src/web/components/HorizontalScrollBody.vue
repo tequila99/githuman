@@ -54,7 +54,7 @@ function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
       :aria-label="label"
       @scroll="syncScroll(viewport, bar)"
     >
-      <slot />
+      <div class="horizontal-scroll-body__content"><slot /></div>
       <q-resize-observer :debounce="0" @resize="measure" />
     </div>
     <div
@@ -82,6 +82,15 @@ function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
+  /* 100cqi = the visible width, for content pinned in view (CommentThread). */
+  container-type: inline-size;
+}
+
+/* One box as wide as the widest line: sticky content can only travel within
+   its parent, so every hunk must span the whole scroll width (#38). */
+.horizontal-scroll-body__content {
+  width: fit-content;
+  min-width: 100%;
 }
 
 .horizontal-scroll-body__viewport:focus-visible {

@@ -57,5 +57,9 @@ const { t } = useI18n()
   border-top: 1px solid rgba(128, 128, 128, 0.2);
   border-bottom: 1px solid rgba(128, 128, 128, 0.2);
   margin-left: var(--comment-form-indent, 0);
+  /* Stays in view while long lines scroll horizontally (#38). */
+  position: sticky;
+  left: var(--comment-form-indent, 0);
+  width: calc(100cqi - var(--comment-form-indent, 0));
 }
 </style>
