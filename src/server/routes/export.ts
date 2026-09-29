@@ -15,13 +15,15 @@ const ExportQuery = Type.Object({
 
 export interface ExportRoutesOptions {
   db: DatabaseSync
+  /** Working tree full-file comments are read from (see exportAsMarkdown). */
+  repositoryPath: string
 }
 
 export async function exportRoutes(
   app: FastifyInstance,
   opts: ExportRoutesOptions
 ): Promise<void> {
-  const { db } = opts
+  const { db, repositoryPath } = opts
   const typedApp = app.withTypeProvider<TypeBoxTypeProvider>()
 
   typedApp.get<{
@@ -36,7 +38,11 @@ export async function exportRoutes(
           return exportAsJson(db, request.params.id)
         }
 
-        const markdown = exportAsMarkdown(db, request.params.id)
+        const markdown = await exportAsMarkdown(
+          db,
+          request.params.id,
+          repositoryPath
+        )
         reply.type('text/markdown')
         return markdown
       } catch (error) {

@@ -1,4 +1,4 @@
-import { test, beforeEach, afterEach } from 'node:test'
+import { test, beforeEach, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { setActivePinia, createPinia } from 'pinia'
 import { useDiffStore } from '@/stores/diff-store'
@@ -55,7 +55,7 @@ test('fetchDiff populates staged/unstaged from the API', async () => {
   assert.equal(store.error, null)
 })
 
-test('fetchDiff clears both lists and records the error on failure', async () => {
+test('a failed first fetchDiff clears both lists and records the error', async () => {
   globalThis.fetch = async () => new Response('nope', { status: 500 })
 
   const store = useDiffStore()
@@ -69,6 +69,27 @@ test('fetchDiff clears both lists and records the error on failure', async () =>
   assert.deepEqual(store.stagedFiles, [])
   assert.deepEqual(store.unstagedFiles, [])
   assert.equal(store.loading, false)
+  assert.ok(store.error)
+})
+
+test('a failed refetch keeps the last good lists and records the error', async () => {
+  // Clearing them would unmount the sidebar list and reset its scroll
+  // position on any transient error during an SSE refresh (#26).
+  const staged = [file({ newPath: 's.txt' })]
+  const unstaged = [file({ newPath: 'u.txt' })]
+  globalThis.fetch = (async (input: string | URL) =>
+    jsonResponse(
+      input.toString().includes('/unstaged') ? unstaged : staged
+    )) as typeof fetch
+
+  const store = useDiffStore()
+  await store.fetchDiff()
+
+  globalThis.fetch = async () => new Response('nope', { status: 500 })
+  await store.fetchDiff()
+
+  assert.deepEqual(store.stagedFiles, staged)
+  assert.deepEqual(store.unstagedFiles, unstaged)
   assert.ok(store.error)
 })
 
@@ -130,4 +151,95 @@ test('changedPaths combines staged and unstaged paths', async () => {
   await store.fetchDiff()
 
   assert.deepEqual(new Set(store.changedPaths), new Set(['s.txt', 'u.txt']))
+})
+
+test('initialLoading is true only during the first fetch, not on refetches', async () => {
+  // A refetch must not flip the file list back to a spinner — that unmounts
+  // the list and resets its scroll position (#26).
+  const pendingResolvers: Array<(r: Response) => void> = []
+  globalThis.fetch = () =>
+    new Promise<Response>(resolve => {
+      pendingResolvers.push(resolve)
+    })
+  const resolveAll = () => {
+    for (const resolve of pendingResolvers.splice(0)) resolve(jsonResponse([]))
+  }
+
+  const store = useDiffStore()
+  assert.equal(store.initialLoading, false)
+
+  const first = store.fetchDiff()
+  assert.equal(store.initialLoading, true)
+  resolveAll()
+  await first
+  assert.equal(store.initialLoading, false)
+
+  const second = store.fetchDiff()
+  assert.equal(store.loading, true)
+  assert.equal(store.initialLoading, false)
+  resolveAll()
+  await second
+})
+
+test('initialLoading clears after a failed first fetch', async () => {
+  globalThis.fetch = async () => new Response('nope', { status: 500 })
+
+  const store = useDiffStore()
+  await store.fetchDiff()
+
+  assert.equal(store.initialLoading, false)
+  assert.ok(store.error)
+})
+
+test('a fetchDiff call made mid-fetch gets exactly one more request pair after it (#37)', async () => {
+  const pendingResolvers: Array<(r: Response) => void> = []
+  const fetchSpy = mock.fn(
+    () =>
+      new Promise<Response>(resolve => {
+        pendingResolvers.push(resolve)
+      })
+  )
+  globalThis.fetch = fetchSpy
+  const resolvePending = () => {
+    for (const resolve of pendingResolvers.splice(0)) resolve(jsonResponse([]))
+  }
+
+  const store = useDiffStore()
+  const first = store.fetchDiff()
+  const second = store.fetchDiff()
+  const third = store.fetchDiff()
+  assert.equal(fetchSpy.mock.callCount(), 2, 'no parallel request pairs')
+
+  resolvePending()
+  await first
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(fetchSpy.mock.callCount(), 4, 'one follow-up pair for both')
+
+  resolvePending()
+  await Promise.all([second, third])
+  assert.equal(fetchSpy.mock.callCount(), 4)
+})
+
+test('error survives a retry in flight and clears only once a fetch succeeds (#35)', async () => {
+  globalThis.fetch = async () => new Response('nope', { status: 500 })
+  const store = useDiffStore()
+  await store.fetchDiff()
+  assert.ok(store.error)
+
+  const pendingResolvers: Array<(r: Response) => void> = []
+  globalThis.fetch = () =>
+    new Promise<Response>(resolve => {
+      pendingResolvers.push(resolve)
+    })
+  const retry = store.fetchDiff()
+  assert.ok(store.error, 'no blink while the retry is in flight')
+
+  assert.equal(pendingResolvers.length, 2, 'both diff requests are in flight')
+  for (const resolve of pendingResolvers.splice(0)) {
+    resolve(jsonResponse([file({ newPath: 'back.txt' })]))
+  }
+  await retry
+
+  assert.equal(store.error, null)
+  assert.equal(store.stagedFiles.length, 1)
 })

@@ -123,6 +123,8 @@ function toggleResolved() {
 
 .comment-item__body {
   white-space: pre-wrap;
+  /* The pinned thread never scrolls, so an overflowing word would be cut off. */
+  overflow-wrap: anywhere;
   font-size: var(--comment-font-size);
   /* Muted relative to the surrounding text color rather than a fixed grey
      (e.g. text-grey-7), so it reads correctly against both light and dark

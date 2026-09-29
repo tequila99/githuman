@@ -33,8 +33,11 @@ test('resolveDbPrefix: explicit value wins over env var and default', () => {
   try {
     assert.equal(resolveDbPrefix('from-flag-'), 'from-flag-')
   } finally {
-    if (original === undefined) delete process.env.GITHUMAN_DB_PREFIX
-    else process.env.GITHUMAN_DB_PREFIX = original
+    if (original === undefined) {
+      delete process.env.GITHUMAN_DB_PREFIX
+    } else {
+      process.env.GITHUMAN_DB_PREFIX = original
+    }
   }
 })
 
@@ -44,8 +47,11 @@ test('resolveDbPrefix: env var wins over default when no explicit value', () => 
   try {
     assert.equal(resolveDbPrefix(), 'from-env-')
   } finally {
-    if (original === undefined) delete process.env.GITHUMAN_DB_PREFIX
-    else process.env.GITHUMAN_DB_PREFIX = original
+    if (original === undefined) {
+      delete process.env.GITHUMAN_DB_PREFIX
+    } else {
+      process.env.GITHUMAN_DB_PREFIX = original
+    }
   }
 })
 
@@ -55,8 +61,11 @@ test('resolveDbPrefix: an explicit empty string is a valid override (interop wit
   try {
     assert.equal(resolveDbPrefix(''), '')
   } finally {
-    if (original === undefined) delete process.env.GITHUMAN_DB_PREFIX
-    else process.env.GITHUMAN_DB_PREFIX = original
+    if (original === undefined) {
+      delete process.env.GITHUMAN_DB_PREFIX
+    } else {
+      process.env.GITHUMAN_DB_PREFIX = original
+    }
   }
 })
 

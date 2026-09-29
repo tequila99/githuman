@@ -73,9 +73,9 @@ test('refreshFromServerEvent() fetches once the cooldown window has passed', asy
   assert.equal(fetchSpy.mock.callCount(), 4)
 })
 
-test('overlapping refresh() calls share a single in-flight fetch', async () => {
-  // fetchDiff() fires two concurrent requests (staged + unstaged) per call, so
-  // each invocation needs its own resolver, not one shared across both.
+// fetchDiff() fires two concurrent requests (staged + unstaged) per run, so
+// each needs its own resolver, not one shared across both.
+function controlledFetch() {
   const pendingResolvers: Array<(r: Response) => void> = []
   const fetchSpy = mock.fn(
     () =>
@@ -84,16 +84,66 @@ test('overlapping refresh() calls share a single in-flight fetch', async () => {
       })
   )
   globalThis.fetch = fetchSpy
+  return {
+    fetchSpy,
+    resolvePending() {
+      for (const resolve of pendingResolvers.splice(0)) {
+        resolve(jsonResponse([]))
+      }
+    }
+  }
+}
+
+const tick = () => new Promise(resolve => setImmediate(resolve))
+
+test('a refresh() made mid-refresh gets one more fetch after it, not the stale in-flight one (#37)', async () => {
+  const { fetchSpy, resolvePending } = controlledFetch()
 
   const explorer = useFileExplorerStore()
   const first = explorer.refresh()
-  const second = explorer.refresh() // fires while `first` is still pending
+  let secondDone = false
+  const second = explorer.refresh().then(() => (secondDone = true))
+  assert.equal(fetchSpy.mock.callCount(), 2, 'no parallel fetches')
 
-  for (const resolve of pendingResolvers) resolve(jsonResponse([]))
-  await Promise.all([first, second])
+  resolvePending()
+  await first
+  await tick()
+  assert.equal(fetchSpy.mock.callCount(), 4)
+  assert.equal(secondDone, false, 'waits for the follow-up fetch')
 
-  // Only the first call's fetchDiff actually ran (2 requests: staged + unstaged);
-  // the second awaited the same in-flight refresh instead of starting a new one.
+  resolvePending()
+  await second
+})
+
+test('stage/unstage right after an external edit is not lost in the SSE refetch already running (#37)', async () => {
+  const { fetchSpy, resolvePending } = controlledFetch()
+  const explorer = useFileExplorerStore()
+
+  fakeNow += 1000 // outside any echo window
+  const sseRefetch = explorer.refreshFromServerEvent()
+  // The user stages a file while that fetch is still in flight:
+  const afterStage = explorer.refresh()
+
+  resolvePending()
+  await sseRefetch
+  await tick()
+  resolvePending()
+  await afterStage
+
+  assert.equal(fetchSpy.mock.callCount(), 4)
+})
+
+test('the echo of our own refresh() arriving mid-fetch still triggers nothing', async () => {
+  const { fetchSpy, resolvePending } = controlledFetch()
+  const explorer = useFileExplorerStore()
+
+  const refreshing = explorer.refresh()
+  fakeNow += 100 // echo within the window
+  await explorer.refreshFromServerEvent()
+  resolvePending()
+  await refreshing
+  await tick()
+
   assert.equal(fetchSpy.mock.callCount(), 2)
 })
 
@@ -124,4 +174,128 @@ test('diffFiles reflects the selected source', async () => {
 
   explorer.source = 'unstaged'
   assert.equal(explorer.diffFiles.length, 0)
+})
+
+// Routes fetch by URL for browse-mode tests: diff, tree and file content.
+function routeFetch(routes: {
+  tree?: () => Response
+  file?: (path: string) => Response | Promise<Response>
+}) {
+  globalThis.fetch = async input => {
+    // The API client always passes a string path.
+    const url = input as string
+    if (url.startsWith('/api/git/tree/')) {
+      return routes.tree?.() ?? jsonResponse({ files: ['a.txt', 'b.txt'] })
+    }
+    if (url.startsWith('/api/git/file/')) {
+      const path = decodeURIComponent(
+        url.slice('/api/git/file/'.length).split('?')[0]!
+      )
+      return (
+        routes.file?.(path) ??
+        jsonResponse({ lines: [`content of ${path}`], isBinary: false })
+      )
+    }
+    return jsonResponse([])
+  }
+}
+
+function failure(): Response {
+  return new Response(JSON.stringify({ message: 'boom' }), {
+    status: 500,
+    headers: { 'content-type': 'application/json' }
+  })
+}
+
+async function settle() {
+  for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 0))
+}
+
+test('browse: a tree error is exposed and cleared by the next successful refresh (#43)', async () => {
+  let treeFails = true
+  routeFetch({
+    tree: () => (treeFails ? failure() : jsonResponse({ files: ['a.txt'] }))
+  })
+  const explorer = useFileExplorerStore()
+  explorer.browseMode = true
+  await explorer.refresh() // joins the refresh entering browse started
+  assert.equal(explorer.treeError, 'boom')
+
+  treeFails = false
+  await explorer.refresh()
+  assert.equal(explorer.treeError, null)
+  assert.equal(explorer.totalTreeFiles, 1)
+})
+
+test("browse: a failed file's error does not carry over to the next file (#43)", async () => {
+  let answerB!: (response: Response) => void
+  routeFetch({
+    file: path =>
+      path === 'a.txt'
+        ? failure()
+        : new Promise<Response>(resolve => {
+            answerB = resolve
+          })
+  })
+  const explorer = useFileExplorerStore()
+  explorer.browseMode = true
+  await settle()
+
+  explorer.selectFile('a.txt')
+  await settle()
+  assert.equal(explorer.browseFileError, 'boom')
+
+  explorer.selectFile('b.txt')
+  await settle()
+  assert.equal(explorer.browseFileError, null, 'b.txt is still loading')
+
+  answerB(jsonResponse({ lines: ['b'], isBinary: false }))
+  await settle()
+  assert.deepEqual(explorer.browseFileLines, ['b'])
+})
+
+test('browse: leaving browse mode forgets the file and its error (#43)', async () => {
+  routeFetch({ file: () => failure() })
+  const explorer = useFileExplorerStore()
+  explorer.browseMode = true
+  await settle()
+  explorer.selectFile('a.txt')
+  await settle()
+  assert.equal(explorer.browseFileError, 'boom')
+
+  explorer.browseMode = false
+  await settle()
+  assert.equal(explorer.browseFileError, null)
+  assert.deepEqual(explorer.browseFileLines, [])
+})
+
+test('browse: the tree shows a spinner, not "No files", until its first answer (#43)', async () => {
+  routeFetch({})
+  const explorer = useFileExplorerStore()
+  explorer.browseMode = true
+  assert.equal(explorer.treeInitialLoading, true, 'still fetching the diff')
+  await explorer.refresh()
+  assert.equal(explorer.treeInitialLoading, false)
+})
+
+test("browse: re-entering doesn't show last session's tree error (#43)", async () => {
+  let treeFails = true
+  routeFetch({
+    tree: () => (treeFails ? failure() : jsonResponse({ files: ['a.txt'] }))
+  })
+  const explorer = useFileExplorerStore()
+  explorer.browseMode = true
+  await explorer.refresh()
+  assert.equal(explorer.treeError, 'boom')
+
+  explorer.browseMode = false
+  await settle()
+  assert.equal(explorer.treeError, null)
+
+  treeFails = false
+  explorer.browseMode = true
+  assert.equal(explorer.treeError, null, 'no stale banner while reloading')
+  assert.equal(explorer.treeInitialLoading, true, 'spinner, not the old tree')
+  await explorer.refresh()
+  assert.equal(explorer.totalTreeFiles, 1)
 })

@@ -4,6 +4,8 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useReviewsStore } from '@/stores/reviews-store'
+import { useDiffStore } from '@/stores/diff-store'
+import { useActiveReviewStore } from '@/stores/active-review-store'
 import { useServerEvents } from '@/composables/use-server-events'
 import ReviewFilters from '@/components/ReviewFilters.vue'
 import ReviewListItem from '@/components/ReviewListItem.vue'
@@ -14,6 +16,8 @@ import type { Review } from '@/api/types'
 const { t } = useI18n()
 const router = useRouter()
 const store = useReviewsStore()
+const diffStore = useDiffStore()
+const activeReviewStore = useActiveReviewStore()
 const { reviews, loading } = storeToRefs(store)
 
 const search = ref<string | null>(null)
@@ -33,11 +37,27 @@ function refetch() {
 onMounted(refetch)
 watch([search, createdFrom, createdTo, files], refetch)
 
-const events = useServerEvents(
+// CreateReviewFabButton's enabled state reads these; this page owns
+// keeping them fresh (FileExplorer.vue does it on the Changes page).
+onMounted(() => {
+  void diffStore.fetchDiff()
+  void activeReviewStore.refresh()
+})
+
+const reviewEvents = useServerEvents(
   ['review:created', 'review:updated', 'review:deleted'],
-  refetch
+  () => {
+    refetch()
+    void activeReviewStore.refresh()
+  }
 )
-onUnmounted(() => events.close())
+onUnmounted(() => reviewEvents.close())
+
+const fileEvents = useServerEvents(
+  ['files:changed'],
+  () => void diffStore.fetchDiff()
+)
+onUnmounted(() => fileEvents.close())
 
 function openReview(id: string) {
   void router.push(`/reviews/${id}`)

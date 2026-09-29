@@ -7,10 +7,10 @@ import type {
   DiffFileStatus,
   DiffLineType
 } from '@/api/types'
-import type { DiffSource } from '@/stores/diff-store'
 import DiffHunkView from '@/components/DiffHunkView.vue'
 import DiffFileFullView from '@/components/DiffFileFullView.vue'
 import FileCardFrame from '@/components/FileCardFrame.vue'
+import HorizontalScrollBody from '@/components/HorizontalScrollBody.vue'
 import FileCardHeader from '@/components/FileCardHeader.vue'
 import FileHeaderMenu from '@/components/FileHeaderMenu.vue'
 import CommentCountBadge from '@/components/CommentCountBadge.vue'
@@ -24,14 +24,7 @@ import { isMarkdown } from '@/utils/file-wrap'
 const props = withDefaults(
   defineProps<{
     file: DiffFile
-    source: DiffSource
     expanded: boolean
-    /**
-     * Overrides the source-derived full-file ref. Set by ReviewDetailPage.vue
-     * (always 'WORKTREE' — see DiffFileFullView.vue for why); omitted on the
-     * Changes page, where `source` alone decides it.
-     */
-    targetRef?: 'INDEX' | 'WORKTREE'
     /** Active review for the current branch — enables gutter drag-select and comment threads (see ADR 0018). */
     commentable?: boolean
     comments?: Comment[]
@@ -181,7 +174,7 @@ function createFullFileComment(input: {
           </template>
 
           <div
-            v-if="!noFullFile"
+            v-if="!noFullFile && file.status !== 'deleted'"
             class="diff-file-card__toggle-section"
             @click.stop
           >
@@ -212,12 +205,14 @@ function createFullFileComment(input: {
       </q-item>
     </template>
 
-    <div v-if="expanded" class="diff-file-card__body">
+    <HorizontalScrollBody
+      v-if="expanded"
+      class="diff-file-card__body"
+      :label="path"
+    >
       <DiffFileFullView
         v-if="viewMode === 'full'"
         :path="path"
-        :source="source"
-        :target-ref="targetRef"
         :commentable="commentable"
         :comments-editable="commentsEditable"
         :comments="fullFileComments"
@@ -258,7 +253,7 @@ function createFullFileComment(input: {
           @unresolve-comment="id => emit('unresolve-comment', id)"
         />
       </template>
-    </div>
+    </HorizontalScrollBody>
   </FileCardFrame>
 </template>
 
@@ -299,13 +294,6 @@ function createFullFileComment(input: {
 }
 
 .diff-file-card__body {
-  /* overflow-y must be set explicitly alongside overflow-x here (not left
-     at its 'visible' default) — otherwise the UA auto-coerces it to 'auto'
-     too (CSS Overflow §3), which would create an unintended second
-     vertical scroll container nested inside the page's own
-     <q-scroll-area>. */
-  overflow-x: auto;
-  overflow-y: hidden;
   border-top: 1px solid rgba(128, 128, 128, 0.2);
 }
 </style>

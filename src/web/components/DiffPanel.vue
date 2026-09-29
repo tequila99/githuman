@@ -4,11 +4,13 @@ import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import { useFileExplorerStore } from '@/stores/file-explorer-store'
 import { useActiveReviewStore } from '@/stores/active-review-store'
+import { useDiffStore } from '@/stores/diff-store'
 import { pathOf } from '@/utils/diff-file'
 import type { CreateCommentRequest } from '@/api/types'
 import DiffStatusBar from './DiffStatusBar.vue'
 import DiffFileCard from './DiffFileCard.vue'
 import ActiveReviewBar from './ActiveReviewBar.vue'
+import LoadErrorBanner from './LoadErrorBanner.vue'
 import CreateReviewFabButton from './buttons/CreateReviewFabButton.vue'
 
 const { t } = useI18n()
@@ -16,7 +18,8 @@ const $q = useQuasar()
 
 const explorer = useFileExplorerStore()
 const activeReviewStore = useActiveReviewStore()
-const { source, diffFiles, expandedFiles } = storeToRefs(explorer)
+const { diffFiles, expandedFiles } = storeToRefs(explorer)
+const { error: loadError, loading: diffLoading } = storeToRefs(useDiffStore())
 const { activeReview, commentsByFile } = storeToRefs(activeReviewStore)
 
 async function notifyOnError(action: () => Promise<unknown>) {
@@ -49,11 +52,21 @@ function unresolveComment(id: string) {
 </script>
 
 <template>
-  <div v-if="diffFiles.length === 0" class="q-pa-md text-grey-6">
+  <!-- Here rather than in the sidebar: that one can be collapsed. -->
+  <LoadErrorBanner
+    v-if="loadError"
+    :title="t('changes.loadError')"
+    :message="loadError"
+    :loading="diffLoading"
+    @retry="explorer.refresh()"
+  />
+
+  <!-- With a load error, "no changes" would be a claim we can't make. -->
+  <div v-if="diffFiles.length === 0 && !loadError" class="q-pa-md text-grey-6">
     {{ t('changes.emptyDiffPanel') }}
   </div>
 
-  <template v-else>
+  <template v-else-if="diffFiles.length > 0">
     <ActiveReviewBar />
     <q-separator v-if="activeReview" />
     <DiffStatusBar
@@ -71,7 +84,6 @@ function unresolveComment(id: string) {
         v-for="file in diffFiles"
         :key="pathOf(file)"
         :file="file"
-        :source="source"
         :expanded="expandedFiles.has(pathOf(file))"
         :commentable="!!activeReview"
         :comments-editable="!!activeReview"

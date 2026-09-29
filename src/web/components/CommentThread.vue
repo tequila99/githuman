@@ -56,6 +56,13 @@ const { t } = useI18n()
   background: color-mix(in srgb, var(--q-primary) 4%, transparent);
   border-top: 1px solid rgba(128, 128, 128, 0.2);
   border-bottom: 1px solid rgba(128, 128, 128, 0.2);
-  margin-left: var(--comment-form-indent, 0);
+  margin-left: var(--comment-thread-indent, 0);
+  /* Stays in view while long lines scroll horizontally (#38). 100cqi needs
+     HorizontalScrollBody's query container: outside it, it's the window —
+     hence the max-width cap to the parent. */
+  position: sticky;
+  left: var(--comment-thread-indent, 0);
+  width: calc(100cqi - var(--comment-thread-indent, 0));
+  max-width: calc(100% - var(--comment-thread-indent, 0));
 }
 </style>

@@ -37,10 +37,14 @@ export default {
     expandAll: 'Expand all',
     collapseAll: 'Collapse all',
     binaryFile: 'Binary file not shown',
+    fullFileDeleted: 'The file no longer exists on disk',
+    fullFileLoadError: 'Could not read the file from disk',
     noTextChanges: 'No text changes',
     showFullFile: 'Show full file',
     fileActions: 'File actions',
     wrapLines: 'Wrap long lines',
+    loadError: 'Could not load changes',
+    retry: 'Retry',
     fileStatus: {
       added: 'Added',
       modified: 'Modified',
@@ -66,6 +70,7 @@ export default {
     allFiles: 'All files',
     searchPlaceholder: 'Search files...',
     noFiles: 'No files to display',
+    treeLoadError: 'Could not load the file tree',
     noMatchingFiles: 'No matching files',
     selectFile: 'Select a file to view its contents'
   },

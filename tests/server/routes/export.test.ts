@@ -1,5 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { createTempGitRepo } from '../helpers/git-fixture.ts'
 import { createTestDatabase } from '../../../src/server/db/index.ts'
 import { buildApp } from '../../../src/server/app.ts'
@@ -21,7 +23,7 @@ async function setupAppWithReview(t: { after: (fn: () => unknown) => void }) {
   })
   const reviewId = created.json().id
 
-  return { app, reviewId }
+  return { app, reviewId, dir: fixture.dir }
 }
 
 test('GET /api/reviews/:id/export?format=json returns the review and comments as JSON', async t => {
@@ -86,4 +88,30 @@ test('GET /api/reviews/:id/export without a format returns 400', async t => {
   })
 
   assert.equal(response.statusCode, 400)
+})
+
+test('GET /api/reviews/:id/export?format=markdown quotes full-file comments from the server repo working tree', async t => {
+  const { app, reviewId, dir } = await setupAppWithReview(t)
+  writeFileSync(join(dir, 'notes.md'), 'alpha\nbeta\n')
+
+  await app.inject({
+    method: 'POST',
+    url: `/api/reviews/${reviewId}/comments`,
+    payload: {
+      filePath: 'notes.md',
+      lineNumber: 2,
+      lineNumberEnd: 2,
+      lineType: null,
+      content: 'typo?'
+    }
+  })
+
+  const response = await app.inject({
+    method: 'GET',
+    url: `/api/reviews/${reviewId}/export?format=markdown`
+  })
+
+  assert.equal(response.statusCode, 200)
+  assert.match(response.body, /```md\n {3}beta\n {3}```/)
+  assert.match(response.body, /typo\?/)
 })

@@ -4,6 +4,7 @@ import { useDiffStore, type DiffSource } from './diff-store'
 import { useFileTree, filterTree } from '@/composables/use-file-tree'
 import { useFileContent } from '@/composables/use-file-content'
 import { pathOf } from '@/utils/diff-file'
+import { singleFlight } from '@/utils/single-flight'
 import type { DiffFile, FileTreeNode } from '@/api/types'
 
 function hasRelevantChild(node: FileTreeNode): boolean {
@@ -13,11 +14,18 @@ function hasRelevantChild(node: FileTreeNode): boolean {
 
 export const useFileExplorerStore = defineStore('file-explorer', () => {
   const diffStore = useDiffStore()
-  const { tree, loading: treeLoading, fetchTree } = useFileTree()
+  const {
+    tree,
+    initialLoading: treeInitialLoading,
+    error: treeError,
+    fetchTree,
+    reset: resetTree
+  } = useFileTree()
   const {
     lines: browseFileLines,
     isBinary: browseFileIsBinary,
     loading: browseFileLoading,
+    error: browseFileError,
     fetchContent: fetchBrowseFileContent,
     reset: resetBrowseFileContent
   } = useFileContent()
@@ -49,8 +57,11 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     let count = 0
     const walk = (nodes: FileTreeNode[]) => {
       for (const node of nodes) {
-        if (node.type === 'file') count++
-        else if (node.children) walk(node.children)
+        if (node.type === 'file') {
+          count++
+        } else if (node.children) {
+          walk(node.children)
+        }
       }
     }
     walk(tree.value)
@@ -75,12 +86,6 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     { immediate: true }
   )
 
-  watch(browseMode, enabled => {
-    filter.value = ''
-    selectedPath.value = null
-    if (enabled) void fetchTree('WORKTREE', diffStore.changedPaths)
-  })
-
   watch(source, () => {
     selectedPath.value = null
     expandedFiles.value = new Set()
@@ -97,15 +102,21 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
 
   function toggleFolder(path: string) {
     const next = new Set(expandedFolders.value)
-    if (next.has(path)) next.delete(path)
-    else next.add(path)
+    if (next.has(path)) {
+      next.delete(path)
+    } else {
+      next.add(path)
+    }
     expandedFolders.value = next
   }
 
   function toggleFileCard(path: string) {
     const next = new Set(expandedFiles.value)
-    if (next.has(path)) next.delete(path)
-    else next.add(path)
+    if (next.has(path)) {
+      next.delete(path)
+    } else {
+      next.add(path)
+    }
     expandedFiles.value = next
   }
 
@@ -148,12 +159,14 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
   // this window.
   const REFRESH_ECHO_WINDOW_MS = 400
 
-  let pendingRefresh: Promise<void> | null = null
   let refreshedAt = 0
 
-  /** Coalesces overlapping calls into a single in-flight fetch. */
-  function doRefresh(): Promise<void> {
-    return (pendingRefresh ??= (async () => {
+  const refreshing = ref(false)
+
+  /** A stage/unstage right after an external edit must not join a stale run (#37). */
+  const doRefresh = singleFlight(async () => {
+    refreshing.value = true
+    try {
       await diffStore.fetchDiff()
       if (browseMode.value) {
         await fetchTree('WORKTREE', diffStore.changedPaths)
@@ -161,10 +174,24 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
           await fetchBrowseFileContent(selectedPath.value, 'WORKTREE')
         }
       }
-    })().finally(() => {
-      pendingRefresh = null
-    }))
-  }
+    } finally {
+      refreshing.value = false
+    }
+  })
+
+  watch(browseMode, enabled => {
+    filter.value = ''
+    selectedPath.value = null
+    // Through doRefresh: a fresh diff for the highlighting, and no tree fetch
+    // racing one already running for an SSE event.
+    if (enabled) {
+      void doRefresh()
+    } else {
+      // Re-entering must not show last session's tree and error as current.
+      resetTree()
+      resetBrowseFileContent()
+    }
+  })
 
   /** Always fetches. Call after anything the UI itself just did (mount, stage/unstage/discard). */
   async function refresh() {
@@ -186,10 +213,13 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     expandedFolders,
     expandedFiles,
     tree,
-    treeLoading,
+    treeInitialLoading,
+    treeError,
+    refreshing,
     browseFileLines,
     browseFileIsBinary,
     browseFileLoading,
+    browseFileError,
     diffFiles,
     filteredDiffFiles,
     filteredTree,
