@@ -1,4 +1,9 @@
-import { SERVER_EVENT_TYPES, type ServerEventType } from '@/api/types'
+import {
+  SERVER_EVENT_TYPES,
+  type ServerEventType,
+  type ServerHello
+} from '@/api/types'
+import { parseServerHello } from '@/utils/parse-server-hello'
 
 type Subscriber = { eventTypes: Set<ServerEventType>; onChange: () => void }
 
@@ -8,6 +13,7 @@ type Subscriber = { eventTypes: Set<ServerEventType>; onChange: () => void }
 const RECONNECT_DELAY_MS = 2000
 
 const subscribers = new Set<Subscriber>()
+const helloHandlers = new Set<(hello: ServerHello) => void>()
 let source: EventSource | null = null
 // An error since the last 'open' means events may have been missed while
 // the connection was down.
@@ -33,6 +39,23 @@ function connect() {
   for (const type of SERVER_EVENT_TYPES) {
     es.addEventListener(type, () => notify(s => s.eventTypes.has(type)))
   }
+  es.addEventListener('connected', event => {
+    if (!(event instanceof MessageEvent)) return
+    const hello = parseServerHello(event.data)
+    if (!hello) return
+    for (const handler of helloHandlers) {
+      // Same isolation as notify(): one handler throwing must not skip the
+      // others (e.g. the restart detector).
+      try {
+        handler(hello)
+      } catch (err) {
+        console.error(err)
+      }
+    }
+  })
+  // 'open' comes before 'connected'. On a reconnect to a *restarted* server
+  // this catch-up still fires refetches that the page reload right after
+  // throws away — one batch per tab per restart, not worth reordering for.
   es.addEventListener('open', () => {
     if (missedEvents) notify(() => true)
     missedEvents = false
@@ -44,6 +67,11 @@ function connect() {
     }
   })
   source = es
+}
+
+/** Doesn't open the connection — pages do, via useServerEvents(). */
+export function onServerHello(handler: (hello: ServerHello) => void): void {
+  helloHandlers.add(handler)
 }
 
 /**

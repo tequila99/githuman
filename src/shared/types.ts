@@ -162,3 +162,8 @@ export const SERVER_EVENT_TYPES = [
 ] as const
 
 export type ServerEventType = (typeof SERVER_EVENT_TYPES)[number]
+
+/** First SSE event. A changed `instanceId` on reconnect means a restart. */
+export interface ServerHello {
+  instanceId: string
+}
