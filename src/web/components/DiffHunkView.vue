@@ -218,8 +218,8 @@ function cancelNewComment() {
 <style scoped>
 .diff-hunk {
   /* Two 40px gutters + the 16px +/- prefix column (see DiffLineRow.vue) —
-     read by CommentForm.vue to align the form with the code column. */
-  --comment-form-indent: 96px;
+     read by CommentThread.vue to align the thread with the code column. */
+  --comment-thread-indent: 96px;
 }
 
 .diff-hunk__header {
