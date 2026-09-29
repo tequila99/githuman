@@ -50,7 +50,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(gitRoutes, { repositoryPath })
   app.register(reviewRoutes, { repositoryPath, db, eventBus })
   app.register(commentRoutes, { db, eventBus })
-  app.register(exportRoutes, { db })
+  app.register(exportRoutes, { db, repositoryPath })
   app.register(eventRoutes, {
     eventBus,
     instanceId: options.instanceId ?? randomUUID()

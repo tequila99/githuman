@@ -66,17 +66,18 @@ function resolveReviewId(db: DatabaseSync, id: string): string {
   return latest.id
 }
 
-export function runExport(
+export async function runExport(
   db: DatabaseSync,
   id: string,
-  format: ExportFormat = 'markdown'
-): string {
+  format: ExportFormat,
+  repositoryPath: string
+): Promise<string> {
   const reviewId = resolveReviewId(db, id)
 
   try {
     return format === 'json'
       ? JSON.stringify(exportAsJson(db, reviewId), null, 2)
-      : exportAsMarkdown(db, reviewId)
+      : await exportAsMarkdown(db, reviewId, repositoryPath)
   } catch (error) {
     if (error instanceof ExportNotFoundError) {
       throw new ExportCliError(error.message)
