@@ -214,3 +214,26 @@ test('overlapping fetchDiff calls share a single in-flight request pair', async 
   await third
   assert.equal(fetchSpy.mock.callCount(), 4, 'a later call fetches again')
 })
+
+test('error survives a retry in flight and clears only once a fetch succeeds (#35)', async () => {
+  globalThis.fetch = async () => new Response('nope', { status: 500 })
+  const store = useDiffStore()
+  await store.fetchDiff()
+  assert.ok(store.error)
+
+  const pendingResolvers: Array<(r: Response) => void> = []
+  globalThis.fetch = () =>
+    new Promise<Response>(resolve => {
+      pendingResolvers.push(resolve)
+    })
+  const retry = store.fetchDiff()
+  assert.ok(store.error, 'no blink while the retry is in flight')
+
+  for (const resolve of pendingResolvers.splice(0)) {
+    resolve(jsonResponse([file({ newPath: 'back.txt' })]))
+  }
+  await retry
+
+  assert.equal(store.error, null)
+  assert.equal(store.stagedFiles.length, 1)
+})

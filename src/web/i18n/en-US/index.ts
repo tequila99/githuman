@@ -41,6 +41,8 @@ export default {
     showFullFile: 'Show full file',
     fileActions: 'File actions',
     wrapLines: 'Wrap long lines',
+    loadError: 'Could not load changes',
+    retry: 'Retry',
     fileStatus: {
       added: 'Added',
       modified: 'Modified',

@@ -15,7 +15,8 @@ const { t } = useI18n()
 const {
   stagedFiles,
   unstagedFiles,
-  initialLoading: diffLoading
+  initialLoading: diffLoading,
+  error: loadError
 } = storeToRefs(useDiffStore())
 
 const explorer = useFileExplorerStore()
@@ -90,7 +91,7 @@ const {
 
     <template v-else>
       <p
-        v-if="filteredDiffFiles.length === 0"
+        v-if="filteredDiffFiles.length === 0 && !loadError"
         class="text-caption text-grey-6 q-px-md q-py-sm"
       >
         {{ filter ? t('browse.noMatchingFiles') : t('changes.emptyFileList') }}
