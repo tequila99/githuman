@@ -57,8 +57,11 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     let count = 0
     const walk = (nodes: FileTreeNode[]) => {
       for (const node of nodes) {
-        if (node.type === 'file') count++
-        else if (node.children) walk(node.children)
+        if (node.type === 'file') {
+          count++
+        } else if (node.children) {
+          walk(node.children)
+        }
       }
     }
     walk(tree.value)
@@ -99,15 +102,21 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
 
   function toggleFolder(path: string) {
     const next = new Set(expandedFolders.value)
-    if (next.has(path)) next.delete(path)
-    else next.add(path)
+    if (next.has(path)) {
+      next.delete(path)
+    } else {
+      next.add(path)
+    }
     expandedFolders.value = next
   }
 
   function toggleFileCard(path: string) {
     const next = new Set(expandedFiles.value)
-    if (next.has(path)) next.delete(path)
-    else next.add(path)
+    if (next.has(path)) {
+      next.delete(path)
+    } else {
+      next.add(path)
+    }
     expandedFiles.value = next
   }
 

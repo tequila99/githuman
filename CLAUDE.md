@@ -27,6 +27,9 @@ branch/commits) с браузером файлов и подсветкой си�
   **Нет тестов для Vue-компонентов** и `tests/e2e/` не существует (несмотря
   на `playwright.config.ts` и скрипт `test:e2e` — известный пробел, не
   чинить молча, если не просили явно). Вёрстку проверять вручную в Chromium.
+- `lint-rules/` — собственные правила oxlint (JS-плагин, подключён в
+  `oxlint.config.ts`), тесты к ним — `tests/lint-rules/` через `RuleTester`
+  из `oxlint/plugins-dev` (единственное исключение из «зеркалят `src/`»).
 - `.claude/docs/adr/`, `.claude/docs/plans/` — история решений проекта
   (см. ниже). **Не публикуется на GitHub** (`.claude/` в `.gitignore`).
 
@@ -51,10 +54,10 @@ superseded` со сноской под заголовочной таблицей
 ```bash
 pnpm run dev:server   # backend, автоперезапуск при правках в src/{server,cli,shared}
 pnpm run dev          # frontend, Quasar dev-сервер с HMR (проксирует /api на :3847)
-pnpm test             # test:server + test:cli + test:web (node:test)
+pnpm test             # test:server + test:cli + test:web + test:lint-rules (node:test)
 pnpm run typecheck    # tsc (server) + vue-tsc (web)
 pnpm run lint:check   # oxfmt --check + oxlint — read-only, используй перед коммитом
-pnpm run lint         # то же самое + автофикс
+pnpm run lint         # oxfmt, oxlint --fix, снова oxfmt (фиксы правил форматируются)
 pnpm run build        # tsc (server) + quasar build (web) → dist/
 ```
 
@@ -151,8 +154,29 @@ userPath)` напрямую.
 - `oxlint`/`oxfmt`, не eslint/prettier. Конфиг в `oxlint.config.ts`
   сознательно не включает категории `style`/`pedantic`/`restriction` — см.
   комментарий в начале файла, почему.
+- **`if` с `else` — фигурные скобки на всех ветках** (включая хвост цепочки
+  `else if`), каждая ветка на своих строках; `if (x) doSomething()` без
+  `else` допустим. Проверяет `local/curly-if-else` (`lint-rules/`), чинит
+  `pnpm run lint`. Встроенный `curly` так не умеет. JS-плагины oxlint —
+  alpha, поэтому oxlint закреплён как `~1.82.0`: при обновлении проверить
+  `pnpm test` (тесты правила).
 - Composition API + `<script setup>` везде во Vue-компонентах — не Options
   API.
+
+## Описание PR
+
+Заполняется по `.github/PULL_REQUEST_TEMPLATE.md`. Эти правила важнее
+комментариев внутри шаблона:
+
+- **Summary** — один абзац, не больше 3–4 лаконичных предложений.
+- **Шаблон не меняется**: разделы и комментарии не удаляются и не
+  переименовываются, ничего не дописывается. Пункты чек-листа только
+  отмечаются, без пояснений. Раздел без содержания (Release Notes, Demo)
+  остаётся пустым, а не удаляется.
+- **Demo** — только скриншоты, картинки, видео. Сценарии проверки туда не
+  пишутся.
+- **Без строк атрибуции агента** («Generated with …», ссылки на сессию) —
+  это правило перекрывает настройки атрибуции агента.
 
 ## Известные ограничения продукта (на 2026-09-29)
 
