@@ -15,7 +15,7 @@ const { t } = useI18n()
 const {
   stagedFiles,
   unstagedFiles,
-  loading: diffLoading
+  initialLoading: diffLoading
 } = storeToRefs(useDiffStore())
 
 const explorer = useFileExplorerStore()

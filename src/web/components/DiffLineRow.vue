@@ -135,6 +135,13 @@ function tokenColor(token: HighlightedToken): string | undefined {
   white-space: pre;
 }
 
+/* Without wrap, grow past the scroll viewport so the added/removed
+   background spans the whole line when scrolled horizontally. Only the row
+   itself — comment threads between rows keep the viewport width. */
+.diff-line:not(.diff-line--wrap) {
+  min-width: max-content;
+}
+
 .diff-line--wrap {
   align-items: flex-start;
 }

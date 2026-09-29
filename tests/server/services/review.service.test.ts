@@ -249,6 +249,12 @@ test('createReview disambiguates two auto-generated names created within the sam
   t.after(fixture.cleanup)
   const db = createTestDatabase()
   t.after(() => db.close())
+  // Pin the clock: with the real one, the two calls can straddle a minute
+  // boundary and get different auto-generated names to begin with.
+  t.mock.timers.enable({
+    apis: ['Date'],
+    now: new Date(2026, 0, 15, 12, 30, 10)
+  })
 
   const first = await createReview(db, fixture.dir, { sourceType: 'staged' })
   const second = await createReview(db, fixture.dir, { sourceType: 'staged' })
