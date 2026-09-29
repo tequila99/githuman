@@ -150,6 +150,6 @@ function cancelNewComment() {
 .file-content-view {
   /* The single 48px gutter (see FileContentLine.vue) — read by
      CommentThread.vue to align the thread with the code column. */
-  --comment-form-indent: 48px;
+  --comment-thread-indent: 48px;
 }
 </style>
