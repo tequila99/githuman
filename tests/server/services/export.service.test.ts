@@ -504,10 +504,10 @@ test('a path with backticks stays inline code in its heading', () => {
 
 test('a review name with newlines stays on the heading line', () => {
   const markdown = formatReviewAsMarkdown(
-    makeReview({ name: 'first\n# injected' }),
+    makeReview({ name: 'first\r\n# injected\rmore' }),
     [],
     []
   )
 
-  assert.ok(markdown.startsWith('# Ревью: first # injected\n'))
+  assert.ok(markdown.startsWith('# Ревью: first # injected more\n'))
 })

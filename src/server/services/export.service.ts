@@ -60,7 +60,13 @@ function longestBacktickRun(text: string): number {
 /** Inline code that survives backticks in `text` (legal in git paths). */
 function inlineCode(text: string): string {
   const delimiter = '`'.repeat(longestBacktickRun(text) + 1)
-  const pad = text.startsWith('`') || text.endsWith('`') ? ' ' : ''
+  // CommonMark strips one space from each end when both ends have one.
+  const pad =
+    text.startsWith('`') ||
+    text.endsWith('`') ||
+    (text.startsWith(' ') && text.endsWith(' '))
+      ? ' '
+      : ''
   return `${delimiter}${pad}${text}${pad}${delimiter}`
 }
 
@@ -191,7 +197,10 @@ export function formatReviewAsMarkdown(
   const lines: string[] = []
 
   // A user-given name may contain newlines; keep it on the heading line.
-  const title = (review.name ?? review.repositoryPath).replace(/\s*\n\s*/g, ' ')
+  const title = (review.name ?? review.repositoryPath).replace(
+    /\s*[\r\n]+\s*/g,
+    ' '
+  )
   lines.push(`# Ревью: ${title}`)
   lines.push('')
   lines.push(`- Репозиторий: ${review.repositoryPath}`)

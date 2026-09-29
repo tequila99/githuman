@@ -70,6 +70,19 @@ test('POST /api/reviews/:id/comments keeps explicit nulls instead of coercing th
   assert.equal(comment.suggestion ?? null, null)
 })
 
+test('POST /api/reviews/:id/comments rejects an unknown lineType with 400', async t => {
+  const { app, reviewId } = await setupAppWithReview(t)
+
+  for (const lineType of ['garbage', 'ADDED', 5]) {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/reviews/${reviewId}/comments`,
+      payload: { filePath: 'a.txt', lineNumber: 1, lineType, content: 'x' }
+    })
+    assert.equal(response.statusCode, 400, `lineType ${String(lineType)}`)
+  }
+})
+
 test('POST /api/reviews/:id/comments with empty content returns 400', async t => {
   const { app, reviewId } = await setupAppWithReview(t)
 
