@@ -46,6 +46,30 @@ test('POST /api/reviews/:id/comments creates a comment', async t => {
   assert.ok(comment.updatedAt)
 })
 
+test('POST /api/reviews/:id/comments keeps explicit nulls instead of coercing them to 0 / ""', async t => {
+  const { app, reviewId } = await setupAppWithReview(t)
+
+  const response = await app.inject({
+    method: 'POST',
+    url: `/api/reviews/${reviewId}/comments`,
+    payload: {
+      filePath: 'a.txt',
+      lineNumber: null,
+      lineNumberEnd: null,
+      lineType: null,
+      content: 'about the whole file',
+      suggestion: null
+    }
+  })
+
+  assert.equal(response.statusCode, 201)
+  const comment = response.json()
+  assert.equal(comment.lineNumber, null)
+  assert.equal(comment.lineNumberEnd, null)
+  assert.equal(comment.lineType, null)
+  assert.equal(comment.suggestion ?? null, null)
+})
+
 test('POST /api/reviews/:id/comments with empty content returns 400', async t => {
   const { app, reviewId } = await setupAppWithReview(t)
 

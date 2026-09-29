@@ -14,10 +14,13 @@ import {
 } from '../services/comment.service.ts'
 import type { EventBus } from '../event-bus.ts'
 
+// Null goes first in each union: Fastify's Ajv coerces types, and with
+// Integer (or String) first it turns a JSON null into 0 (or "") before the
+// Null branch is ever tried — a file-level comment would be stored as line 0.
 const CreateCommentBody = Type.Object({
   filePath: Type.String({ minLength: 1 }),
-  lineNumber: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
-  lineNumberEnd: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
+  lineNumber: Type.Optional(Type.Union([Type.Null(), Type.Integer()])),
+  lineNumberEnd: Type.Optional(Type.Union([Type.Null(), Type.Integer()])),
   lineType: Type.Optional(
     Type.Union([
       Type.Literal('added'),
@@ -27,7 +30,7 @@ const CreateCommentBody = Type.Object({
     ])
   ),
   content: Type.String(),
-  suggestion: Type.Optional(Type.Union([Type.String(), Type.Null()]))
+  suggestion: Type.Optional(Type.Union([Type.Null(), Type.String()]))
 })
 
 const UpdateCommentBody = Type.Object({
