@@ -3,6 +3,7 @@ import {
   type ServerEventType,
   type ServerHello
 } from '@/api/types'
+import { parseServerHello } from '@/utils/parse-server-hello'
 
 type Subscriber = { eventTypes: Set<ServerEventType>; onChange: () => void }
 
@@ -40,7 +41,7 @@ function connect() {
   }
   es.addEventListener('connected', event => {
     if (!(event instanceof MessageEvent)) return
-    const hello = parseHello(event.data)
+    const hello = parseServerHello(event.data)
     if (!hello) return
     for (const handler of helloHandlers) {
       // Same isolation as notify(): one handler throwing must not skip the
@@ -66,25 +67,6 @@ function connect() {
     }
   })
   source = es
-}
-
-/** Anything but a well-formed ServerHello is ignored rather than trusted. */
-function parseHello(data: unknown): ServerHello | null {
-  if (typeof data !== 'string') return null
-  try {
-    const parsed: unknown = JSON.parse(data)
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      'instanceId' in parsed &&
-      typeof parsed.instanceId === 'string'
-    ) {
-      return { instanceId: parsed.instanceId }
-    }
-  } catch {
-    // Not JSON — treat like a missing payload.
-  }
-  return null
 }
 
 /** Doesn't open the connection — pages do, via useServerEvents(). */

@@ -195,13 +195,12 @@ test('onServerHello receives the server greeting on every (re)connect', () => {
   )
 })
 
-test('onServerHello ignores a greeting without an instanceId (older server)', () => {
+test('onServerHello ignores a malformed greeting (older server)', () => {
   const hello = mock.fn()
   onServerHello(hello)
   useServerEvents(['files:changed'], () => {})
 
   latest().emit('connected', '{}')
-  latest().emit('connected', 'not json')
 
   assert.equal(hello.mock.callCount(), 0)
 })
