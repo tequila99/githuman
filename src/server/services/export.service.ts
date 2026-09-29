@@ -50,11 +50,18 @@ function filePathOf(file: DiffFile): string {
  * code or a suggestion that itself contains ``` can't close the block early.
  */
 function fenceFor(text: string): string {
-  const longestRun = Math.max(
-    0,
-    ...(text.match(/`+/g) ?? []).map(run => run.length)
-  )
-  return '`'.repeat(Math.max(3, longestRun + 1))
+  return '`'.repeat(Math.max(3, longestBacktickRun(text) + 1))
+}
+
+function longestBacktickRun(text: string): number {
+  return Math.max(0, ...(text.match(/`+/g) ?? []).map(run => run.length))
+}
+
+/** Inline code that survives backticks in `text` (legal in git paths). */
+function inlineCode(text: string): string {
+  const delimiter = '`'.repeat(longestBacktickRun(text) + 1)
+  const pad = text.startsWith('`') || text.endsWith('`') ? ' ' : ''
+  return `${delimiter}${pad}${text}${pad}${delimiter}`
 }
 
 function extensionOf(path: string): string {
@@ -183,7 +190,9 @@ export function formatReviewAsMarkdown(
 ): string {
   const lines: string[] = []
 
-  lines.push(`# Ревью: ${review.name ?? review.repositoryPath}`)
+  // A user-given name may contain newlines; keep it on the heading line.
+  const title = (review.name ?? review.repositoryPath).replace(/\s*\n\s*/g, ' ')
+  lines.push(`# Ревью: ${title}`)
   lines.push('')
   lines.push(`- Репозиторий: ${review.repositoryPath}`)
   lines.push(
@@ -203,10 +212,9 @@ export function formatReviewAsMarkdown(
   const filesByPath = new Map(files.map(file => [filePathOf(file), file]))
   const byFile = new Map<string, Comment[]>()
   for (const comment of open) {
-    byFile.set(comment.filePath, [
-      ...(byFile.get(comment.filePath) ?? []),
-      comment
-    ])
+    const list = byFile.get(comment.filePath)
+    if (list) list.push(comment)
+    else byFile.set(comment.filePath, [comment])
   }
   // Snapshot order first; a commented file missing from the snapshot still
   // gets its section rather than silently dropping the comment.
@@ -264,7 +272,7 @@ export function formatReviewAsMarkdown(
 
     items.sort((a, b) => a.order - b.order)
 
-    lines.push(`## \`${path}\``)
+    lines.push(`## ${inlineCode(path)}`)
     lines.push('')
     items.forEach((item, index) => lines.push(...renderItem(item, index)))
   }
@@ -288,7 +296,7 @@ export async function exportAsMarkdown(
 
   const fullFilePaths = new Set(
     comments
-      .filter(c => !c.resolved && c.lineType === null && c.lineNumber !== null)
+      .filter(c => !c.resolved && c.lineType === null && rangeOf(c) !== null)
       .map(c => c.filePath)
   )
   const fileLines = new Map(

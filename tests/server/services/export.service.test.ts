@@ -484,3 +484,30 @@ test('a full-file comment with an inverted range gets a note, not an empty code 
   assert.ok(markdown.includes('Этих строк нет в текущей версии файла'))
   assert.ok(!markdown.includes('```ts'))
 })
+
+test('a path with backticks stays inline code in its heading', () => {
+  const markdown = formatReviewAsMarkdown(
+    makeReview(),
+    [],
+    [
+      comment({
+        filePath: 'odd`name.ts',
+        lineType: null,
+        lineNumber: null,
+        lineNumberEnd: null
+      })
+    ]
+  )
+
+  assert.ok(markdown.includes('## ``odd`name.ts``'))
+})
+
+test('a review name with newlines stays on the heading line', () => {
+  const markdown = formatReviewAsMarkdown(
+    makeReview({ name: 'first\n# injected' }),
+    [],
+    []
+  )
+
+  assert.ok(markdown.startsWith('# Ревью: first # injected\n'))
+})

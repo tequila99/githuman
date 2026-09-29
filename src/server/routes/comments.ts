@@ -23,10 +23,10 @@ const CreateCommentBody = Type.Object({
   lineNumberEnd: Type.Optional(Type.Union([Type.Null(), Type.Integer()])),
   lineType: Type.Optional(
     Type.Union([
+      Type.Null(),
       Type.Literal('added'),
       Type.Literal('removed'),
-      Type.Literal('context'),
-      Type.Null()
+      Type.Literal('context')
     ])
   ),
   content: Type.String(),
