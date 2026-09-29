@@ -2,19 +2,13 @@
 import { ref, useTemplateRef, watch } from 'vue'
 
 /**
- * Horizontal scroll container whose scrollbar stays visible at the bottom of
- * the page's scroll area while any part of it is on screen (#27). A plain
- * `overflow-x: auto` draws its scrollbar at the very bottom of the element —
- * for a file longer than the screen that's out of view until you reach the
- * end of the file. QScrollArea has the same limitation (its bars are
- * absolute-bottom of the area, which also needs a fixed height). So the
- * content scrolls in a viewport with its native scrollbar hidden, and a
- * separate `position: sticky` bar of the same scroll width is kept in sync
- * with it. Shift+wheel works natively on either.
+ * A native (or QScrollArea) horizontal scrollbar sits at the element's
+ * bottom — off-screen for a long file (#27). Hence a hidden-scrollbar
+ * viewport plus a synced `position: sticky` bar.
  */
 
 defineProps<{
-  /** Accessible name for the focusable scroll region, e.g. the file path. */
+  /** Names the focusable scroll region for screen readers. */
   label?: string
 }>()
 
@@ -25,14 +19,10 @@ const scrollWidth = ref(0)
 const overflowing = ref(false)
 
 /**
- * Called by QResizeObserver (the viewport's own box changed: width, or
- * height when wrap is toggled — overflowing lines re-wrap thanks to
- * `overflow-wrap: anywhere` in DiffLineRow/FileContentLine, which is what
- * makes a wrap toggle visible here) and by v-mutation (new/longer lines,
- * diff/full-file switch, late syntax highlighting — scrollWidth changes the
- * viewport's box doesn't show). Attributes are deliberately not watched:
- * token colors change on every theme switch/highlight pass and never affect
- * width, and v-mutation has no attribute filter.
+ * Reads scrollWidth itself: QResizeObserver only reports the viewport's
+ * box, which new or longer lines don't change — v-mutation catches those.
+ * Attributes aren't watched: token colors churn and never affect width. A
+ * wrap toggle shows up as a height change (rows use overflow-wrap: anywhere).
  */
 function measure() {
   const el = viewport.value
@@ -41,8 +31,7 @@ function measure() {
   overflowing.value = el.scrollWidth > el.clientWidth + 1
 }
 
-// After the DOM update, so the bar already has its new spacer width and is
-// no longer display:none when its scrollLeft is set.
+// Post-flush: the bar must already have its new width and be visible.
 watch([scrollWidth, overflowing], () => syncScroll(viewport.value, bar.value), {
   flush: 'post'
 })
@@ -83,24 +72,20 @@ function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
 
 <style scoped>
 .horizontal-scroll-body {
-  /* Keeps long lines (and the bar's full-width spacer) from widening a
-     shrink-to-fit ancestor, e.g. the q-scroll-area content box on
-     ReviewDetailPage — the overflow has to land here, not in the page. */
+  /* Stops long lines widening a shrink-to-fit ancestor (ReviewDetailPage). */
   contain: inline-size;
 }
 
 .horizontal-scroll-body__viewport {
-  /* overflow-y must be set explicitly alongside overflow-x (not left at its
-     'visible' default) — otherwise the UA auto-coerces it to 'auto' too
-     (CSS Overflow §3), creating a second vertical scroll container nested
-     inside the page's own <q-scroll-area>. */
+  /* Explicit: a 'visible' overflow-y would be coerced to 'auto',
+     nesting a second vertical scroller. */
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
 }
 
 .horizontal-scroll-body__viewport:focus-visible {
-  /* Inset: FileCardFrame's overflow: clip would cut off an outside outline. */
+  /* Inset: FileCardFrame's overflow: clip cuts off an outside outline. */
   outline: 2px solid var(--q-primary);
   outline-offset: -2px;
 }
@@ -120,8 +105,7 @@ function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
   border-top: 1px solid rgba(128, 128, 128, 0.2);
 }
 
-/* Styled explicitly so it stays visible on platforms with overlay
-   scrollbars (macOS, GTK) instead of only appearing mid-scroll. */
+/* Explicit styling keeps it visible with overlay scrollbars (macOS, GTK). */
 .horizontal-scroll-body__bar::-webkit-scrollbar {
   height: 10px;
 }
