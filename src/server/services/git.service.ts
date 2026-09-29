@@ -208,10 +208,8 @@ export async function getFilesAtRefBatch(
       }
     })
 
-    // If git exits before reading its input (e.g. not a git repository), the
-    // write fails with EPIPE. That's reported by 'close' above with git's own
-    // exit code and stderr; unhandled, the stdin 'error' event would instead
-    // crash the process.
+    // git may exit before reading stdin (e.g. not a repository): the EPIPE
+    // would crash the process, and 'close' already reports the failure.
     child.stdin.on('error', () => {})
     child.stdin.write(specs.join('\n') + '\n')
     child.stdin.end()

@@ -91,10 +91,8 @@ function rangeLabel([start, end]: [number, number]): string {
 }
 
 /**
- * The snapshot lines a diff comment covers — exactly the lines whose number in
- * the comment's anchor column falls in its range, like ReviewDetailPage's
- * comments-only view. The anchor column follows DiffHunkView.vue: 'removed'
- * comments count old-side line numbers, everything else new-side.
+ * Same line selection as ReviewDetailPage's comments-only view. Anchor column
+ * as in DiffHunkView.vue: 'removed' comments count old-side numbers.
  */
 function diffLinesFor(
   file: DiffFile | undefined,
@@ -181,12 +179,9 @@ function renderItem(item: ReportItem, index: number): string[] {
 }
 
 /**
- * Renders only the *open* comments, grouped by file: each comment becomes a
- * numbered item with just the code it's about, then its text (#30). Diff
- * comments take their lines from the review's frozen diff snapshot;
- * full-file comments (lineType null) from `fileLines`, the file as currently
- * on disk — the same exception to "review = frozen snapshot" the full-file
- * view in the UI makes. A null entry means the file couldn't be read.
+ * Full-file comments (lineType null) quote `fileLines`, the file as on disk
+ * (null = unreadable), not the snapshot — the same exception to "review =
+ * frozen snapshot" as the UI's full-file view (#30).
  */
 export function formatReviewAsMarkdown(
   review: Review,
@@ -290,9 +285,8 @@ export function formatReviewAsMarkdown(
 }
 
 /**
- * `repositoryPath` is the repository this server/CLI runs on — full-file
- * comments are read from its working tree, not from the path stored with
- * the review, which goes stale if the repository was moved.
+ * Reads from `repositoryPath` (where the server/CLI runs), not the path stored
+ * with the review: that one goes stale if the repository was moved.
  */
 export async function exportAsMarkdown(
   db: DatabaseSync,
