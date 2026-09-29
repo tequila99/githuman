@@ -1,11 +1,8 @@
 import type { ServerHello } from '@/api/types'
 
 /**
- * Returns a ServerHello handler that calls `onRestart` once, the first time
- * a reconnect greets the page with a different server instance than the one
- * it first connected to — i.e. `githuman serve` was restarted while the page
- * stayed open (#29). A plain network blip reconnects to the same instance and
- * is ignored.
+ * Compares instance ids rather than reacting to any reconnect: a network
+ * blip reconnects to the same instance and must not reload the page (#29).
  */
 export function detectServerRestart(
   onRestart: () => void

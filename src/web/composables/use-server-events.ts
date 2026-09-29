@@ -87,11 +87,7 @@ function parseHello(data: unknown): ServerHello | null {
   return null
 }
 
-/**
- * Calls `handler` with the server's `connected` greeting on every (re)connect
- * of the shared connection. Doesn't open the connection by itself — pages do,
- * via useServerEvents().
- */
+/** Doesn't open the connection — pages do, via useServerEvents(). */
 export function onServerHello(handler: (hello: ServerHello) => void): void {
   helloHandlers.add(handler)
 }
