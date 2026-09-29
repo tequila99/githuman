@@ -175,8 +175,9 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     selectedPath.value = null
     // Through doRefresh: a fresh diff for the highlighting, and no tree fetch
     // racing one already running for an SSE event.
-    if (enabled) void doRefresh()
-    else {
+    if (enabled) {
+      void doRefresh()
+    } else {
       // Re-entering must not show last session's tree and error as current.
       resetTree()
       resetBrowseFileContent()
