@@ -23,7 +23,8 @@ export type {
   Comment,
   CreateCommentRequest,
   UpdateCommentRequest,
-  ServerEventType
+  ServerEventType,
+  ServerHello
 } from '../../shared/types.ts'
 
 // A value export can't keep the .ts extension (only `export type` can).

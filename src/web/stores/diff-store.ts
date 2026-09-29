@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { apiGet } from '@/api/client'
 import { decodeGitPath } from '@/utils/git-path'
+import { singleFlight } from '@/utils/single-flight'
 import type { DiffFile } from '@/api/types'
 
 function decodeDiffFile(file: DiffFile): DiffFile {
@@ -40,7 +41,16 @@ export const useDiffStore = defineStore('diff', () => {
   const stagedFiles = ref<DiffFile[]>([])
   const unstagedFiles = ref<DiffFile[]>([])
   const loading = ref(false)
+  const loaded = ref(false)
   const error = ref<string | null>(null)
+
+  /**
+   * Only the very first fetch should block the UI with a spinner. Later
+   * refetches (stage/unstage/discard, SSE) keep the current list mounted —
+   * swapping it for a spinner collapses the scroll area and resets its
+   * scroll position to the top (#26).
+   */
+  const initialLoading = computed(() => loading.value && !loaded.value)
 
   const changedPaths = computed(() =>
     [...stagedFiles.value, ...unstagedFiles.value].map(
@@ -48,18 +58,8 @@ export const useDiffStore = defineStore('diff', () => {
     )
   )
 
-  let pendingFetch: Promise<void> | null = null
-
-  /**
-   * Overlapping calls share one in-flight request pair: callers outside
-   * file-explorer-store (e.g. ReviewsPage.vue on SSE events) would otherwise
-   * fire parallel fetches whose responses can land out of order (#28).
-   */
-  function fetchDiff(): Promise<void> {
-    return (pendingFetch ??= doFetchDiff().finally(() => {
-      pendingFetch = null
-    }))
-  }
+  /** Parallel responses could land out of order (#28); see singleFlight (#37). */
+  const fetchDiff = singleFlight(doFetchDiff)
 
   async function doFetchDiff() {
     loading.value = true
@@ -79,15 +79,28 @@ export const useDiffStore = defineStore('diff', () => {
         unstaged.map(decodeDiffFile)
       )
     } catch (err) {
-      stagedFiles.value = []
-      unstagedFiles.value = []
+      // A failed refetch keeps the last good lists: clearing them would
+      // unmount the file list and reset its scroll position (#26).
+      if (!loaded.value) {
+        stagedFiles.value = []
+        unstagedFiles.value = []
+      }
       error.value = err instanceof Error ? err.message : String(err)
     } finally {
       loading.value = false
+      loaded.value = true
     }
   }
 
-  return { stagedFiles, unstagedFiles, loading, error, changedPaths, fetchDiff }
+  return {
+    stagedFiles,
+    unstagedFiles,
+    loading,
+    initialLoading,
+    error,
+    changedPaths,
+    fetchDiff
+  }
 })
 
 if (import.meta.hot) {
