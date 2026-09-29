@@ -4,6 +4,7 @@ import { useDiffStore, type DiffSource } from './diff-store'
 import { useFileTree, filterTree } from '@/composables/use-file-tree'
 import { useFileContent } from '@/composables/use-file-content'
 import { pathOf } from '@/utils/diff-file'
+import { singleFlight } from '@/utils/single-flight'
 import type { DiffFile, FileTreeNode } from '@/api/types'
 
 function hasRelevantChild(node: FileTreeNode): boolean {
@@ -148,23 +149,22 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
   // this window.
   const REFRESH_ECHO_WINDOW_MS = 400
 
-  let pendingRefresh: Promise<void> | null = null
   let refreshedAt = 0
 
-  /** Coalesces overlapping calls into a single in-flight fetch. */
-  function doRefresh(): Promise<void> {
-    return (pendingRefresh ??= (async () => {
-      await diffStore.fetchDiff()
-      if (browseMode.value) {
-        await fetchTree('WORKTREE', diffStore.changedPaths)
-        if (selectedPath.value) {
-          await fetchBrowseFileContent(selectedPath.value, 'WORKTREE')
-        }
+  /**
+   * One refresh at a time; a call made while one runs (an SSE event, or a
+   * stage/unstage right after an external edit) gets one more run after it,
+   * since the running one may predate the change behind the call (#37).
+   */
+  const doRefresh = singleFlight(async () => {
+    await diffStore.fetchDiff()
+    if (browseMode.value) {
+      await fetchTree('WORKTREE', diffStore.changedPaths)
+      if (selectedPath.value) {
+        await fetchBrowseFileContent(selectedPath.value, 'WORKTREE')
       }
-    })().finally(() => {
-      pendingRefresh = null
-    }))
-  }
+    }
+  })
 
   /** Always fetches. Call after anything the UI itself just did (mount, stage/unstage/discard). */
   async function refresh() {
