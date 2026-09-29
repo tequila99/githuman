@@ -191,7 +191,7 @@ test('initialLoading clears after a failed first fetch', async () => {
   assert.ok(store.error)
 })
 
-test('overlapping fetchDiff calls share a single in-flight request pair', async () => {
+test('a fetchDiff call made mid-fetch gets exactly one more request pair after it (#37)', async () => {
   const pendingResolvers: Array<(r: Response) => void> = []
   const fetchSpy = mock.fn(
     () =>
@@ -200,17 +200,22 @@ test('overlapping fetchDiff calls share a single in-flight request pair', async 
       })
   )
   globalThis.fetch = fetchSpy
+  const resolvePending = () => {
+    for (const resolve of pendingResolvers.splice(0)) resolve(jsonResponse([]))
+  }
 
   const store = useDiffStore()
   const first = store.fetchDiff()
   const second = store.fetchDiff()
-  for (const resolve of pendingResolvers) resolve(jsonResponse([]))
-  await Promise.all([first, second])
-
-  assert.equal(fetchSpy.mock.callCount(), 2) // staged + unstaged, once
-
   const third = store.fetchDiff()
-  for (const resolve of pendingResolvers.splice(2)) resolve(jsonResponse([]))
-  await third
-  assert.equal(fetchSpy.mock.callCount(), 4, 'a later call fetches again')
+  assert.equal(fetchSpy.mock.callCount(), 2, 'no parallel request pairs')
+
+  resolvePending()
+  await first
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(fetchSpy.mock.callCount(), 4, 'one follow-up pair for both')
+
+  resolvePending()
+  await Promise.all([second, third])
+  assert.equal(fetchSpy.mock.callCount(), 4)
 })

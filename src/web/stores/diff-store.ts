@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { apiGet } from '@/api/client'
 import { decodeGitPath } from '@/utils/git-path'
+import { singleFlight } from '@/utils/single-flight'
 import type { DiffFile } from '@/api/types'
 
 function decodeDiffFile(file: DiffFile): DiffFile {
@@ -57,18 +58,8 @@ export const useDiffStore = defineStore('diff', () => {
     )
   )
 
-  let pendingFetch: Promise<void> | null = null
-
-  /**
-   * Overlapping calls share one in-flight request pair: callers outside
-   * file-explorer-store (e.g. ReviewsPage.vue on SSE events) would otherwise
-   * fire parallel fetches whose responses can land out of order (#28).
-   */
-  function fetchDiff(): Promise<void> {
-    return (pendingFetch ??= doFetchDiff().finally(() => {
-      pendingFetch = null
-    }))
-  }
+  /** Parallel responses could land out of order (#28); see singleFlight (#37). */
+  const fetchDiff = singleFlight(doFetchDiff)
 
   async function doFetchDiff() {
     loading.value = true

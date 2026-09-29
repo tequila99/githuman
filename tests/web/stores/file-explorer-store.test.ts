@@ -73,9 +73,9 @@ test('refreshFromServerEvent() fetches once the cooldown window has passed', asy
   assert.equal(fetchSpy.mock.callCount(), 4)
 })
 
-test('overlapping refresh() calls share a single in-flight fetch', async () => {
-  // fetchDiff() fires two concurrent requests (staged + unstaged) per call, so
-  // each invocation needs its own resolver, not one shared across both.
+// fetchDiff() fires two concurrent requests (staged + unstaged) per run, so
+// each needs its own resolver, not one shared across both.
+function controlledFetch() {
   const pendingResolvers: Array<(r: Response) => void> = []
   const fetchSpy = mock.fn(
     () =>
@@ -84,16 +84,66 @@ test('overlapping refresh() calls share a single in-flight fetch', async () => {
       })
   )
   globalThis.fetch = fetchSpy
+  return {
+    fetchSpy,
+    resolvePending() {
+      for (const resolve of pendingResolvers.splice(0)) {
+        resolve(jsonResponse([]))
+      }
+    }
+  }
+}
+
+const tick = () => new Promise(resolve => setImmediate(resolve))
+
+test('a refresh() made mid-refresh gets one more fetch after it, not the stale in-flight one (#37)', async () => {
+  const { fetchSpy, resolvePending } = controlledFetch()
 
   const explorer = useFileExplorerStore()
   const first = explorer.refresh()
-  const second = explorer.refresh() // fires while `first` is still pending
+  let secondDone = false
+  const second = explorer.refresh().then(() => (secondDone = true))
+  assert.equal(fetchSpy.mock.callCount(), 2, 'no parallel fetches')
 
-  for (const resolve of pendingResolvers) resolve(jsonResponse([]))
-  await Promise.all([first, second])
+  resolvePending()
+  await first
+  await tick()
+  assert.equal(fetchSpy.mock.callCount(), 4)
+  assert.equal(secondDone, false, 'waits for the follow-up fetch')
 
-  // Only the first call's fetchDiff actually ran (2 requests: staged + unstaged);
-  // the second awaited the same in-flight refresh instead of starting a new one.
+  resolvePending()
+  await second
+})
+
+test('stage/unstage right after an external edit is not lost in the SSE refetch already running (#37)', async () => {
+  const { fetchSpy, resolvePending } = controlledFetch()
+  const explorer = useFileExplorerStore()
+
+  fakeNow += 1000 // outside any echo window
+  const sseRefetch = explorer.refreshFromServerEvent()
+  // The user stages a file while that fetch is still in flight:
+  const afterStage = explorer.refresh()
+
+  resolvePending()
+  await sseRefetch
+  await tick()
+  resolvePending()
+  await afterStage
+
+  assert.equal(fetchSpy.mock.callCount(), 4)
+})
+
+test('the echo of our own refresh() arriving mid-fetch still triggers nothing', async () => {
+  const { fetchSpy, resolvePending } = controlledFetch()
+  const explorer = useFileExplorerStore()
+
+  const refreshing = explorer.refresh()
+  fakeNow += 100 // echo within the window
+  await explorer.refreshFromServerEvent()
+  resolvePending()
+  await refreshing
+  await tick()
+
   assert.equal(fetchSpy.mock.callCount(), 2)
 })
 
