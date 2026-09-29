@@ -1,23 +1,13 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Comment } from '@/api/types'
 import { useFileContent } from '@/composables/use-file-content'
 import FileContentView from './FileContentView.vue'
-import type { DiffSource } from '@/stores/diff-store'
 
 const props = withDefaults(
   defineProps<{
     path: string
-    source: DiffSource
-    /**
-     * Overrides the source-derived ref. Used by ReviewDetailPage.vue, whose
-     * full-file mode is a deliberate exception to "review = frozen snapshot"
-     * (ADR 0003/0017) — it always reads the *current* disk content
-     * (WORKTREE) regardless of which source the review's diff snapshot was
-     * taken from.
-     */
-    targetRef: 'INDEX' | 'WORKTREE' | undefined
     commentable?: boolean
     comments?: Comment[]
     /** Whether existing comments show edit/delete/resolve controls — see DiffHunkView.vue. */
@@ -41,14 +31,12 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { lines, isBinary, loading, fetchContent } = useFileContent()
 
-const resolvedTargetRef = computed(
-  () => props.targetRef ?? (props.source === 'staged' ? 'INDEX' : 'WORKTREE')
-)
-
+// Always the file on disk, even on the Staged tab: full-file comments are
+// numbered against one version everywhere, the markdown export included (#39).
 watch(
-  () => [props.path, resolvedTargetRef.value] as const,
-  ([path, ref]) => {
-    void fetchContent(path, ref)
+  () => props.path,
+  path => {
+    void fetchContent(path, 'WORKTREE')
   },
   { immediate: true }
 )

@@ -17,7 +17,7 @@ const $q = useQuasar()
 
 const explorer = useFileExplorerStore()
 const activeReviewStore = useActiveReviewStore()
-const { source, diffFiles, expandedFiles } = storeToRefs(explorer)
+const { diffFiles, expandedFiles } = storeToRefs(explorer)
 const { error: loadError, loading: diffLoading } = storeToRefs(useDiffStore())
 const { activeReview, commentsByFile } = storeToRefs(activeReviewStore)
 
@@ -93,7 +93,6 @@ function unresolveComment(id: string) {
         v-for="file in diffFiles"
         :key="pathOf(file)"
         :file="file"
-        :source="source"
         :expanded="expandedFiles.has(pathOf(file))"
         :commentable="!!activeReview"
         :comments-editable="!!activeReview"
