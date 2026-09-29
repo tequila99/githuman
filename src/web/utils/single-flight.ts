@@ -1,10 +1,8 @@
 /**
- * Wraps `run` so overlapping calls never start parallel runs, yet every call
- * resolves only after a run that *started after* it (#37). Joining the run
- * already in flight isn't enough: it may have started before whatever
- * prompted the new call (an SSE event, a stage/unstage), so its result can
- * be stale. Calls made during a run share one follow-up run that starts as
- * soon as the current one settles — N calls cost at most one extra run.
+ * No parallel runs, yet each call resolves only after a run that started
+ * after it: the run in flight may predate the change that prompted the call,
+ * so joining it could return stale data (#37). Calls made during a run share
+ * one follow-up.
  */
 export function singleFlight(run: () => Promise<void>): () => Promise<void> {
   let current: Promise<void> | null = null

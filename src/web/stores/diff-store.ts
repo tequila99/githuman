@@ -58,11 +58,7 @@ export const useDiffStore = defineStore('diff', () => {
     )
   )
 
-  /**
-   * Never two request pairs in flight at once — parallel responses can land
-   * out of order (#28) — but a call made mid-fetch still gets data fetched
-   * after it (#37), e.g. ReviewsPage.vue refetching on an SSE event.
-   */
+  /** Parallel responses could land out of order (#28); see singleFlight (#37). */
   const fetchDiff = singleFlight(doFetchDiff)
 
   async function doFetchDiff() {

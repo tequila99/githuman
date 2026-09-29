@@ -151,11 +151,7 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
 
   let refreshedAt = 0
 
-  /**
-   * One refresh at a time; a call made while one runs (an SSE event, or a
-   * stage/unstage right after an external edit) gets one more run after it,
-   * since the running one may predate the change behind the call (#37).
-   */
+  /** A stage/unstage right after an external edit must not join a stale run (#37). */
   const doRefresh = singleFlight(async () => {
     await diffStore.fetchDiff()
     if (browseMode.value) {
