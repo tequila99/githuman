@@ -14,9 +14,14 @@ import { getAppVersion } from '../server/app-version.ts'
 import type { DatabaseSync } from 'node:sqlite'
 
 /** Opens the reviews DB for the repo at cwd, shared by `list` and `export`. */
-async function openReviewsDb(dbPrefix: string): Promise<DatabaseSync> {
+async function openReviewsDb(
+  dbPrefix: string
+): Promise<{ db: DatabaseSync; repositoryPath: string }> {
   const repositoryPath = await resolveRepositoryPath(process.cwd())
-  return createFileDatabase(resolveReviewsDbPath(repositoryPath, dbPrefix))
+  return {
+    db: createFileDatabase(resolveReviewsDbPath(repositoryPath, dbPrefix)),
+    repositoryPath
+  }
 }
 
 async function main(argv: string[]): Promise<void> {
@@ -33,14 +38,19 @@ async function main(argv: string[]): Promise<void> {
     }
     case 'list': {
       const options = parseListArgs(rest)
-      const db = await openReviewsDb(options.dbPrefix)
+      const { db } = await openReviewsDb(options.dbPrefix)
       console.log(runList(db, options))
       return
     }
     case 'export': {
       const options = parseExportArgs(rest)
-      const db = await openReviewsDb(options.dbPrefix)
-      const output = runExport(db, options.id, options.format)
+      const { db, repositoryPath } = await openReviewsDb(options.dbPrefix)
+      const output = await runExport(
+        db,
+        options.id,
+        options.format,
+        repositoryPath
+      )
       if (options.output) {
         writeFileSync(options.output, output)
       } else {
