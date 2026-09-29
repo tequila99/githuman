@@ -41,7 +41,16 @@ export const useDiffStore = defineStore('diff', () => {
   const stagedFiles = ref<DiffFile[]>([])
   const unstagedFiles = ref<DiffFile[]>([])
   const loading = ref(false)
+  const loaded = ref(false)
   const error = ref<string | null>(null)
+
+  /**
+   * Only the very first fetch should block the UI with a spinner. Later
+   * refetches (stage/unstage/discard, SSE) keep the current list mounted —
+   * swapping it for a spinner collapses the scroll area and resets its
+   * scroll position to the top (#26).
+   */
+  const initialLoading = computed(() => loading.value && !loaded.value)
 
   const changedPaths = computed(() =>
     [...stagedFiles.value, ...unstagedFiles.value].map(
@@ -74,15 +83,28 @@ export const useDiffStore = defineStore('diff', () => {
         unstaged.map(decodeDiffFile)
       )
     } catch (err) {
-      stagedFiles.value = []
-      unstagedFiles.value = []
+      // A failed refetch keeps the last good lists: clearing them would
+      // unmount the file list and reset its scroll position (#26).
+      if (!loaded.value) {
+        stagedFiles.value = []
+        unstagedFiles.value = []
+      }
       error.value = err instanceof Error ? err.message : String(err)
     } finally {
       loading.value = false
+      loaded.value = true
     }
   }
 
-  return { stagedFiles, unstagedFiles, loading, error, changedPaths, fetchDiff }
+  return {
+    stagedFiles,
+    unstagedFiles,
+    loading,
+    initialLoading,
+    error,
+    changedPaths,
+    fetchDiff
+  }
 })
 
 if (import.meta.hot) {

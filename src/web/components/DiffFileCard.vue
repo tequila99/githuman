@@ -11,6 +11,7 @@ import type { DiffSource } from '@/stores/diff-store'
 import DiffHunkView from '@/components/DiffHunkView.vue'
 import DiffFileFullView from '@/components/DiffFileFullView.vue'
 import FileCardFrame from '@/components/FileCardFrame.vue'
+import HorizontalScrollBody from '@/components/HorizontalScrollBody.vue'
 import FileCardHeader from '@/components/FileCardHeader.vue'
 import FileHeaderMenu from '@/components/FileHeaderMenu.vue'
 import CommentCountBadge from '@/components/CommentCountBadge.vue'
@@ -212,7 +213,11 @@ function createFullFileComment(input: {
       </q-item>
     </template>
 
-    <div v-if="expanded" class="diff-file-card__body">
+    <HorizontalScrollBody
+      v-if="expanded"
+      class="diff-file-card__body"
+      :label="path"
+    >
       <DiffFileFullView
         v-if="viewMode === 'full'"
         :path="path"
@@ -258,7 +263,7 @@ function createFullFileComment(input: {
           @unresolve-comment="id => emit('unresolve-comment', id)"
         />
       </template>
-    </div>
+    </HorizontalScrollBody>
   </FileCardFrame>
 </template>
 
@@ -299,13 +304,6 @@ function createFullFileComment(input: {
 }
 
 .diff-file-card__body {
-  /* overflow-y must be set explicitly alongside overflow-x here (not left
-     at its 'visible' default) — otherwise the UA auto-coerces it to 'auto'
-     too (CSS Overflow §3), which would create an unintended second
-     vertical scroll container nested inside the page's own
-     <q-scroll-area>. */
-  overflow-x: auto;
-  overflow-y: hidden;
   border-top: 1px solid rgba(128, 128, 128, 0.2);
 }
 </style>
