@@ -75,7 +75,10 @@ const {
 
     <template v-else-if="browseMode">
       <p
-        v-if="filteredTree.length === 0 && (filter || !treeError)"
+        v-if="
+          filteredTree.length === 0 &&
+          (!treeError || (filter && totalTreeFiles > 0))
+        "
         class="text-caption text-grey-6 q-px-md q-py-sm"
       >
         {{ filter ? t('browse.noMatchingFiles') : t('browse.noFiles') }}

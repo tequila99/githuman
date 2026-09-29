@@ -218,7 +218,7 @@ test('browse: a tree error is exposed and cleared by the next successful refresh
   })
   const explorer = useFileExplorerStore()
   explorer.browseMode = true
-  await settle()
+  await explorer.refresh() // joins the refresh entering browse started
   assert.equal(explorer.treeError, 'boom')
 
   treeFails = false
@@ -267,4 +267,13 @@ test('browse: leaving browse mode forgets the file and its error (#43)', async (
   await settle()
   assert.equal(explorer.browseFileError, null)
   assert.deepEqual(explorer.browseFileLines, [])
+})
+
+test('browse: the tree shows a spinner, not "No files", until its first answer (#43)', async () => {
+  routeFetch({})
+  const explorer = useFileExplorerStore()
+  explorer.browseMode = true
+  assert.equal(explorer.treeInitialLoading, true, 'still fetching the diff')
+  await explorer.refresh()
+  assert.equal(explorer.treeInitialLoading, false)
 })

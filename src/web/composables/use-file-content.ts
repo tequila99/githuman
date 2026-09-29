@@ -16,14 +16,14 @@ export function useFileContent() {
   let lastPath: string | null = null
 
   async function fetchContent(filePath: string, targetRef: string) {
-    const requestId = ++latestRequestId
-    loading.value = true
     // Another file: drop the old one's lines and error. The same file (a
     // refetch): keep both until the answer, so nothing blinks (#43).
     if (filePath !== lastPath) {
       reset()
       lastPath = filePath
     }
+    const requestId = ++latestRequestId
+    loading.value = true
 
     try {
       const encodedPath = filePath.split('/').map(encodeURIComponent).join('/')
@@ -45,6 +45,8 @@ export function useFileContent() {
   }
 
   function reset() {
+    ++latestRequestId // an answer still in flight must not refill the state
+    loading.value = false
     lastPath = null
     lines.value = []
     isBinary.value = false

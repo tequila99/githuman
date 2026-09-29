@@ -87,8 +87,10 @@ export function useFileTree() {
   const loading = ref(false)
   const loaded = ref(false)
   const error = ref<string | null>(null)
-  // Spinner only until the first answer: a refetch keeps the tree on screen.
-  const initialLoading = computed(() => loading.value && !loaded.value)
+  // Spinner until the first answer, not only while a request runs: entering
+  // browse fetches the diff first, and "No files" would flash meanwhile. A
+  // refetch keeps the tree on screen.
+  const initialLoading = computed(() => !loaded.value)
 
   // A slower, older request must not overwrite a newer answer.
   let latestRequestId = 0
