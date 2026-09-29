@@ -52,9 +52,12 @@ function unresolveComment(id: string) {
 
 <template>
   <!-- Here rather than in the sidebar: that one can be collapsed. -->
-  <q-banner v-if="loadError" dense class="bg-negative text-white" role="alert">
-    {{ t('changes.loadError') }}
-    <div class="text-caption">{{ loadError }}</div>
+  <q-banner v-if="loadError" dense class="bg-negative text-white">
+    <!-- Only the text is live: the Retry spinner would be re-announced. -->
+    <div role="alert">
+      {{ t('changes.loadError') }}
+      <div class="text-caption">{{ loadError }}</div>
+    </div>
     <template #action>
       <q-btn
         flat
