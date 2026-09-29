@@ -2,7 +2,11 @@
 // when there is an else": "all" also forbids `if (x) return`, and
 // ["multi-line", "consistent"] lets `if (a) x()` / `else y()` through.
 
-/** Wraps a branch in braces; oxfmt then puts them on their own lines. */
+/**
+ * Wraps a branch in braces; oxfmt then puts them on their own lines. An
+ * unbraced if/else nested in an unbraced branch has overlapping fixes, so
+ * oxlint --fix applies the outer one and a second `pnpm run lint` the rest.
+ */
 function reportUnbraced(context, node) {
   context.report({
     node,
