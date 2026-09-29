@@ -219,3 +219,27 @@ test('a fetchDiff call made mid-fetch gets exactly one more request pair after i
   await Promise.all([second, third])
   assert.equal(fetchSpy.mock.callCount(), 4)
 })
+
+test('error survives a retry in flight and clears only once a fetch succeeds (#35)', async () => {
+  globalThis.fetch = async () => new Response('nope', { status: 500 })
+  const store = useDiffStore()
+  await store.fetchDiff()
+  assert.ok(store.error)
+
+  const pendingResolvers: Array<(r: Response) => void> = []
+  globalThis.fetch = () =>
+    new Promise<Response>(resolve => {
+      pendingResolvers.push(resolve)
+    })
+  const retry = store.fetchDiff()
+  assert.ok(store.error, 'no blink while the retry is in flight')
+
+  assert.equal(pendingResolvers.length, 2, 'both diff requests are in flight')
+  for (const resolve of pendingResolvers.splice(0)) {
+    resolve(jsonResponse([file({ newPath: 'back.txt' })]))
+  }
+  await retry
+
+  assert.equal(store.error, null)
+  assert.equal(store.stagedFiles.length, 1)
+})

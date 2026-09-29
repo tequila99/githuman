@@ -63,7 +63,6 @@ export const useDiffStore = defineStore('diff', () => {
 
   async function doFetchDiff() {
     loading.value = true
-    error.value = null
 
     try {
       const [staged, unstaged] = await Promise.all([
@@ -78,6 +77,9 @@ export const useDiffStore = defineStore('diff', () => {
         unstagedFiles.value,
         unstaged.map(decodeDiffFile)
       )
+      // Cleared only on success: resetting at the start would blink the
+      // error banner away during every retry and SSE refetch (#35).
+      error.value = null
     } catch (err) {
       // A failed refetch keeps the last good lists: clearing them would
       // unmount the file list and reset its scroll position (#26).

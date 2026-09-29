@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import { useFileExplorerStore } from '@/stores/file-explorer-store'
 import { useActiveReviewStore } from '@/stores/active-review-store'
+import { useDiffStore } from '@/stores/diff-store'
 import { pathOf } from '@/utils/diff-file'
 import type { CreateCommentRequest } from '@/api/types'
 import DiffStatusBar from './DiffStatusBar.vue'
@@ -17,6 +18,7 @@ const $q = useQuasar()
 const explorer = useFileExplorerStore()
 const activeReviewStore = useActiveReviewStore()
 const { source, diffFiles, expandedFiles } = storeToRefs(explorer)
+const { error: loadError, loading: diffLoading } = storeToRefs(useDiffStore())
 const { activeReview, commentsByFile } = storeToRefs(activeReviewStore)
 
 async function notifyOnError(action: () => Promise<unknown>) {
@@ -49,11 +51,31 @@ function unresolveComment(id: string) {
 </script>
 
 <template>
-  <div v-if="diffFiles.length === 0" class="q-pa-md text-grey-6">
+  <!-- Here rather than in the sidebar: that one can be collapsed. -->
+  <q-banner v-if="loadError" dense class="bg-negative text-white">
+    <!-- Only the text is live: the Retry spinner would be re-announced. -->
+    <div role="alert">
+      {{ t('changes.loadError') }}
+      <div class="text-caption">{{ loadError }}</div>
+    </div>
+    <template #action>
+      <q-btn
+        flat
+        dense
+        color="white"
+        :label="t('changes.retry')"
+        :loading="diffLoading"
+        @click="explorer.refresh()"
+      />
+    </template>
+  </q-banner>
+
+  <!-- With a load error, "no changes" would be a claim we can't make. -->
+  <div v-if="diffFiles.length === 0 && !loadError" class="q-pa-md text-grey-6">
     {{ t('changes.emptyDiffPanel') }}
   </div>
 
-  <template v-else>
+  <template v-else-if="diffFiles.length > 0">
     <ActiveReviewBar />
     <q-separator v-if="activeReview" />
     <DiffStatusBar
