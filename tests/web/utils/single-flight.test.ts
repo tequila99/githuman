@@ -103,7 +103,8 @@ test('after everything settles, the next call starts a fresh run immediately', a
   pending[0]!.resolve()
   await first
 
-  void call()
+  const next = call()
   assert.equal(pending.length, 2)
   pending[1]!.resolve()
+  await next
 })
