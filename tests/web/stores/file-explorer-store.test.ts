@@ -175,3 +175,127 @@ test('diffFiles reflects the selected source', async () => {
   explorer.source = 'unstaged'
   assert.equal(explorer.diffFiles.length, 0)
 })
+
+// Routes fetch by URL for browse-mode tests: diff, tree and file content.
+function routeFetch(routes: {
+  tree?: () => Response
+  file?: (path: string) => Response | Promise<Response>
+}) {
+  globalThis.fetch = async input => {
+    // The API client always passes a string path.
+    const url = input as string
+    if (url.startsWith('/api/git/tree/')) {
+      return routes.tree?.() ?? jsonResponse({ files: ['a.txt', 'b.txt'] })
+    }
+    if (url.startsWith('/api/git/file/')) {
+      const path = decodeURIComponent(
+        url.slice('/api/git/file/'.length).split('?')[0]!
+      )
+      return (
+        routes.file?.(path) ??
+        jsonResponse({ lines: [`content of ${path}`], isBinary: false })
+      )
+    }
+    return jsonResponse([])
+  }
+}
+
+function failure(): Response {
+  return new Response(JSON.stringify({ message: 'boom' }), {
+    status: 500,
+    headers: { 'content-type': 'application/json' }
+  })
+}
+
+async function settle() {
+  for (let i = 0; i < 20; i++) await new Promise(r => setTimeout(r, 0))
+}
+
+test('browse: a tree error is exposed and cleared by the next successful refresh (#43)', async () => {
+  let treeFails = true
+  routeFetch({
+    tree: () => (treeFails ? failure() : jsonResponse({ files: ['a.txt'] }))
+  })
+  const explorer = useFileExplorerStore()
+  explorer.browseMode = true
+  await explorer.refresh() // joins the refresh entering browse started
+  assert.equal(explorer.treeError, 'boom')
+
+  treeFails = false
+  await explorer.refresh()
+  assert.equal(explorer.treeError, null)
+  assert.equal(explorer.totalTreeFiles, 1)
+})
+
+test("browse: a failed file's error does not carry over to the next file (#43)", async () => {
+  let answerB!: (response: Response) => void
+  routeFetch({
+    file: path =>
+      path === 'a.txt'
+        ? failure()
+        : new Promise<Response>(resolve => {
+            answerB = resolve
+          })
+  })
+  const explorer = useFileExplorerStore()
+  explorer.browseMode = true
+  await settle()
+
+  explorer.selectFile('a.txt')
+  await settle()
+  assert.equal(explorer.browseFileError, 'boom')
+
+  explorer.selectFile('b.txt')
+  await settle()
+  assert.equal(explorer.browseFileError, null, 'b.txt is still loading')
+
+  answerB(jsonResponse({ lines: ['b'], isBinary: false }))
+  await settle()
+  assert.deepEqual(explorer.browseFileLines, ['b'])
+})
+
+test('browse: leaving browse mode forgets the file and its error (#43)', async () => {
+  routeFetch({ file: () => failure() })
+  const explorer = useFileExplorerStore()
+  explorer.browseMode = true
+  await settle()
+  explorer.selectFile('a.txt')
+  await settle()
+  assert.equal(explorer.browseFileError, 'boom')
+
+  explorer.browseMode = false
+  await settle()
+  assert.equal(explorer.browseFileError, null)
+  assert.deepEqual(explorer.browseFileLines, [])
+})
+
+test('browse: the tree shows a spinner, not "No files", until its first answer (#43)', async () => {
+  routeFetch({})
+  const explorer = useFileExplorerStore()
+  explorer.browseMode = true
+  assert.equal(explorer.treeInitialLoading, true, 'still fetching the diff')
+  await explorer.refresh()
+  assert.equal(explorer.treeInitialLoading, false)
+})
+
+test("browse: re-entering doesn't show last session's tree error (#43)", async () => {
+  let treeFails = true
+  routeFetch({
+    tree: () => (treeFails ? failure() : jsonResponse({ files: ['a.txt'] }))
+  })
+  const explorer = useFileExplorerStore()
+  explorer.browseMode = true
+  await explorer.refresh()
+  assert.equal(explorer.treeError, 'boom')
+
+  explorer.browseMode = false
+  await settle()
+  assert.equal(explorer.treeError, null)
+
+  treeFails = false
+  explorer.browseMode = true
+  assert.equal(explorer.treeError, null, 'no stale banner while reloading')
+  assert.equal(explorer.treeInitialLoading, true, 'spinner, not the old tree')
+  await explorer.refresh()
+  assert.equal(explorer.totalTreeFiles, 1)
+})

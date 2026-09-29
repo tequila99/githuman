@@ -14,11 +14,18 @@ function hasRelevantChild(node: FileTreeNode): boolean {
 
 export const useFileExplorerStore = defineStore('file-explorer', () => {
   const diffStore = useDiffStore()
-  const { tree, loading: treeLoading, fetchTree } = useFileTree()
+  const {
+    tree,
+    initialLoading: treeInitialLoading,
+    error: treeError,
+    fetchTree,
+    reset: resetTree
+  } = useFileTree()
   const {
     lines: browseFileLines,
     isBinary: browseFileIsBinary,
     loading: browseFileLoading,
+    error: browseFileError,
     fetchContent: fetchBrowseFileContent,
     reset: resetBrowseFileContent
   } = useFileContent()
@@ -75,12 +82,6 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     },
     { immediate: true }
   )
-
-  watch(browseMode, enabled => {
-    filter.value = ''
-    selectedPath.value = null
-    if (enabled) void fetchTree('WORKTREE', diffStore.changedPaths)
-  })
 
   watch(source, () => {
     selectedPath.value = null
@@ -151,14 +152,35 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
 
   let refreshedAt = 0
 
+  const refreshing = ref(false)
+
   /** A stage/unstage right after an external edit must not join a stale run (#37). */
   const doRefresh = singleFlight(async () => {
-    await diffStore.fetchDiff()
-    if (browseMode.value) {
-      await fetchTree('WORKTREE', diffStore.changedPaths)
-      if (selectedPath.value) {
-        await fetchBrowseFileContent(selectedPath.value, 'WORKTREE')
+    refreshing.value = true
+    try {
+      await diffStore.fetchDiff()
+      if (browseMode.value) {
+        await fetchTree('WORKTREE', diffStore.changedPaths)
+        if (selectedPath.value) {
+          await fetchBrowseFileContent(selectedPath.value, 'WORKTREE')
+        }
       }
+    } finally {
+      refreshing.value = false
+    }
+  })
+
+  watch(browseMode, enabled => {
+    filter.value = ''
+    selectedPath.value = null
+    // Through doRefresh: a fresh diff for the highlighting, and no tree fetch
+    // racing one already running for an SSE event.
+    if (enabled) {
+      void doRefresh()
+    } else {
+      // Re-entering must not show last session's tree and error as current.
+      resetTree()
+      resetBrowseFileContent()
     }
   })
 
@@ -182,10 +204,13 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     expandedFolders,
     expandedFiles,
     tree,
-    treeLoading,
+    treeInitialLoading,
+    treeError,
+    refreshing,
     browseFileLines,
     browseFileIsBinary,
     browseFileLoading,
+    browseFileError,
     diffFiles,
     filteredDiffFiles,
     filteredTree,

@@ -13,11 +13,18 @@ export function useFileContent() {
   // allowed to commit into state — an earlier, slower request landing after
   // it would otherwise overwrite the correct content with a stale file's.
   let latestRequestId = 0
+  let lastKey: string | null = null
 
   async function fetchContent(filePath: string, targetRef: string) {
+    // Another file or ref: drop the old lines and error. The same one (a
+    // refetch): keep both until the answer, so nothing blinks (#43).
+    const key = `${targetRef}:${filePath}`
+    if (key !== lastKey) {
+      reset()
+      lastKey = key
+    }
     const requestId = ++latestRequestId
     loading.value = true
-    error.value = null
 
     try {
       const encodedPath = filePath.split('/').map(encodeURIComponent).join('/')
@@ -27,11 +34,10 @@ export function useFileContent() {
       if (requestId !== latestRequestId) return
       lines.value = data.lines
       isBinary.value = data.isBinary
+      error.value = null
     } catch (e) {
       if (requestId !== latestRequestId) return
       error.value = e instanceof Error ? e.message : String(e)
-      lines.value = []
-      isBinary.value = false
     } finally {
       if (requestId === latestRequestId) {
         loading.value = false
@@ -40,6 +46,9 @@ export function useFileContent() {
   }
 
   function reset() {
+    ++latestRequestId // an answer still in flight must not refill the state
+    loading.value = false
+    lastKey = null
     lines.value = []
     isBinary.value = false
     error.value = null

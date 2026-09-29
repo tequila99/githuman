@@ -26,7 +26,8 @@ const {
   filter,
   selectedPath,
   expandedFolders,
-  treeLoading,
+  treeInitialLoading,
+  treeError,
   filteredDiffFiles,
   filteredTree,
   totalTreeFiles
@@ -43,7 +44,9 @@ const {
     />
     <div v-else class="text-subtitle2 q-mb-sm">
       {{ t('browse.allFiles') }}
-      <span class="text-primary">({{ totalTreeFiles }})</span>
+      <span v-if="totalTreeFiles > 0 || !treeError" class="text-primary"
+        >({{ totalTreeFiles }})</span
+      >
     </div>
 
     <SearchInput
@@ -64,7 +67,7 @@ const {
     content-active-style="padding: 4px 0"
   >
     <div
-      v-if="browseMode ? treeLoading : diffLoading"
+      v-if="browseMode ? treeInitialLoading : diffLoading"
       class="row justify-center q-pa-lg"
     >
       <q-spinner color="primary" size="2em" />
@@ -72,7 +75,10 @@ const {
 
     <template v-else-if="browseMode">
       <p
-        v-if="filteredTree.length === 0"
+        v-if="
+          filteredTree.length === 0 &&
+          (!treeError || (filter && totalTreeFiles > 0))
+        "
         class="text-caption text-grey-6 q-px-md q-py-sm"
       >
         {{ filter ? t('browse.noMatchingFiles') : t('browse.noFiles') }}
