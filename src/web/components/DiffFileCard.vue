@@ -174,7 +174,7 @@ function createFullFileComment(input: {
           </template>
 
           <div
-            v-if="!noFullFile"
+            v-if="!noFullFile && file.status !== 'deleted'"
             class="diff-file-card__toggle-section"
             @click.stop
           >
