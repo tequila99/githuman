@@ -321,7 +321,7 @@ test('a full-file comment whose file is unavailable or shorter is kept, with a n
     new Map([['src/app.ts', ['only one line']]])
   )
 
-  assert.ok(markdown.includes('Файл изменился или недоступен'))
+  assert.ok(markdown.includes('Этих строк нет в текущей версии файла'))
   assert.ok(markdown.includes('gone?'))
   assert.ok(!markdown.includes('only one line'))
 })
@@ -453,4 +453,34 @@ test('exportAsMarkdown rejects with ExportNotFoundError for an unknown review', 
     ExportNotFoundError
   )
   db.close()
+})
+
+test('line 0 (how older data stored a whole-file comment) is treated as whole-file', () => {
+  const markdown = formatReviewAsMarkdown(
+    makeReview(),
+    [richFile],
+    [
+      comment({
+        lineType: null,
+        lineNumber: 0,
+        lineNumberEnd: 0,
+        content: 'legacy'
+      })
+    ]
+  )
+
+  assert.ok(markdown.includes('1. Файл целиком'))
+  assert.ok(!markdown.includes('Строка 0'))
+})
+
+test('a full-file comment with an inverted range gets a note, not an empty code block', () => {
+  const markdown = formatReviewAsMarkdown(
+    makeReview(),
+    [richFile],
+    [comment({ lineType: null, lineNumber: 2, lineNumberEnd: 1 })],
+    new Map([['src/app.ts', ['a', 'b', 'c']]])
+  )
+
+  assert.ok(markdown.includes('Этих строк нет в текущей версии файла'))
+  assert.ok(!markdown.includes('```ts'))
 })

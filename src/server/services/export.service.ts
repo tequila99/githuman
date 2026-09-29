@@ -63,9 +63,13 @@ function extensionOf(path: string): string {
   return dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
 }
 
-/** `lineNumberEnd` is null on comments saved before ranges existed (ADR 0017). */
+/**
+ * `lineNumberEnd` is null on comments saved before ranges existed (ADR 0017).
+ * Line 0 is how the API used to store a whole-file comment's null (a type
+ * coercion bug, since fixed), so existing databases still contain it.
+ */
 function rangeOf(comment: Comment): [number, number] | null {
-  if (comment.lineNumber === null) return null
+  if (comment.lineNumber === null || comment.lineNumber <= 0) return null
   return [comment.lineNumber, comment.lineNumberEnd ?? comment.lineNumber]
 }
 
@@ -231,7 +235,8 @@ export function formatReviewAsMarkdown(
       if (comment.lineType === null) {
         const content = fileLines.get(path) ?? null
         const [start, end] = range
-        const available = content !== null && end <= content.length
+        const available =
+          content !== null && start <= end && end <= content.length
         items.push({
           heading: `${rangeLabel(range)} (файл целиком)`,
           code: available
@@ -239,7 +244,7 @@ export function formatReviewAsMarkdown(
             : null,
           missingNote: available
             ? null
-            : 'Файл изменился или недоступен — код не показан',
+            : 'Этих строк нет в текущей версии файла — код не показан',
           comment,
           // After all diff comments, in file-line order.
           order: Number.MAX_SAFE_INTEGER / 2 + start
