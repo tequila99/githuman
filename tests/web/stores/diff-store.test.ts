@@ -229,6 +229,7 @@ test('error survives a retry in flight and clears only once a fetch succeeds (#3
   const retry = store.fetchDiff()
   assert.ok(store.error, 'no blink while the retry is in flight')
 
+  assert.equal(pendingResolvers.length, 2, 'both diff requests are in flight')
   for (const resolve of pendingResolvers.splice(0)) {
     resolve(jsonResponse([file({ newPath: 'back.txt' })]))
   }

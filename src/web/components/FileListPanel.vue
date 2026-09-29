@@ -91,7 +91,7 @@ const {
 
     <template v-else>
       <p
-        v-if="filteredDiffFiles.length === 0 && !loadError"
+        v-if="filteredDiffFiles.length === 0 && (filter || !loadError)"
         class="text-caption text-grey-6 q-px-md q-py-sm"
       >
         {{ filter ? t('browse.noMatchingFiles') : t('changes.emptyFileList') }}
