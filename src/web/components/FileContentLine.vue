@@ -85,7 +85,9 @@ function tokenColor(token: HighlightedToken): string | undefined {
 }
 
 /* Without wrap, grow past the scroll viewport so the added/removed
-   background spans the whole line when scrolled horizontally. */
+   background spans the whole line when scrolled horizontally. Still needed
+   here (unlike DiffLineRow): FileContentPanel renders this view in a
+   q-scroll-area, without HorizontalScrollBody's full-width content box. */
 .file-content-line:not(.file-content-line--wrap) {
   min-width: max-content;
 }

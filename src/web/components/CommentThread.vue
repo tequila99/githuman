@@ -58,9 +58,11 @@ const { t } = useI18n()
   border-bottom: 1px solid rgba(128, 128, 128, 0.2);
   margin-left: var(--comment-thread-indent, 0);
   /* Stays in view while long lines scroll horizontally (#38). 100cqi needs
-     HorizontalScrollBody's query container: outside it, it's the window. */
+     HorizontalScrollBody's query container: outside it, it's the window —
+     hence the max-width cap to the parent. */
   position: sticky;
   left: var(--comment-thread-indent, 0);
   width: calc(100cqi - var(--comment-thread-indent, 0));
+  max-width: calc(100% - var(--comment-thread-indent, 0));
 }
 </style>
