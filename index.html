@@ -11,9 +11,16 @@
       name="viewport"
       content="width=device-width, initial-scale=1<% if (ctx.mode.cordova || ctx.mode.capacitor) { %>, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover<% } %>"
     />
+    <!--
+      Shiki/Oniguruma compiles Wasm; wasm-unsafe-eval permits that without
+      allowing JavaScript eval. Quasar and highlighting use inline styles;
+      data: images cover pasted/uploaded attachments. Other resources default
+      to this origin. Dev alone permits the localhost HMR WebSocket and blob
+      workers; those permissions are absent from the production build.
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline';<% if (ctx.dev) { %> connect-src 'self' ws://localhost:*; worker-src 'self' blob:;<% } %>"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;<% if (ctx.dev) { %> connect-src 'self' ws://localhost:*; worker-src 'self' blob:;<% } %>"
     />
 
     <link

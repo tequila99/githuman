@@ -8,10 +8,10 @@ import {
   editComment,
   removeComment,
   resolveComment,
-  unresolveComment,
-  ValidationError
+  unresolveComment
 } from '../../../src/server/services/comment.service.ts'
-import type { Review } from '../../../src/shared/types.ts'
+import { ValidationError } from '../../../src/server/errors/comments.ts'
+import type { Review } from '../../../src/shared/reviews/types.ts'
 import { createEventBus } from '../../../src/server/event-bus.ts'
 
 function makeReview(id: string): Review {

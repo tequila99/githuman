@@ -20,6 +20,15 @@ import {
 } from '@/composables/use-syntax-highlighting'
 import { pathOf } from '@/utils/diff-file'
 import { isMarkdown } from '@/utils/file-wrap'
+import type { DiffSource } from '@/stores/diff-store'
+
+// Keep status colors consistent across this component.
+const STATUS_COLOR: Record<DiffFileStatus, string> = {
+  added: 'positive',
+  modified: 'warning',
+  deleted: 'negative',
+  renamed: 'purple'
+}
 
 const props = withDefaults(
   defineProps<{
@@ -32,6 +41,8 @@ const props = withDefaults(
     commentsOnly?: boolean
     /** Whether existing comments show edit/delete/resolve controls — see DiffHunkView.vue. */
     commentsEditable?: boolean
+    /** Which side of the diff this card shows — enables "add diff to agent chat" in its menu. */
+    agentSource?: DiffSource | undefined
     /** Hides the "show full file" toggle (e.g. in review views where only the diff makes sense). */
     noFullFile?: boolean
   }>(),
@@ -58,13 +69,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-
-const STATUS_COLOR: Record<DiffFileStatus, string> = {
-  added: 'positive',
-  modified: 'warning',
-  deleted: 'negative',
-  renamed: 'purple'
-}
 
 const path = computed(() => pathOf(props.file))
 
@@ -170,7 +174,7 @@ function createFullFileComment(input: {
           </template>
 
           <template #badges>
-            <CommentCountBadge :count="comments.length" />
+            <CommentCountBadge compact :count="comments.length" />
           </template>
 
           <div
@@ -199,7 +203,11 @@ function createFullFileComment(input: {
           </span>
 
           <div @click.stop>
-            <FileHeaderMenu v-model="wrap" />
+            <FileHeaderMenu
+              v-model="wrap"
+              :path="path"
+              :diff-source="agentSource"
+            />
           </div>
         </FileCardHeader>
       </q-item>

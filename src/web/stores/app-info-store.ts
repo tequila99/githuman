@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { apiGet } from '@/api/client'
 import type { AppInfo } from '@/api/types'
+import { errorMessage } from '@/utils/error-message'
 
 export const useAppInfoStore = defineStore('appInfo', () => {
   const version = ref<string | null>(null)
@@ -17,7 +18,7 @@ export const useAppInfoStore = defineStore('appInfo', () => {
       version.value = info.version
     } catch (err) {
       version.value = null
-      error.value = err instanceof Error ? err.message : String(err)
+      error.value = errorMessage(err)
     } finally {
       loading.value = false
     }

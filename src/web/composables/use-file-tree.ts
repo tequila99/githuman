@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { apiGet } from '@/api/client'
 import { decodeGitPath } from '@/utils/git-path'
 import type { FileTreeNode, FileTreeResponse } from '@/api/types'
+import { errorMessage } from '@/utils/error-message'
 
 function sortNodes(nodes: FileTreeNode[]): FileTreeNode[] {
   return nodes
@@ -113,7 +114,7 @@ export function useFileTree() {
       error.value = null
     } catch (e) {
       if (requestId !== latestRequestId) return
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = errorMessage(e)
     } finally {
       if (requestId === latestRequestId) {
         loading.value = false

@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import { useRepositoryStore } from '@/stores/repository-store'
 import { useAppInfoStore } from '@/stores/app-info-store'
 import { useAppTheme } from '@/composables/use-app-theme'
+import { useAgentStore } from '@/stores/agent-store'
+import { AGENT_ICON } from '@/utils/agent-icon'
 
 const emit = defineEmits<{
   (e: 'toggle-drawer'): void
@@ -12,7 +14,10 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { info } = storeToRefs(useRepositoryStore())
 const { version } = storeToRefs(useAppInfoStore())
-const { isDark, toggleTheme } = useAppTheme()
+const { isDark } = useAppTheme()
+const agentStore = useAgentStore()
+const { enabled: agentEnabled, panelOpen: agentPanelOpen } =
+  storeToRefs(agentStore)
 </script>
 
 <template>
@@ -56,32 +61,18 @@ const { isDark, toggleTheme } = useAppTheme()
 
       <q-space />
 
-      <div class="row items-center gt-sm">
-        <q-btn :to="{ path: '/' }" flat no-caps :label="t('nav.changes')" />
-        <q-btn
-          :to="{ path: '/reviews' }"
-          flat
-          no-caps
-          :label="t('nav.reviews')"
-        />
-      </div>
-
       <q-btn
+        v-if="agentEnabled"
         v-ripple
         flat
         round
         dense
-        size="sm"
-        :icon="isDark ? 'light_mode' : 'dark_mode'"
-        :aria-label="
-          isDark ? t('theme.switchToLight') : t('theme.switchToDark')
-        "
-        class="q-ml-xs gt-xs"
-        @click="toggleTheme"
+        :icon="AGENT_ICON"
+        :color="agentPanelOpen ? 'primary' : undefined"
+        :aria-label="t('nav.agent')"
+        @click="agentPanelOpen = !agentPanelOpen"
       >
-        <q-tooltip>{{
-          isDark ? t('theme.switchToLight') : t('theme.switchToDark')
-        }}</q-tooltip>
+        <q-tooltip>{{ t('nav.agent') }}</q-tooltip>
       </q-btn>
     </q-toolbar>
   </q-header>

@@ -2,6 +2,7 @@
  * Thin fetch wrapper for the githuman backend API.
  * In dev, /api is proxied to the backend (see quasar.config.ts devServer.proxy).
  */
+import { isRecord } from '@/utils/guards'
 
 export class ApiRequestError extends Error {
   readonly status: number
@@ -17,16 +18,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init)
 
   if (!response.ok) {
-    // The server's JSON error body (see src/shared/types.ts ApiError) carries
+    // The server's JSON error body (see src/shared/http/types.ts ApiError) carries
     // a human-readable `message` (e.g. a ValidationError's text) — surface
     // it instead of a generic "status N" string whenever the body has one.
     const message = await response
       .clone()
       .json()
       .then((body: unknown) =>
-        body && typeof body === 'object' && 'message' in body
-          ? String(body.message)
-          : null
+        isRecord(body) && 'message' in body ? String(body.message) : null
       )
       .catch(() => null)
 
@@ -36,13 +35,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     )
   }
 
-  if (response.status === 204) {
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- 204 has no body; caller's T must allow undefined
+  // Not only 204: a 202 Accepted (agent prompt) is sent without a body too.
+  const text = await response.text()
+  if (text === '') {
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- no body; caller's T must allow undefined
     return undefined as T
   }
 
   // eslint-disable-next-line typescript/no-unsafe-type-assertion -- runtime JSON shape isn't checked; caller asserts the response contract
-  return (await response.json()) as T
+  return JSON.parse(text) as T
 }
 
 export function apiGet<T>(path: string): Promise<T> {

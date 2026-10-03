@@ -3,6 +3,7 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import { apiDelete, apiGet, apiPatch } from '@/api/client'
 import { decodeGitPath } from '@/utils/git-path'
 import type { Comment, DiffFile, Review, ReviewStatus } from '@/api/types'
+import { errorMessage } from '@/utils/error-message'
 
 function decodeDiffFile(file: DiffFile): DiffFile {
   return {
@@ -51,7 +52,7 @@ export const useReviewDetailStore = defineStore('review-detail', () => {
     } catch (err) {
       review.value = null
       comments.value = []
-      error.value = err instanceof Error ? err.message : String(err)
+      error.value = errorMessage(err)
     } finally {
       loading.value = false
     }

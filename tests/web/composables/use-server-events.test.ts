@@ -225,3 +225,25 @@ test('a throwing hello handler does not stop the others', t => {
   assert.equal(other.mock.callCount(), 1)
   assert.equal(logged.mock.callCount(), 1, 'the error is logged, not swallowed')
 })
+
+test('repeated permanent errors schedule only one replacement connection', () => {
+  useServerEvents(['files:changed'], () => {})
+  const source = latest()
+  source.fail(true)
+  source.fail(true)
+  mock.timers.tick(2000)
+  assert.equal(FakeEventSource.instances.length, 2)
+  mock.timers.tick(2000)
+  assert.equal(FakeEventSource.instances.length, 2)
+})
+
+test('a replaced source cannot schedule another reconnect', () => {
+  useServerEvents(['files:changed'], () => {})
+  const old = latest()
+  old.fail(true)
+  mock.timers.tick(2000)
+  latest().emitOpen()
+  old.fail(true)
+  mock.timers.tick(2000)
+  assert.equal(FakeEventSource.instances.length, 2)
+})

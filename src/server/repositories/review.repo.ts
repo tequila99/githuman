@@ -1,5 +1,6 @@
+import { UniqueNameError } from '../errors/reviews.ts'
 import type { DatabaseSync } from 'node:sqlite'
-import type { Review, ReviewStatus } from '../../shared/types.ts'
+import type { Review, ReviewStatus } from '../../shared/reviews/types.ts'
 
 interface ReviewRow {
   id: string
@@ -30,9 +31,6 @@ function rowToReview(row: ReviewRow): Review {
     updatedAt: row.updated_at
   }
 }
-
-/** Thrown by `createReview` when `(name, branch)` collides with an existing review — see ADR 0017. */
-export class UniqueNameError extends Error {}
 
 export function createReview(db: DatabaseSync, review: Review): Review {
   try {

@@ -1,11 +1,30 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { DiffFile, DiffFileStatus } from '@/api/types'
 import type { DiffSource } from '@/stores/diff-store'
 import { pathOf } from '@/utils/diff-file'
 import { useFileActions } from '@/composables/use-file-actions'
+import { useActiveReviewStore } from '@/stores/active-review-store'
+import CommentCountBadge from './CommentCountBadge.vue'
 
-defineProps<{
+// Keep status markers consistent across file rows.
+const STATUS_LABEL: Record<DiffFileStatus, string> = {
+  added: 'A',
+  modified: 'M',
+  deleted: 'D',
+  renamed: 'R'
+}
+
+// Use the same status colors in every file row.
+const STATUS_COLOR: Record<DiffFileStatus, string> = {
+  added: 'positive',
+  modified: 'warning',
+  deleted: 'negative',
+  renamed: 'purple'
+}
+
+const props = defineProps<{
   file: DiffFile
   selected: boolean
   source: DiffSource
@@ -14,20 +33,10 @@ defineEmits<{ (e: 'click'): void }>()
 
 const { t } = useI18n()
 const { stage, unstage, discard } = useFileActions()
-
-const STATUS_LABEL: Record<DiffFileStatus, string> = {
-  added: 'A',
-  modified: 'M',
-  deleted: 'D',
-  renamed: 'R'
-}
-
-const STATUS_COLOR: Record<DiffFileStatus, string> = {
-  added: 'positive',
-  modified: 'warning',
-  deleted: 'negative',
-  renamed: 'purple'
-}
+const activeReview = useActiveReviewStore()
+const commentCount = computed(
+  () => activeReview.commentsByFile.get(pathOf(props.file))?.length ?? 0
+)
 </script>
 
 <template>
@@ -47,11 +56,20 @@ const STATUS_COLOR: Record<DiffFileStatus, string> = {
       >
     </q-item-section>
     <q-item-section class="text-mono">
-      <div class="ellipsis file-list-item__path-label">
-        {{ pathOf(file) }}
-        <q-tooltip anchor="top middle" self="bottom middle">{{
-          pathOf(file)
-        }}</q-tooltip>
+      <!-- The name shrinks with an ellipsis; the badge never does, so it stays visible. -->
+      <div class="file-list-item__path-row row no-wrap items-center">
+        <span class="ellipsis file-list-item__path-label">
+          {{ pathOf(file) }}
+          <q-tooltip anchor="top middle" self="bottom middle">{{
+            pathOf(file)
+          }}</q-tooltip>
+        </span>
+        <CommentCountBadge
+          v-if="commentCount > 0"
+          compact
+          class="file-list-item__badge"
+          :count="commentCount"
+        />
       </div>
     </q-item-section>
     <q-item-section side class="file-list-item__stats">
@@ -110,9 +128,18 @@ const STATUS_COLOR: Record<DiffFileStatus, string> = {
   padding-right: 6px !important;
 }
 
-.file-list-item__path-label {
+.file-list-item__path-row {
   width: 100%;
   min-width: 0;
+}
+
+.file-list-item__path-label {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.file-list-item__badge {
+  flex: 0 0 auto;
 }
 
 .file-list-item--selected,

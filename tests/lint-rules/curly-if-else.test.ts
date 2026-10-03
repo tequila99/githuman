@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import { RuleTester } from 'oxlint/plugins-dev'
-import plugin from '../../lint-rules/curly-if-else.js'
+import plugin from '../../lint-rules/index.js'
 
 // RuleTester has no test runner of its own.
 RuleTester.describe = describe

@@ -2,9 +2,9 @@ import { parseArgs } from 'node:util'
 import type { DatabaseSync } from 'node:sqlite'
 import {
   exportAsJson,
-  exportAsMarkdown,
-  ExportNotFoundError
+  exportAsMarkdown
 } from '../../server/services/export.service.ts'
+import { ExportNotFoundError } from '../../server/errors/export.ts'
 import { getReviews } from '../../server/services/review.service.ts'
 import { resolveDbPrefix } from '../config.ts'
 

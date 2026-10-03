@@ -3,7 +3,9 @@ import { promisify } from 'node:util'
 import { readFile } from 'node:fs/promises'
 import { basename, resolve, sep } from 'node:path'
 import { simpleGit } from 'simple-git'
-import type { DiffFileStatus, RepositoryInfo } from '../../shared/types.ts'
+import type { DiffFileStatus } from '../../shared/diff/types.ts'
+import type { RepositoryInfo } from '../../shared/git/types.ts'
+import { isBinaryBuffer } from '../utils/text.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -12,7 +14,7 @@ const execFileAsync = promisify(execFile)
  * repository root (e.g. `../../etc/passwd`), since `path` here is untrusted
  * input coming straight off the HTTP request.
  */
-function resolveWithinRepo(repoPath: string, path: string): string {
+export function resolveWithinRepo(repoPath: string, path: string): string {
   const repoRoot = resolve(repoPath)
   const resolved = resolve(repoRoot, path)
   if (resolved !== repoRoot && !resolved.startsWith(repoRoot + sep)) {
@@ -83,10 +85,8 @@ export async function getFileAtRef(
     try {
       const absolutePath = resolveWithinRepo(repoPath, path)
       const buffer = await readFile(absolutePath)
-      return {
-        content: buffer.includes(0) ? '' : buffer.toString('utf-8'),
-        isBinary: buffer.includes(0)
-      }
+      const isBinary = isBinaryBuffer(buffer)
+      return { content: isBinary ? '' : buffer.toString('utf-8'), isBinary }
     } catch {
       return { content: '', isBinary: false }
     }
@@ -101,7 +101,7 @@ export async function getFileAtRef(
       maxBuffer: 1024 * 1024 * 100
     })
 
-    const isBinary = stdout.includes(0)
+    const isBinary = isBinaryBuffer(stdout)
 
     return {
       content: isBinary ? '' : stdout.toString('utf-8'),
@@ -147,7 +147,7 @@ function parseCatFileBatchOutput(buffer: Buffer, count: number): FileAtRef[] {
     }
     offset += size + 1 // skip content + its trailing LF
 
-    const isBinary = content.includes(0)
+    const isBinary = isBinaryBuffer(content)
     results.push({
       content: isBinary ? '' : content.toString('utf-8'),
       isBinary

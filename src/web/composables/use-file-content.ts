@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { apiGet } from '@/api/client'
 import type { FileContentResponse } from '@/api/types'
+import { errorMessage } from '@/utils/error-message'
 
 export function useFileContent() {
   const lines = ref<string[]>([])
@@ -37,7 +38,7 @@ export function useFileContent() {
       error.value = null
     } catch (e) {
       if (requestId !== latestRequestId) return
-      error.value = e instanceof Error ? e.message : String(e)
+      error.value = errorMessage(e)
     } finally {
       if (requestId === latestRequestId) {
         loading.value = false

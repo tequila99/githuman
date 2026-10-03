@@ -7,12 +7,20 @@ branch/commits) с браузером файлов и подсветкой си�
 
 ## Структура
 
-- `src/server/` — Fastify-бэкенд, 3 слоя: `routes/` (HTTP + TypeBox-схемы
-  валидации) → `services/` (бизнес-логика, вызовы `git`) →
+- `src/server/` — Fastify-бэкенд, 3 слоя: `routes/` (HTTP; общие TypeBox-схемы — в `shared/<domain>/schemas.ts`) → `services/` (бизнес-логика, вызовы `git`) →
   `repositories/`+`db/` (прямой доступ к `node:sqlite`).
 - `src/cli/` — команды `serve`/`list`/`export`, парсинг аргументов
   (`node:util` `parseArgs`, не сторонняя библиотека).
-- `src/shared/types.ts` — типы, общие между backend и frontend.
+- `src/shared/<domain>/` — общие типы, схемы, константы и чистые функции
+  (agents/diff/git/reviews/comments/app/http/events/network/utils — `utils`
+  для функций без своего домена, напр. `errorMessage`). Не импортирует
+  Node API, серверные модули или исполняемый ACP SDK. Типы агентских запросов
+  выводятся через Static из схем; схемы не реэкспортируются как runtime из
+  клиентского фасада типов.
+- `src/server/{config,hooks,adapters,utils,errors}` — серверная конфигурация,
+  HTTP hooks, ACP-преобразования, Node-утилиты и доменные конструкторы ошибок.
+  Ошибки сервисов и HTTP оформляются через @fastify/error; Fastify сериализует
+  statusCode/code/error/message. Статусы и тексты CLI/SSE сохраняются.
 - `src/web/{components,pages,stores,composables,boot,router,api,i18n}` —
   frontend на Quasar (Vue 3 + Composition API + `<script setup>`, Pinia,
   vue-i18n). `@` в импортах указывает на `src/web` (алиас переопределён в
@@ -21,15 +29,18 @@ branch/commits) с браузером файлов и подсветкой си�
   `src/web/boot/pinia.ts`, а не через `sourceFiles.store` — у Quasar два
   несовместимых способа резолвить этот путь (через alias и от корня
   проекта одновременно), и при нестандартном `@` они расходятся.
-- `tests/server/`, `tests/cli/`, `tests/web/` — `node:test`, зеркалируют
+- `tests/server/`, `tests/cli/`, `tests/shared/`, `tests/web/` — `node:test`, зеркалируют
   структуру `src/`. `tests/web/` покрывает сторы, composables и utils
   фронтенда (алиас `@` подключает `tests/web/register-web-alias-loader.mjs`).
   **Нет тестов для Vue-компонентов** и `tests/e2e/` не существует (несмотря
   на `playwright.config.ts` и скрипт `test:e2e` — известный пробел, не
   чинить молча, если не просили явно). Вёрстку проверять вручную в Chromium.
-- `lint-rules/` — собственные правила oxlint (JS-плагин, подключён в
-  `oxlint.config.ts`), тесты к ним — `tests/lint-rules/` через `RuleTester`
-  из `oxlint/plugins-dev` (единственное исключение из «зеркалят `src/`»).
+- `lint-rules/` — собственные правила oxlint (один JS-плагин `local`, правила
+  собирает `lint-rules/index.js`, подключён в `oxlint.config.ts`; два плагина с
+  одним именем oxlint не принимает), тесты к ним — `tests/lint-rules/` через
+  `RuleTester` из `oxlint/plugins-dev` (единственное исключение из
+  «зеркалят `src/`»). Код с TypeScript-синтаксисом в тестах правил — с
+  `filename: 'test.ts'`: по умолчанию `RuleTester` разбирает JS.
 - `.claude/docs/adr/`, `.claude/docs/plans/` — история решений проекта
   (см. ниже). **Не публикуется на GitHub** (`.claude/` в `.gitignore`).
 
@@ -54,7 +65,7 @@ superseded` со сноской под заголовочной таблицей
 ```bash
 pnpm run dev:server   # backend, автоперезапуск при правках в src/{server,cli,shared}
 pnpm run dev          # frontend, Quasar dev-сервер с HMR (проксирует /api на :3847)
-pnpm test             # test:server + test:cli + test:web + test:lint-rules (node:test)
+pnpm test             # test:server + test:cli + test:shared + test:web + test:lint-rules (node:test)
 pnpm run typecheck    # tsc (server) + vue-tsc (web)
 pnpm run lint:check   # oxfmt --check + oxlint — read-only, используй перед коммитом
 pnpm run lint         # oxfmt, oxlint --fix, снова oxfmt (фиксы правил форматируются)
@@ -119,19 +130,37 @@ userPath)` напрямую.
   окружения `GITHUMAN_DB_PREFIX`; пустая строка — осознанный режим прямой
   работы с файлами оригинала. Сама директория `.githuman/` не
   переименовывается — префиксуются только файлы внутри неё.
-- **`src/shared/types.ts` реально импортируется фронтендом**, не
-  копируется вручную — `src/web/api/types.ts` это тонкий `export type
-{...} from '../../shared/types.ts'`. До 2026-09-09 `src/shared` был в
-  exclude-списке vue-tsc (`extendTsConfig` в `quasar.config.ts`, за
-  компанию с `server`/`cli`, хотя технической причины для этого не было —
-  файл без единой Node-зависимости), из-за чего фронт вручную дублировал
-  типы, и копия успела разойтись с оригиналом (разные имена/optional-типы).
-  Не возвращать `src/shared` в exclude — это опять сломает импорт и
-  создаст стимул завести ручную копию заново.
+- **Общие доменные типы реально импортируются фронтендом**, не копируются
+  вручную — `src/web/api/types.ts` лишь реэкспортирует доменные контракты.
+  Не возвращать `src/shared` в exclude vue-tsc: это уже приводило к
+  дублированию типов и расхождению контрактов. См. ADR 0025.
 - **Одно SSE-соединение на вкладку** (`use-server-events.ts`): все
   подписчики делят один `EventSource`, после переподключения каждый
   получает один catch-up вызов. Не открывать `EventSource` в компонентах
   напрямую — запросы задублируются (#28).
+- **Агентский поток — тоже один на вкладку** (`GET /api/agent/events`,
+  `agent-store.ts`): все чаты мультиплексируются в него со сквозными id
+  событий (ADR 0024) — HTTP/1.1 даёт браузеру ~6 соединений на origin, SSE
+  на чат их бы исчерпал. Не открывать SSE на сессию. Событие `sessions` —
+  сигнал перечитать список (через `singleFlight`), `gap` — буфер чата
+  обрезан, чат принимается заново; следом идёт `state` с текущими
+  статусом, автоподтверждением, настройками и открытыми запросами (ADR 0031).
+- **Агентов запускает только сервер, команда — только из конфига**
+  (пресеты, `.githuman/ght-agents.json`), никогда из HTTP-запроса. Агентские
+  роуты есть только при loopback-хосте и за `requireLocalOrigin`.
+  Автоподтверждение (`autoApprove`) — флаг сессии, по умолчанию выкл,
+  включается через диалог с предупреждением; не делать его общей настройкой
+  и не включать по умолчанию. Как элементы контекста превращаются в блоки
+  запроса и что значит `githuman://` — [docs/agent-context-uris.md](docs/agent-context-uris.md).
+  Лимит чатов — `MAX_AGENT_SESSIONS`
+  (`src/shared/agents/constants.ts`), на сервере и в UI.
+- **`localStorage` — только через `@/utils/safe-storage`** (обёртка над Quasar
+  `LocalStorage`, всё в `try/catch`: `setItem` может бросить при переполнении или
+  отключённом хранилище, а страница обязана работать и без него). Прямого
+  `localStorage` в `src/web` нет. В node-тестах Quasar-хранилище пустое —
+  подменять через `setStorageBackend()`, а не через `globalThis.localStorage`.
+- **Сообщение из пойманной ошибки — `errorMessage()`** (`@/utils/error-message`,
+  источник — `src/shared/utils/`), не копией `err instanceof Error ? …`.
 - **Рефетчи через `singleFlight`** (`src/web/utils/single-flight.ts`): без
   параллельных запросов, но вызов во время запроса получает данные,
   запрошенные после него. Простое «присоединиться к текущему запросу»
@@ -151,6 +180,30 @@ userPath)` напрямую.
 - JSDoc-комментарии — только там, где поведение не очевидно из кода (WHY,
   не WHAT) — см. существующие функции в `git.service.ts`/`diff.service.ts`
   как образец.
+- **Комментарии в коде — на английском, в духе ASD-STE100** (Simplified
+  Technical English): одно предложение — одна мысль, до 25 слов; активный
+  залог; без идиом, `etc.` и оборотов с двойным смыслом; одно слово на
+  понятие — термины из [docs/GLOSSARY.md](docs/GLOSSARY.md) (нового понятия
+  там нет — сначала добавить его туда). Берём правила построения фраз, а не
+  словарь на 900 слов: технические термины (`reconnect`, `payload`) разрешены.
+  Соответствие стандарту не заявляем — проверить его нечем. Правило
+  относится к новым и затронутым комментариям; существующие переписываем
+  только вместе с кодом рядом, массовый проход — отдельная задача.
+  Комментарий по-прежнему объясняет WHY, а не WHAT (см. выше).
+- **Константы модуля — в начале**, после импортов и до функций; к каждой —
+  короткий комментарий, зачем она нужна. Порядок проверяет
+  `local/constants-first` (`lint-rules/`) для верхнеуровневых `const` в
+  `UPPER_SNAKE`, в том числе в `<script setup>`: они должны предшествовать
+  функциям и вызовам функций при инициализации (например, `ref()` и
+  `useStore()`). Вызовы в инициализаторах самих констант допустимы; наличие и качество
+  комментария линтер не видит — это дело ревью.
+- **Перед новой функцией общего назначения — поиск готовой**: сначала в общих
+  утилитах (`src/shared/utils`, `src/server/utils`, `src/web/utils`), потом в
+  других модулях (сервисы, сторы, компоненты). Нашлась — используем. Нашлась
+  похожая в другом модуле — выносим в общее место и заменяем все дубли, а не
+  пишем третью копию. Куда выносить: чистое и нужное и вебу, и серверу —
+  `shared/utils`; Node API (`Buffer`, `node:path`) — `server/utils`; только
+  веб — `web/utils`.
 - `oxlint`/`oxfmt`, не eslint/prettier. Конфиг в `oxlint.config.ts`
   сознательно не включает категории `style`/`pedantic`/`restriction` — см.
   комментарий в начале файла, почему.

@@ -1,3 +1,4 @@
+import { BadRequestError } from '../errors/http.ts'
 import { Type, type Static } from '@sinclair/typebox'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import type { FastifyInstance } from 'fastify'
@@ -46,14 +47,13 @@ export async function gitRoutes(
   typedApp.post<{ Body: Static<typeof OptionalPathsBody> }>(
     '/api/git/stage',
     { schema: { body: OptionalPathsBody } },
-    async (request, reply) => {
+    async request => {
       try {
         await stagePaths(repositoryPath, request.body.paths ?? [])
         return { ok: true }
       } catch (err) {
-        reply.code(400)
         const message = err instanceof Error ? err.message : 'Failed to stage'
-        return { error: 'Bad Request', message, statusCode: 400 }
+        throw new BadRequestError(message, { cause: err })
       }
     }
   )
@@ -61,14 +61,13 @@ export async function gitRoutes(
   typedApp.post<{ Body: Static<typeof OptionalPathsBody> }>(
     '/api/git/unstage',
     { schema: { body: OptionalPathsBody } },
-    async (request, reply) => {
+    async request => {
       try {
         await unstagePaths(repositoryPath, request.body.paths ?? [])
         return { ok: true }
       } catch (err) {
-        reply.code(400)
         const message = err instanceof Error ? err.message : 'Failed to unstage'
-        return { error: 'Bad Request', message, statusCode: 400 }
+        throw new BadRequestError(message, { cause: err })
       }
     }
   )
@@ -76,15 +75,14 @@ export async function gitRoutes(
   typedApp.post<{ Body: Static<typeof DiscardBody> }>(
     '/api/git/discard',
     { schema: { body: DiscardBody } },
-    async (request, reply) => {
+    async request => {
       try {
         await discardPaths(repositoryPath, request.body.paths)
         return { ok: true }
       } catch (err) {
-        reply.code(400)
         const message =
           err instanceof Error ? err.message : 'Failed to discard changes'
-        return { error: 'Bad Request', message, statusCode: 400 }
+        throw new BadRequestError(message, { cause: err })
       }
     }
   )
@@ -92,17 +90,16 @@ export async function gitRoutes(
   typedApp.get<{ Params: Static<typeof TreeParams> }>(
     '/api/git/tree/:ref',
     { schema: { params: TreeParams } },
-    async (request, reply) => {
+    async request => {
       const { ref } = request.params
 
       try {
         const files = await getFilesAtRef(repositoryPath, ref)
         return { ref, files }
       } catch (err) {
-        reply.code(400)
         const message =
           err instanceof Error ? err.message : 'Failed to list files'
-        return { error: 'Bad Request', message, statusCode: 400 }
+        throw new BadRequestError(message, { cause: err })
       }
     }
   )
@@ -113,17 +110,12 @@ export async function gitRoutes(
   }>(
     '/api/git/file/*',
     { schema: { querystring: FileContentQuery } },
-    async (request, reply) => {
+    async request => {
       const filePath = request.params['*']
       const { ref } = request.query
 
       if (!filePath) {
-        reply.code(400)
-        return {
-          error: 'Bad Request',
-          message: 'File path is required',
-          statusCode: 400
-        }
+        throw new BadRequestError('File path is required')
       }
 
       let content: string
@@ -135,10 +127,9 @@ export async function gitRoutes(
           filePath
         ))
       } catch (err) {
-        reply.code(400)
         const message =
           err instanceof Error ? err.message : 'Failed to read file'
-        return { error: 'Bad Request', message, statusCode: 400 }
+        throw new BadRequestError(message, { cause: err })
       }
       const lines = isBinary ? [] : content.split('\n')
 

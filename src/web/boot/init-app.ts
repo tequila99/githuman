@@ -1,6 +1,7 @@
 import { defineBoot } from '#q-app'
 import { useRepositoryStore } from '@/stores/repository-store'
 import { useAppInfoStore } from '@/stores/app-info-store'
+import { useAgentStore } from '@/stores/agent-store'
 import { onServerHello } from '@/composables/use-server-events'
 import { detectServerRestart } from '@/utils/detect-server-restart'
 
@@ -10,6 +11,8 @@ export default defineBoot(() => {
 
   const appInfoStore = useAppInfoStore()
   void appInfoStore.fetchInfo()
+
+  void useAgentStore().init()
 
   // A restarted server may be a newer version (new frontend build, old
   // lazy chunks gone) or serve another repository on the same port — a full

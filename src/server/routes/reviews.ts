@@ -1,3 +1,4 @@
+import { NotFoundError, BadRequestError } from '../errors/http.ts'
 import { Type } from '@sinclair/typebox'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import type { FastifyInstance } from 'fastify'
@@ -7,8 +8,7 @@ import {
   getReview,
   getReviews,
   setReviewStatus,
-  removeReview,
-  ValidationError
+  removeReview
 } from '../services/review.service.ts'
 import { getRepositoryInfo } from '../services/git.service.ts'
 import type { EventBus } from '../event-bus.ts'
@@ -66,26 +66,14 @@ export async function reviewRoutes(
     '/api/reviews',
     { schema: { body: CreateReviewBody } },
     async (request, reply) => {
-      try {
-        const review = await createReview(
-          db,
-          repositoryPath,
-          request.body,
-          eventBus
-        )
-        reply.code(201)
-        return review
-      } catch (error) {
-        if (error instanceof ValidationError) {
-          reply.code(400)
-          return {
-            error: 'Bad Request',
-            message: error.message,
-            statusCode: 400
-          }
-        }
-        throw error
-      }
+      const review = await createReview(
+        db,
+        repositoryPath,
+        request.body,
+        eventBus
+      )
+      reply.code(201)
+      return review
     }
   )
 
@@ -112,16 +100,11 @@ export async function reviewRoutes(
   typedApp.get(
     '/api/reviews/:id',
     { schema: { params: ReviewIdParams } },
-    async (request, reply) => {
+    async request => {
       const review = getReview(db, request.params.id)
 
       if (!review) {
-        reply.code(404)
-        return {
-          error: 'Not Found',
-          message: `Review ${request.params.id} not found`,
-          statusCode: 404
-        }
+        throw new NotFoundError(`Review ${request.params.id} not found`)
       }
 
       return review
@@ -131,14 +114,9 @@ export async function reviewRoutes(
   typedApp.patch(
     '/api/reviews/:id',
     { schema: { params: ReviewIdParams, body: UpdateReviewBody } },
-    async (request, reply) => {
+    async request => {
       if (!request.body.status) {
-        reply.code(400)
-        return {
-          error: 'Bad Request',
-          message: '"status" is required',
-          statusCode: 400
-        }
+        throw new BadRequestError('"status" is required')
       }
 
       const updated = setReviewStatus(
@@ -149,12 +127,7 @@ export async function reviewRoutes(
       )
 
       if (!updated) {
-        reply.code(404)
-        return {
-          error: 'Not Found',
-          message: `Review ${request.params.id} not found`,
-          statusCode: 404
-        }
+        throw new NotFoundError(`Review ${request.params.id} not found`)
       }
 
       return updated
@@ -166,12 +139,7 @@ export async function reviewRoutes(
     { schema: { params: ReviewIdParams } },
     async (request, reply) => {
       if (!getReview(db, request.params.id)) {
-        reply.code(404)
-        return {
-          error: 'Not Found',
-          message: `Review ${request.params.id} not found`,
-          statusCode: 404
-        }
+        throw new NotFoundError(`Review ${request.params.id} not found`)
       }
 
       removeReview(db, request.params.id, eventBus)

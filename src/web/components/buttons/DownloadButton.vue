@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useQuasar } from 'quasar'
+import { exportFile } from 'quasar'
 import { useI18n } from 'vue-i18n'
+import { useNotifyError } from '@/composables/use-notify-error'
 
 const props = defineProps<{
   /** GET endpoint returning the file's raw content (e.g. text/markdown). */
@@ -10,8 +11,8 @@ const props = defineProps<{
   tooltip?: string
 }>()
 
-const $q = useQuasar()
 const { t } = useI18n()
+const notifyError = useNotifyError()
 const downloading = ref(false)
 
 async function download() {
@@ -24,20 +25,11 @@ async function download() {
     }
     const text = await response.text()
 
-    const blobUrl = URL.createObjectURL(
-      new Blob([text], { type: 'text/markdown' })
-    )
-    const link = document.createElement('a')
-    link.href = blobUrl
-    link.download = props.filename
-    link.click()
-    URL.revokeObjectURL(blobUrl)
+    // exportFile returns the error instead of throwing it.
+    const result = exportFile(props.filename, text, 'text/markdown')
+    if (result !== true) throw result
   } catch (err) {
-    $q.notify({
-      type: 'negative',
-      message: t('reviews.detail.downloadError'),
-      caption: err instanceof Error ? err.message : String(err)
-    })
+    notifyError(t('reviews.detail.downloadError'), err)
   } finally {
     downloading.value = false
   }

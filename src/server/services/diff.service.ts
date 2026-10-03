@@ -4,7 +4,7 @@ import type {
   DiffFileStatus,
   DiffHunk,
   DiffLine
-} from '../../shared/types.ts'
+} from '../../shared/diff/types.ts'
 import {
   assertSafeRef,
   getFileAtRef,
@@ -13,6 +13,9 @@ import {
   listUntrackedPaths
 } from './git.service.ts'
 import type { FileAtRef } from './git.service.ts'
+
+/** Unchanged lines kept around each change in a hunk, as in `git diff`. */
+const CONTEXT_LINES = 3
 
 export interface DiffFileMeta {
   oldPath: string
@@ -27,8 +30,6 @@ function splitLines(text: string): string[] {
   if (lines[lines.length - 1] === '') lines.pop()
   return lines
 }
-
-const CONTEXT_LINES = 3
 
 function windowHunks(
   lines: DiffLine[],

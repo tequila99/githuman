@@ -1,10 +1,11 @@
 import { computed } from 'vue'
-import { Dark, LocalStorage } from 'quasar'
+import { Dark } from 'quasar'
+import { safeStorage } from '@/utils/safe-storage'
 
 const STORAGE_KEY = 'githuman-theme'
 
 export function initAppTheme() {
-  const stored = LocalStorage.getItem(STORAGE_KEY)
+  const stored = safeStorage.get(STORAGE_KEY)
   Dark.set(stored === 'light' || stored === 'dark' ? stored === 'dark' : 'auto')
 }
 
@@ -13,7 +14,7 @@ export function useAppTheme() {
 
   function toggleTheme() {
     Dark.set(!Dark.isActive)
-    LocalStorage.set(STORAGE_KEY, Dark.isActive ? 'dark' : 'light')
+    safeStorage.set(STORAGE_KEY, Dark.isActive ? 'dark' : 'light')
   }
 
   return { isDark, toggleTheme }
