@@ -1,25 +1,32 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { copyToClipboard } from 'quasar'
+import { onBeforeUnmount, onDeactivated, ref } from 'vue'
+import { copyToClipboard, useTimeout } from 'quasar'
+import { COPIED_FEEDBACK_MS } from '@/utils/copy-code'
 
 const props = defineProps<{ value: string; tooltip: string }>()
 
 const copied = ref(false)
-let resetTimer: ReturnType<typeof setTimeout> | undefined
+const { registerTimeout } = useTimeout()
+let generation = 0
+
+function resetCopied() {
+  generation++
+  copied.value = false
+}
+
+onBeforeUnmount(resetCopied)
+onDeactivated(resetCopied)
 
 async function copy() {
+  const current = generation
   try {
-    // Quasar's helper falls back to a hidden-textarea + execCommand('copy')
-    // when navigator.clipboard is unavailable — notably in an insecure
-    // context, which is exactly what `serve --host 0.0.0.0` (ADR 0008) is:
-    // plain http:// on the LAN. A bare navigator.clipboard.writeText() call
-    // would silently no-op for every LAN user.
+    // Quasar also supports clipboard access over plain HTTP in the LAN.
     await copyToClipboard(props.value)
+    if (current !== generation) return
     copied.value = true
-    clearTimeout(resetTimer)
-    resetTimer = setTimeout(() => {
+    registerTimeout(() => {
       copied.value = false
-    }, 1500)
+    }, COPIED_FEEDBACK_MS)
   } catch {
     // Clipboard unavailable even with the fallback — nothing to recover.
   }

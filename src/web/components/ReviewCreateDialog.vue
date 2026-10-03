@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ApiRequestError } from '@/api/client'
+import { errorMessage as toErrorMessage } from '@/utils/error-message'
 import { useReviewsStore } from '@/stores/reviews-store'
 import type { Review } from '@/api/types'
 
@@ -43,12 +43,7 @@ async function submit() {
     reset()
     emit('created', review)
   } catch (err) {
-    errorMessage.value =
-      err instanceof ApiRequestError
-        ? err.message
-        : err instanceof Error
-          ? err.message
-          : String(err)
+    errorMessage.value = toErrorMessage(err)
   } finally {
     submitting.value = false
   }

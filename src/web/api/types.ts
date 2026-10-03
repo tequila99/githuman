@@ -1,31 +1,60 @@
 /**
- * Re-exported from src/shared/types.ts, the actual source of truth shared
+ * Re-exported from the domain modules in src/shared, the actual source of truth shared
  * with the backend — this file exists only so web code can import via
  * `@/api/types` instead of a relative path reaching out of src/web/.
  */
 export type {
   RepositoryInfo,
-  AppInfo,
+  FileTreeNode,
+  FileTreeResponse,
+  FileContentResponse
+} from '../../shared/git/types.ts'
+export type { AppInfo } from '../../shared/app/types.ts'
+export type {
   DiffFileStatus,
   DiffLineType,
   DiffLine,
   DiffHunk,
-  DiffFile,
-  FileTreeNode,
-  FileTreeResponse,
-  FileContentResponse,
-  ApiError,
+  DiffFile
+} from '../../shared/diff/types.ts'
+export type { ApiError } from '../../shared/http/types.ts'
+export type {
   ReviewStatus,
   ReviewSourceType,
   Review,
   CreateReviewRequest,
-  UpdateReviewRequest,
+  UpdateReviewRequest
+} from '../../shared/reviews/types.ts'
+export type {
   Comment,
   CreateCommentRequest,
-  UpdateCommentRequest,
-  ServerEventType,
-  ServerHello
-} from '../../shared/types.ts'
+  UpdateCommentRequest
+} from '../../shared/comments/types.ts'
+export type { ServerEventType, ServerHello } from '../../shared/events/types.ts'
+export type {
+  AgentPresetInfo,
+  AgentSessionStatus,
+  AgentSessionInfo,
+  CreateAgentSessionRequest,
+  AgentContextItem,
+  AgentPromptRequest,
+  AgentToolDiff,
+  AgentToolStatus,
+  AgentPermissionOption,
+  AgentChatEvent,
+  AgentChatEnvelope,
+  AgentSessionState,
+  AgentPermissionRequest,
+  AgentStreamEnvelope,
+  AgentSetAutoApproveRequest,
+  AgentFileSearchResponse,
+  AgentPermissionAnswer,
+  AgentConfigOption,
+  AgentConfigChoice,
+  AgentSetConfigRequest
+} from '../../shared/agents/types.ts'
 
 // A value export can't keep the .ts extension (only `export type` can).
-export { SERVER_EVENT_TYPES } from '../../shared/types'
+export { SERVER_EVENT_TYPES } from '../../shared/events/types'
+export { MAX_AGENT_SESSIONS } from '../../shared/agents/constants'
+export { uniqueChatName } from '../../shared/agents/chat-names'

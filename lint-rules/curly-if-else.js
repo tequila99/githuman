@@ -59,7 +59,4 @@ const curlyIfElse = {
   }
 }
 
-export default {
-  meta: { name: 'local' },
-  rules: { 'curly-if-else': curlyIfElse }
-}
+export default curlyIfElse

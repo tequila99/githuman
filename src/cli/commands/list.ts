@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util'
 import type { DatabaseSync } from 'node:sqlite'
-import type { ReviewStatus } from '../../shared/types.ts'
+import type { ReviewStatus } from '../../shared/reviews/types.ts'
 import { getReviews } from '../../server/services/review.service.ts'
 import { resolveDbPrefix } from '../config.ts'
 

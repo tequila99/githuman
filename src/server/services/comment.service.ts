@@ -1,5 +1,9 @@
+import { ValidationError } from '../errors/comments.ts'
 import type { DatabaseSync } from 'node:sqlite'
-import type { Comment, CreateCommentRequest } from '../../shared/types.ts'
+import type {
+  Comment,
+  CreateCommentRequest
+} from '../../shared/comments/types.ts'
 import {
   createComment as insertComment,
   findCommentById,
@@ -9,8 +13,6 @@ import {
   setCommentResolved
 } from '../repositories/comment.repo.ts'
 import type { EventBus } from '../event-bus.ts'
-
-export class ValidationError extends Error {}
 
 export function createComment(
   db: DatabaseSync,

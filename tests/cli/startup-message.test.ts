@@ -14,7 +14,8 @@ test('a non-localhost host adds a LAN-exposure warning', () => {
   assert.equal(
     message,
     'githuman listening on http://0.0.0.0:3847\n' +
-      'Warning: server is reachable from your local network without authentication.'
+      'Warning: server is reachable from your local network without authentication.\n' +
+      'Agent chat is disabled: it is only available when listening on localhost.'
   )
 })
 
@@ -22,4 +23,11 @@ test('127.0.0.1 is treated the same as localhost (no warning)', () => {
   const message = formatStartupMessage('http://127.0.0.1:3847', '127.0.0.1')
 
   assert.equal(message, 'githuman listening on http://127.0.0.1:3847')
+})
+
+test('::1 is loopback too', () => {
+  assert.equal(
+    formatStartupMessage('http://[::1]:3847', '::1'),
+    'githuman listening on http://[::1]:3847'
+  )
 })

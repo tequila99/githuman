@@ -1,20 +1,21 @@
+import { ValidationError } from '../errors/reviews.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import type {
   CreateReviewRequest,
-  DiffFile,
   Review,
   ReviewSourceType,
   ReviewStatus
-} from '../../shared/types.ts'
+} from '../../shared/reviews/types.ts'
+import type { DiffFile } from '../../shared/diff/types.ts'
 import {
   createReview as insertReview,
   findReviewById,
   listReviews,
   updateReviewStatus as updateReviewStatusRepo,
   deleteReview as deleteReviewRepo,
-  UniqueNameError,
   type ListReviewsFilters
 } from '../repositories/review.repo.ts'
+import { UniqueNameError } from '../errors/reviews.ts'
 import {
   listCommentsByReview,
   deleteComment
@@ -31,8 +32,6 @@ import {
 } from './diff.service.ts'
 import { getRepositoryInfo } from './git.service.ts'
 import type { EventBus } from '../event-bus.ts'
-
-export class ValidationError extends Error {}
 
 const REVIEW_NAME_MONTHS_RU = [
   'янв',

@@ -1,5 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
-import type { Comment, DiffLineType } from '../../shared/types.ts'
+import type { Comment } from '../../shared/comments/types.ts'
+import type { DiffLineType } from '../../shared/diff/types.ts'
 
 interface CommentRow {
   id: string

@@ -8,9 +8,9 @@ import {
   createReview,
   setReviewStatus,
   removeReview,
-  getReview,
-  ValidationError
+  getReview
 } from '../../../src/server/services/review.service.ts'
+import { ValidationError } from '../../../src/server/errors/reviews.ts'
 import { createEventBus } from '../../../src/server/event-bus.ts'
 import {
   createComment,

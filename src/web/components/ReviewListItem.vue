@@ -3,16 +3,17 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Review, ReviewStatus } from '@/api/types'
 
-const props = defineProps<{ review: Review }>()
-defineEmits<{ (e: 'click'): void }>()
-
-const { t } = useI18n()
-
+// Keep status colors consistent across this component.
 const STATUS_COLOR: Record<ReviewStatus, string> = {
   in_progress: 'grey-7',
   approved: 'positive',
   changes_requested: 'negative'
 }
+
+const props = defineProps<{ review: Review }>()
+defineEmits<{ (e: 'click'): void }>()
+
+const { t } = useI18n()
 
 const name = computed(() => props.review.name ?? t('reviews.list.unnamed'))
 const branch = computed(

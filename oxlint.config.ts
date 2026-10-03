@@ -29,7 +29,7 @@ export default defineConfig({
 
   // Project rules the built-ins can't express. oxlint's JS plugin API is
   // alpha (not semver-stable), hence oxlint pinned with ~ in package.json.
-  jsPlugins: ['./lint-rules/curly-if-else.js'],
+  jsPlugins: ['./lint-rules/index.js'],
 
   // correctness/suspicious catch real bugs and are safe to blanket-enable.
   // oxlint's "style"/"pedantic"/"restriction" categories were tried and
@@ -86,7 +86,9 @@ export default defineConfig({
     // type-aware checker doesn't see the ES2023 lib target it needs.
     'unicorn/no-array-sort': 'off',
     // An if with an else gets braces on every branch (lint-rules/).
-    'local/curly-if-else': 'error'
+    'local/curly-if-else': 'error',
+    // Module-level UPPER_SNAKE constants precede functions and runtime calls (lint-rules/).
+    'local/constants-first': 'error'
   },
 
   env: {

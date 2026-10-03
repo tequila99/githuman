@@ -6,9 +6,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const pkgPath = fileURLToPath(new URL('../../package.json', import.meta.url))
+// Resolve package metadata relative to this test file.
+const PACKAGE_PATH = fileURLToPath(
+  new URL('../../package.json', import.meta.url)
+)
+// Compare CLI output with the version declared by the package.
 const APP_VERSION = (
-  JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version: string }
+  JSON.parse(readFileSync(PACKAGE_PATH, 'utf-8')) as { version: string }
 ).version
 
 function waitForListeningUrl(

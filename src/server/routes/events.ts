@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { EventBus } from '../event-bus.ts'
-import type { ServerHello } from '../../shared/types.ts'
+import { safeSend } from '../utils/sse.ts'
+import type { ServerHello } from '../../shared/events/types.ts'
 
 export interface EventRoutesOptions {
   eventBus: EventBus
@@ -18,9 +19,13 @@ export async function eventRoutes(
   app.get('/api/events', { sse: true }, async (request, reply) => {
     reply.sse.keepAlive()
     await reply.sse.send({ event: 'connected', data: hello })
+    // The client can leave during the await; a later `onClose` would never run.
+    if (!reply.sse.isConnected) {
+      return
+    }
 
     const unsubscribe = eventBus.subscribe(event => {
-      void reply.sse.send({
+      safeSend(reply.sse, {
         event: event.type,
         data: { reviewId: event.reviewId }
       })

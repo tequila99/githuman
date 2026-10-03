@@ -6,11 +6,11 @@ import {
   findReviewById,
   listReviews,
   updateReviewStatus,
-  deleteReview,
-  UniqueNameError
+  deleteReview
 } from '../../../src/server/repositories/review.repo.ts'
+import { UniqueNameError } from '../../../src/server/errors/reviews.ts'
 import { insertReviewFiles } from '../../../src/server/repositories/review-file.repo.ts'
-import type { Review } from '../../../src/shared/types.ts'
+import type { Review } from '../../../src/shared/reviews/types.ts'
 
 function makeReview(overrides: Partial<Review> = {}): Review {
   const now = new Date().toISOString()

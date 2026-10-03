@@ -1,0 +1,18 @@
+// Keep wide Markdown inside the message instead of widening the chat panel.
+.agent-item.q-message {
+  font-family: var(--font-agent);
+  margin-bottom: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+.agent-item :deep(.q-message-text) {
+  padding-right: 16px;
+  padding-left: 16px;
+  min-height: 0;
+}
+.agent-item :deep(.q-message-container > *),
+.agent-item :deep(.q-message-text-content),
+.agent-item :deep(.q-message-text) {
+  min-width: 0;
+  max-width: 100%;
+}

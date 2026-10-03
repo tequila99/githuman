@@ -4,7 +4,7 @@ import { createTestDatabase } from '../../../src/server/db/index.ts'
 import { createReview } from '../../../src/server/repositories/review.repo.ts'
 import { runList, parseListArgs } from '../../../src/cli/commands/list.ts'
 import { DEFAULT_DB_PREFIX } from '../../../src/cli/config.ts'
-import type { Review } from '../../../src/shared/types.ts'
+import type { Review } from '../../../src/shared/reviews/types.ts'
 
 function makeReview(overrides: Partial<Review> = {}): Review {
   const now = new Date().toISOString()

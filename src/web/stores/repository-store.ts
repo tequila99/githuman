@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { apiGet } from '@/api/client'
 import type { RepositoryInfo } from '@/api/types'
+import { errorMessage } from '@/utils/error-message'
 
 export const useRepositoryStore = defineStore('repository', () => {
   const info = ref<RepositoryInfo | null>(null)
@@ -16,7 +17,7 @@ export const useRepositoryStore = defineStore('repository', () => {
       info.value = await apiGet<RepositoryInfo>('/api/git/info')
     } catch (err) {
       info.value = null
-      error.value = err instanceof Error ? err.message : String(err)
+      error.value = errorMessage(err)
     } finally {
       loading.value = false
     }

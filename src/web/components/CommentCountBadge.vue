@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-defineProps<{ count: number }>()
+defineProps<{ count: number; compact?: boolean }>()
 
 const { t } = useI18n()
 </script>
@@ -10,8 +10,9 @@ const { t } = useI18n()
   <span
     v-if="count > 0"
     class="comment-count-badge relative-position inline-block"
+    :class="{ 'comment-count-badge--compact': compact }"
   >
-    <q-icon name="mode_comment" size="20px" />
+    <q-icon name="mode_comment" :size="compact ? '15px' : '20px'" />
     <q-badge color="primary" floating rounded>{{ count }}</q-badge>
     <q-tooltip>{{ t('reviews.comments.count', { count }) }}</q-tooltip>
   </span>
@@ -30,5 +31,14 @@ const { t } = useI18n()
 .comment-count-badge :deep(.q-badge--floating) {
   top: -7px;
   right: -9px;
+}
+
+.comment-count-badge--compact :deep(.q-badge--floating) {
+  top: -5px;
+  right: -7px;
+  min-height: 12px;
+  padding: 1px 4px;
+  font-size: 9px;
+  line-height: 1;
 }
 </style>

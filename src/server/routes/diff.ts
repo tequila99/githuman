@@ -1,3 +1,4 @@
+import { BadRequestError } from '../errors/http.ts'
 import { Type, type Static } from '@sinclair/typebox'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import type { FastifyInstance } from 'fastify'
@@ -39,13 +40,12 @@ export async function diffRoutes(
   typedApp.get<{ Querystring: Static<typeof BranchQuery> }>(
     '/api/diff/branch',
     { schema: { querystring: BranchQuery } },
-    async (request, reply) => {
+    async request => {
       try {
         return await getBranchDiff(repositoryPath, request.query.base)
       } catch (err) {
-        reply.code(400)
         const message = err instanceof Error ? err.message : 'Bad ref'
-        return { error: 'Bad Request', message, statusCode: 400 }
+        throw new BadRequestError(message, { cause: err })
       }
     }
   )
@@ -53,7 +53,7 @@ export async function diffRoutes(
   typedApp.get<{ Querystring: Static<typeof CommitsQuery> }>(
     '/api/diff/commits',
     { schema: { querystring: CommitsQuery } },
-    async (request, reply) => {
+    async request => {
       try {
         return await getCommitsDiff(
           repositoryPath,
@@ -61,9 +61,8 @@ export async function diffRoutes(
           request.query.to
         )
       } catch (err) {
-        reply.code(400)
         const message = err instanceof Error ? err.message : 'Bad ref'
-        return { error: 'Bad Request', message, statusCode: 400 }
+        throw new BadRequestError(message, { cause: err })
       }
     }
   )
