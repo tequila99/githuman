@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { apiGet, apiPost } from '@/api/client'
 import type { CreateReviewRequest, Review } from '@/api/types'
+import { errorMessage } from '@/utils/error-message'
 
 export interface ReviewFilters {
   search: string
@@ -37,7 +38,7 @@ export const useReviewsStore = defineStore('reviews', () => {
       )
     } catch (err) {
       reviews.value = []
-      error.value = err instanceof Error ? err.message : String(err)
+      error.value = errorMessage(err)
     } finally {
       loading.value = false
     }

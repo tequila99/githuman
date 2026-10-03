@@ -2,6 +2,8 @@
 
 // Self-hosted fonts (via @fontsource) so the app works fully offline,
 // matching the githuman reference's font choices (see githuman/src/web/styles/globals.css)
+@import '@fontsource/golos-text/400.css';
+@import '@fontsource/golos-text/500.css';
 @import '@fontsource/syne/400.css';
 @import '@fontsource/syne/500.css';
 @import '@fontsource/syne/600.css';
@@ -13,8 +15,10 @@
 @import '@fontsource/fira-code/400.css';
 @import '@fontsource/fira-code/500.css';
 @import '@fontsource/fira-code/600.css';
+@import 'markdown';
 
 :root {
+  --font-agent: 'Golos Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --code-font-size: 14px;
   // Comment UI text is intentionally smaller than the surrounding code —
@@ -47,4 +51,44 @@ body.body--dark {
   --diff-gutter-color: #64748b;
   --diff-header-bg: #1a2234;
   color-scheme: dark;
+}
+
+// Dropdown menus of the agent UI (settings, add, file actions) share one
+// scale: 13px names, small grey descriptions, a hairline between rows, a
+// little air above the first and below the last.
+.agent-menu {
+  padding: 4px 0;
+  font-size: 13px;
+
+  .q-item {
+    min-height: 0;
+    align-items: flex-start;
+    padding: 5px 12px;
+    font-size: 13px;
+  }
+  .q-item + .q-item {
+    border-top: 1px solid rgba(128, 128, 128, 0.25);
+  }
+  .q-item__label {
+    font-size: 13px;
+    line-height: 1.3;
+    white-space: normal;
+  }
+  .q-item__label--caption {
+    margin-top: 1px;
+    font-size: 11px;
+    opacity: 0.65;
+    overflow-wrap: anywhere;
+  }
+  // Icons / checks sit beside the first line, in a column of their own.
+  .q-item__section--avatar,
+  .q-item__section--side {
+    align-self: flex-start;
+    min-width: 0;
+    width: 22px;
+    padding-right: 0;
+  }
+  .q-icon {
+    font-size: 16px;
+  }
 }

@@ -24,6 +24,7 @@
     "src/server/**/*",
     "src/shared/**/*",
     "tests/server/**/*",
-    "tests/cli/**/*"
+    "tests/cli/**/*",
+    "tests/shared/**/*"
   ]
 }

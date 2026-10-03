@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { buildApp } from '../../../src/server/app.ts'
 import { createEventBus } from '../../../src/server/event-bus.ts'
 import { createTempGitRepo } from '../helpers/git-fixture.ts'
-import type { ServerHello } from '../../../src/shared/types.ts'
+import type { ServerHello } from '../../../src/shared/events/types.ts'
 
 test('GET /api/events sets the SSE content-type and delivers a published event', async t => {
   const eventBus = createEventBus()

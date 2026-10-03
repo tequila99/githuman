@@ -6,7 +6,7 @@ import {
   insertReviewFiles,
   deleteReviewFiles
 } from '../../../src/server/repositories/review-file.repo.ts'
-import type { Review } from '../../../src/shared/types.ts'
+import type { Review } from '../../../src/shared/reviews/types.ts'
 
 function makeReview(id: string): Review {
   const now = new Date().toISOString()

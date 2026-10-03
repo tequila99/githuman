@@ -1,3 +1,4 @@
+import { debounce } from 'quasar'
 import {
   SERVER_EVENT_TYPES,
   type ServerEventType,
@@ -18,7 +19,7 @@ let source: EventSource | null = null
 // An error since the last 'open' means events may have been missed while
 // the connection was down.
 let missedEvents = false
-let reconnectTimer: ReturnType<typeof setTimeout> | undefined
+const reconnect = debounce(connect, RECONNECT_DELAY_MS)
 
 function notify(matches: (subscriber: Subscriber) => boolean) {
   for (const subscriber of subscribers) {
@@ -33,6 +34,8 @@ function notify(matches: (subscriber: Subscriber) => boolean) {
 }
 
 function connect() {
+  reconnect.cancel()
+  source?.close()
   const es = new EventSource('/api/events')
   // These listeners live exactly as long as this EventSource — subscribers
   // come and go through the `subscribers` set instead.
@@ -61,9 +64,10 @@ function connect() {
     missedEvents = false
   })
   es.addEventListener('error', () => {
+    if (source !== es) return
     missedEvents = true
     if (es.readyState === EventSource.CLOSED) {
-      reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS)
+      reconnect()
     }
   })
   source = es
@@ -105,8 +109,7 @@ export function useServerEvents(
 // Not exported: in the app the connection lives as long as the tab, and the
 // browser closes it on unload. Only HMR needs an explicit teardown.
 function disconnect() {
-  clearTimeout(reconnectTimer) // or the pending reconnect would revive it
-  reconnectTimer = undefined
+  reconnect.cancel()
   source?.close()
   source = null
   missedEvents = false

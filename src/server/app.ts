@@ -1,3 +1,4 @@
+import { NotFoundError } from './errors/http.ts'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -16,6 +17,9 @@ import { reviewRoutes } from './routes/reviews.ts'
 import { commentRoutes } from './routes/comments.ts'
 import { exportRoutes } from './routes/export.ts'
 import { eventRoutes } from './routes/events.ts'
+import { agentRoutes } from './routes/agent.ts'
+import { createSessionRegistry } from './services/agent/session-registry.ts'
+import type { AgentPreset } from '../shared/agents/types.ts'
 import { createTestDatabase } from './db/index.ts'
 import { createEventBus, type EventBus } from './event-bus.ts'
 import { watchRepository } from './services/file-watcher.service.ts'
@@ -35,6 +39,12 @@ export interface BuildAppOptions {
   watchFiles?: boolean
   /** Lets open pages detect a server restart (see ServerHello). Random by default. */
   instanceId?: string
+  /**
+   * Enables the agent chat routes (ADR 0023) with these launch presets. Off by
+   * default: the routes are a remote-execution surface, so the CLI passes this
+   * only for a loopback bind. Tests pass a fake-agent preset.
+   */
+  agentPresets?: readonly AgentPreset[]
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -56,6 +66,18 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     instanceId: options.instanceId ?? randomUUID()
   })
 
+  if (options.agentPresets) {
+    app.register(agentRoutes, {
+      registry: createSessionRegistry({
+        presets: options.agentPresets,
+        repositoryPath
+      }),
+      db,
+      repositoryPath,
+      eventBus
+    })
+  }
+
   if (options.watchFiles) {
     const watcher = watchRepository(repositoryPath, () => {
       eventBus.publish({ type: 'files:changed' })
@@ -72,21 +94,19 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       root: staticRoot,
       wildcard: false
     })
-
-    app.setNotFoundHandler((request, reply) => {
-      if (request.url.startsWith('/api/')) {
-        reply.code(404).send({
-          error: 'Not Found',
-          message: `Route ${request.url} not found`,
-          statusCode: 404
-        })
-        return
-      }
-
-      const indexHtml = readFileSync(join(staticRoot, 'index.html'), 'utf-8')
-      reply.code(200).type('text/html').send(indexHtml)
-    })
   }
+
+  app.setNotFoundHandler((request, reply) => {
+    if (request.url.startsWith('/api/') || !options.staticRoot) {
+      throw new NotFoundError(`Route ${request.url} not found`)
+    }
+
+    const indexHtml = readFileSync(
+      join(options.staticRoot, 'index.html'),
+      'utf-8'
+    )
+    reply.code(200).type('text/html').send(indexHtml)
+  })
 
   return app
 }

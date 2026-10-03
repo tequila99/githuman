@@ -7,6 +7,8 @@ import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../server/app.ts'
 import { createFileDatabase } from '../server/db/index.ts'
 import { resolveDbPrefix, type ServeOptions } from './config.ts'
+import { isLoopbackHost } from '../shared/network/loopback.ts'
+import { loadAgentPresets } from '../server/config/agents.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -69,6 +71,18 @@ export function resolveReviewsDbPath(
   return join(repositoryPath, '.githuman', `${prefix}reviews.db`)
 }
 
+/** `.githuman/<prefix>agents.json` — the user's agent launch-command overrides (ADR 0023). */
+export function resolveAgentsConfigPath(
+  repositoryPath: string,
+  dbPrefix?: string
+): string {
+  return join(
+    repositoryPath,
+    '.githuman',
+    `${resolveDbPrefix(dbPrefix)}agents.json`
+  )
+}
+
 export async function startServer(
   options: ServeOptions
 ): Promise<RunningServer> {
@@ -81,7 +95,15 @@ export async function startServer(
     staticRoot: resolveStaticRoot(),
     repositoryPath,
     db,
-    watchFiles: true
+    watchFiles: true,
+    // Agents can run commands, so they are only offered on a loopback bind.
+    ...(isLoopbackHost(options.host)
+      ? {
+          agentPresets: loadAgentPresets(
+            resolveAgentsConfigPath(repositoryPath, options.dbPrefix)
+          )
+        }
+      : {})
   })
 
   const address = await app.listen({ port: options.port, host: options.host })

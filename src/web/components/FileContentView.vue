@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { Comment } from '@/api/types'
 import FileContentLine from './FileContentLine.vue'
 import CommentThread from './CommentThread.vue'
@@ -76,15 +76,29 @@ function isSelected(lineNumber: number): boolean {
   return drag.isSelected('full', lineNumber)
 }
 
-function commentsAnchoredAt(lineNumber: number): Comment[] {
-  return (props.comments ?? []).filter(
-    comment => comment.lineNumberEnd === lineNumber
-  )
-}
-
-function isPendingFormRow(lineNumber: number): boolean {
-  return !!pending.value && lineNumber === pending.value.endKey
-}
+const rows = computed(() => {
+  const byLine = new Map<number, Comment[]>()
+  for (const comment of props.comments ?? []) {
+    if (comment.lineNumberEnd === null) continue
+    const thread = byLine.get(comment.lineNumberEnd)
+    if (thread) {
+      thread.push(comment)
+    } else {
+      byLine.set(comment.lineNumberEnd, [comment])
+    }
+  }
+  return props.lines.map((line, index) => ({
+    line,
+    index,
+    lineNumber: index + 1,
+    comments: byLine.get(index + 1) ?? []
+  }))
+})
+const pendingLineRange = computed(() =>
+  pending.value
+    ? { start: pending.value.startKey, end: pending.value.endKey }
+    : null
+)
 
 function handleGutterMousedown(lineNumber: number) {
   if (!props.commentable) return
@@ -113,28 +127,26 @@ function cancelNewComment() {
 
 <template>
   <div class="file-content-view">
-    <template v-for="(line, index) in lines" :key="index">
+    <template
+      v-for="{ line, index, lineNumber, comments } in rows"
+      :key="index"
+    >
       <FileContentLine
-        :line-number="index + 1"
+        :line-number="lineNumber"
         :content="line"
         :tokens="highlightedLines?.[index]"
         :selectable="commentable"
-        :selected="isSelected(index + 1)"
+        :selected="isSelected(lineNumber)"
         :wrap="wrap"
-        @gutter-mousedown="handleGutterMousedown(index + 1)"
-        @gutter-mouseenter="handleGutterMouseenter(index + 1)"
+        @gutter-mousedown="handleGutterMousedown(lineNumber)"
+        @gutter-mouseenter="handleGutterMouseenter(lineNumber)"
       />
       <CommentThread
-        v-if="
-          commentsAnchoredAt(index + 1).length > 0 ||
-          isPendingFormRow(index + 1)
-        "
-        :comments="commentsAnchoredAt(index + 1)"
+        v-if="comments.length > 0 || pending?.endKey === lineNumber"
+        :comments="comments"
         :readonly="!commentsEditable"
-        :show-new-form="isPendingFormRow(index + 1)"
-        :pending-line-range="
-          pending && { start: pending.startKey, end: pending.endKey }
-        "
+        :show-new-form="pending?.endKey === lineNumber"
+        :pending-line-range="pendingLineRange"
         @submit-new="submitNewComment"
         @cancel-new="cancelNewComment"
         @edit="(id, content) => emit('edit-comment', id, content)"

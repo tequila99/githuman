@@ -58,7 +58,7 @@ export default defineConfig(ctx => {
         // Node-specific globals that don't belong in a DOM lib typecheck)
         // so vue-tsc doesn't try to typecheck it as part of the frontend.
         // src/shared is deliberately NOT excluded here — it's plain
-        // dependency-free types with nothing Node-specific, and src/web
+        // browser-safe domain contracts with nothing Node-specific, and src/web
         // imports it directly (via src/web/api/types.ts) instead of
         // hand-duplicating it, so it needs to stay in vue-tsc's scope.
         extendTsConfig(tsConfig) {
@@ -70,6 +70,7 @@ export default defineConfig(ctx => {
             './../src/cli',
             './../tests/server',
             './../tests/cli',
+            './../tests/shared',
             './../tests/e2e',
             './../reference'
           ]
@@ -93,7 +94,13 @@ export default defineConfig(ctx => {
       // built SPA at dist/web/ next to the compiled server at dist/cli/.
       distDir: 'dist/web',
 
-      // extendViteConf (viteConf) {},
+      extendViteConf(viteConf) {
+        // CSP defaults font-src to 'self': keep small font subsets as files,
+        // rather than Vite's default data: URLs, without widening the policy.
+        viteConf.build ??= {}
+        viteConf.build.assetsInlineLimit = filePath =>
+          /\.(woff2?|ttf|otf)$/i.test(filePath) ? false : undefined
+      },
       // viteVuePluginOptions: {},
 
       // to write components with JSX/TSX:
@@ -127,7 +134,11 @@ export default defineConfig(ctx => {
       open: true, // opens browser window automatically
 
       proxy: {
-        '/api': 'http://localhost:3847'
+        // Object form, not the 'http://…' shorthand: the shorthand implies
+        // changeOrigin: true, which rewrites Host to :3847 while the browser's
+        // Origin stays the dev server's — the agent routes' Host/Origin check
+        // (ADR 0023) would then reject every request with 403.
+        '/api': { target: 'http://localhost:3847', changeOrigin: false }
       }
     },
 

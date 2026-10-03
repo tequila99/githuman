@@ -9,7 +9,8 @@ import {
   parseExportArgs
 } from '../../../src/cli/commands/export.ts'
 import { DEFAULT_DB_PREFIX } from '../../../src/cli/config.ts'
-import type { Review, Comment } from '../../../src/shared/types.ts'
+import type { Review } from '../../../src/shared/reviews/types.ts'
+import type { Comment } from '../../../src/shared/comments/types.ts'
 
 function makeReview(overrides: Partial<Review> = {}): Review {
   const now = new Date().toISOString()

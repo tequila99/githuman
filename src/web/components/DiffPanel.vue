@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { useQuasar } from 'quasar'
 import { useFileExplorerStore } from '@/stores/file-explorer-store'
 import { useActiveReviewStore } from '@/stores/active-review-store'
 import { useDiffStore } from '@/stores/diff-store'
@@ -12,9 +11,10 @@ import DiffFileCard from './DiffFileCard.vue'
 import ActiveReviewBar from './ActiveReviewBar.vue'
 import LoadErrorBanner from './LoadErrorBanner.vue'
 import CreateReviewFabButton from './buttons/CreateReviewFabButton.vue'
+import { useNotifyError } from '@/composables/use-notify-error'
 
 const { t } = useI18n()
-const $q = useQuasar()
+const notifyError = useNotifyError()
 
 const explorer = useFileExplorerStore()
 const activeReviewStore = useActiveReviewStore()
@@ -26,11 +26,7 @@ async function notifyOnError(action: () => Promise<unknown>) {
   try {
     await action()
   } catch (err) {
-    $q.notify({
-      type: 'negative',
-      message: t('reviews.comments.error'),
-      caption: err instanceof Error ? err.message : String(err)
-    })
+    notifyError(t('reviews.comments.error'), err)
   }
 }
 
@@ -85,6 +81,7 @@ function unresolveComment(id: string) {
         :key="pathOf(file)"
         :file="file"
         :expanded="expandedFiles.has(pathOf(file))"
+        :agent-source="explorer.source"
         :commentable="!!activeReview"
         :comments-editable="!!activeReview"
         :comments="commentsByFile.get(pathOf(file)) ?? []"

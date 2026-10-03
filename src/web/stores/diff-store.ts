@@ -4,6 +4,7 @@ import { apiGet } from '@/api/client'
 import { decodeGitPath } from '@/utils/git-path'
 import { singleFlight } from '@/utils/single-flight'
 import type { DiffFile } from '@/api/types'
+import { errorMessage } from '@/utils/error-message'
 
 function decodeDiffFile(file: DiffFile): DiffFile {
   return {
@@ -87,7 +88,7 @@ export const useDiffStore = defineStore('diff', () => {
         stagedFiles.value = []
         unstagedFiles.value = []
       }
-      error.value = err instanceof Error ? err.message : String(err)
+      error.value = errorMessage(err)
     } finally {
       loading.value = false
       loaded.value = true

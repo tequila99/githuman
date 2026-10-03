@@ -107,50 +107,46 @@ function isWithinAnyComment(line: {
   })
 }
 
-// Index kept alongside each line so lineTokens (aligned to the unfiltered
-// hunk.lines) can still be looked up correctly once commentsOnly drops rows.
-const visibleLines = computed(() =>
-  props.hunk.lines
-    .map((line, index) => ({ line, index }))
+// Keep token indices tied to the original hunk when commentsOnly hides rows.
+const visibleLines = computed(() => {
+  const oldThreads = new Map<number, Comment[]>()
+  const newThreads = new Map<number, Comment[]>()
+  for (const comment of props.comments ?? []) {
+    if (comment.lineNumberEnd === null) continue
+    const threads = anchorColumn(comment) === 'old' ? oldThreads : newThreads
+    const thread = threads.get(comment.lineNumberEnd)
+    if (thread) {
+      thread.push(comment)
+    } else {
+      threads.set(comment.lineNumberEnd, [comment])
+    }
+  }
+  return props.hunk.lines
+    .map((line, index) => ({
+      line,
+      index,
+      comments: [
+        ...(line.oldLineNumber === null
+          ? []
+          : (oldThreads.get(line.oldLineNumber) ?? [])),
+        ...(line.newLineNumber === null
+          ? []
+          : (newThreads.get(line.newLineNumber) ?? []))
+      ]
+    }))
     .filter(entry => !props.commentsOnly || isWithinAnyComment(entry.line))
+})
+const pendingLineRange = computed(() =>
+  pending.value
+    ? { start: pending.value.startKey, end: pending.value.endKey }
+    : null
 )
-
-function commentsAnchoredAt(
-  column: 'old' | 'new',
-  key: number | null
-): Comment[] {
-  if (key === null) return []
-  return (props.comments ?? []).filter(
-    comment => anchorColumn(comment) === column && comment.lineNumberEnd === key
-  )
-}
 
 function isPendingFormRow(column: 'old' | 'new', key: number | null): boolean {
   return (
     !!pending.value &&
     pending.value.column === column &&
     key === pending.value.endKey
-  )
-}
-
-function threadFor(line: {
-  oldLineNumber: number | null
-  newLineNumber: number | null
-}): Comment[] {
-  return [
-    ...commentsAnchoredAt('old', line.oldLineNumber),
-    ...commentsAnchoredAt('new', line.newLineNumber)
-  ]
-}
-
-function showThread(line: {
-  oldLineNumber: number | null
-  newLineNumber: number | null
-}): boolean {
-  return (
-    threadFor(line).length > 0 ||
-    isPendingFormRow('old', line.oldLineNumber) ||
-    isPendingFormRow('new', line.newLineNumber)
   )
 }
 
@@ -183,7 +179,7 @@ function cancelNewComment() {
 <template>
   <div v-if="!commentsOnly || visibleLines.length > 0" class="diff-hunk">
     <div class="diff-hunk__header text-mono text-primary">{{ header }}</div>
-    <template v-for="{ line, index } in visibleLines" :key="index">
+    <template v-for="{ line, index, comments } in visibleLines" :key="index">
       <DiffLineRow
         :line="line"
         :tokens="lineTokens?.[index]"
@@ -197,13 +193,11 @@ function cancelNewComment() {
         @new-mouseenter="handleMouseenter('new', line.newLineNumber)"
       />
       <CommentThread
-        v-if="showThread(line)"
-        :comments="threadFor(line)"
+        v-if="comments.length > 0 || showNewForm(line)"
+        :comments="comments"
         :readonly="!commentsEditable"
         :show-new-form="showNewForm(line)"
-        :pending-line-range="
-          pending && { start: pending.startKey, end: pending.endKey }
-        "
+        :pending-line-range="pendingLineRange"
         @submit-new="submitNewComment"
         @cancel-new="cancelNewComment"
         @edit="(id, content) => emit('edit-comment', id, content)"

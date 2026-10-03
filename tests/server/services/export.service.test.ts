@@ -8,10 +8,12 @@ import { createComment } from '../../../src/server/repositories/comment.repo.ts'
 import {
   exportAsJson,
   exportAsMarkdown,
-  formatReviewAsMarkdown,
-  ExportNotFoundError
+  formatReviewAsMarkdown
 } from '../../../src/server/services/export.service.ts'
-import type { Comment, DiffFile, Review } from '../../../src/shared/types.ts'
+import { ExportNotFoundError } from '../../../src/server/errors/export.ts'
+import type { Comment } from '../../../src/shared/comments/types.ts'
+import type { DiffFile } from '../../../src/shared/diff/types.ts'
+import type { Review } from '../../../src/shared/reviews/types.ts'
 import { createTempGitRepo } from '../helpers/git-fixture.ts'
 
 const sampleFiles: DiffFile[] = [

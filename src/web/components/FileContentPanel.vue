@@ -65,7 +65,7 @@ watch(
   <FileCardFrame v-else class="col">
     <template #header>
       <FileCardHeader :path="selectedPath">
-        <FileHeaderMenu v-model="wrap" />
+        <FileHeaderMenu v-model="wrap" :path="selectedPath" />
       </FileCardHeader>
     </template>
 

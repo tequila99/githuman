@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useReviewDetailStore } from '@/stores/review-detail-store'
@@ -12,9 +11,10 @@ import StatusSwitcher from '@/components/StatusSwitcher.vue'
 import AppPage from '@/components/AppPage.vue'
 import DownloadButton from '@/components/buttons/DownloadButton.vue'
 import type { ReviewStatus } from '@/api/types'
+import { useNotifyError } from '@/composables/use-notify-error'
 
 const { t } = useI18n()
-const $q = useQuasar()
+const notifyError = useNotifyError()
 const route = useRoute()
 const router = useRouter()
 const store = useReviewDetailStore()
@@ -78,11 +78,7 @@ async function notifyOnError(action: () => Promise<unknown>) {
   try {
     await action()
   } catch (err) {
-    $q.notify({
-      type: 'negative',
-      message: t('reviews.comments.error'),
-      caption: err instanceof Error ? err.message : String(err)
-    })
+    notifyError(t('reviews.comments.error'), err)
   }
 }
 

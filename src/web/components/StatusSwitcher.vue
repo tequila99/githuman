@@ -3,17 +3,19 @@ import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import type { ReviewStatus } from '@/api/types'
 
+// Keep the available review statuses and their colors together.
+const STATUSES: { value: ReviewStatus; color: string }[] = [
+  { value: 'in_progress', color: 'grey-7' },
+  { value: 'approved', color: 'primary' },
+  { value: 'changes_requested', color: 'warning' }
+]
+
 const props = defineProps<{ status: ReviewStatus }>()
 const emit = defineEmits<{ (e: 'change', status: ReviewStatus): void }>()
 
 const { t } = useI18n()
 const $q = useQuasar()
 
-const STATUSES: { value: ReviewStatus; color: string }[] = [
-  { value: 'in_progress', color: 'grey-7' },
-  { value: 'approved', color: 'primary' },
-  { value: 'changes_requested', color: 'warning' }
-]
 function confirmChange(option: { value: ReviewStatus; color: string }) {
   if (option.value === props.status) return
 

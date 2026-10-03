@@ -1,23 +1,24 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import { useQuasar } from 'quasar'
 import { useActiveReviewStore } from '@/stores/active-review-store'
+import { useAgentStore } from '@/stores/agent-store'
+import { useAddAgentContext } from '@/composables/use-add-agent-context'
 import StatusSwitcher from './StatusSwitcher.vue'
+import { ADD_TO_CHAT_ICON } from '@/utils/agent-icon'
 import type { ReviewStatus } from '@/api/types'
+import { useNotifyError } from '@/composables/use-notify-error'
 
 const { t } = useI18n()
-const $q = useQuasar()
+const notifyError = useNotifyError()
 const activeReviewStore = useActiveReviewStore()
 const { activeReview } = storeToRefs(activeReviewStore)
+const agent = useAgentStore()
+const addToChat = useAddAgentContext()
 
 function changeStatus(status: ReviewStatus) {
   activeReviewStore.setStatus(status).catch((err: unknown) => {
-    $q.notify({
-      type: 'negative',
-      message: t('reviews.comments.error'),
-      caption: err instanceof Error ? err.message : String(err)
-    })
+    notifyError(t('reviews.comments.error'), err)
   })
 }
 </script>
@@ -32,6 +33,16 @@ function changeStatus(status: ReviewStatus) {
       {{ activeReview.name ?? t('reviews.list.unnamed') }}
     </span>
     <q-space />
+    <q-btn
+      v-if="agent.enabled"
+      flat
+      dense
+      no-caps
+      size="sm"
+      :icon="ADD_TO_CHAT_ICON"
+      :label="t('agent.context.addReview')"
+      @click="addToChat({ kind: 'review', reviewId: activeReview.id })"
+    />
     <StatusSwitcher :status="activeReview.status" @change="changeStatus" />
   </div>
 </template>

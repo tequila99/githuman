@@ -1,3 +1,4 @@
+import { NotFoundError } from '../errors/http.ts'
 import { Type } from '@sinclair/typebox'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import type { FastifyInstance } from 'fastify'
@@ -9,8 +10,7 @@ import {
   editComment,
   removeComment,
   resolveComment,
-  unresolveComment,
-  ValidationError
+  unresolveComment
 } from '../services/comment.service.ts'
 import type { EventBus } from '../event-bus.ts'
 
@@ -57,48 +57,26 @@ export async function commentRoutes(
     { schema: { params: ReviewIdParams, body: CreateCommentBody } },
     async (request, reply) => {
       if (!getReview(db, request.params.id)) {
-        reply.code(404)
-        return {
-          error: 'Not Found',
-          message: `Review ${request.params.id} not found`,
-          statusCode: 404
-        }
+        throw new NotFoundError(`Review ${request.params.id} not found`)
       }
 
-      try {
-        const comment = createComment(
-          db,
-          request.params.id,
-          request.body,
-          eventBus
-        )
-        reply.code(201)
-        return comment
-      } catch (error) {
-        if (error instanceof ValidationError) {
-          reply.code(400)
-          return {
-            error: 'Bad Request',
-            message: error.message,
-            statusCode: 400
-          }
-        }
-        throw error
-      }
+      const comment = createComment(
+        db,
+        request.params.id,
+        request.body,
+        eventBus
+      )
+      reply.code(201)
+      return comment
     }
   )
 
   typedApp.get(
     '/api/reviews/:id/comments',
     { schema: { params: ReviewIdParams } },
-    async (request, reply) => {
+    async request => {
       if (!getReview(db, request.params.id)) {
-        reply.code(404)
-        return {
-          error: 'Not Found',
-          message: `Review ${request.params.id} not found`,
-          statusCode: 404
-        }
+        throw new NotFoundError(`Review ${request.params.id} not found`)
       }
 
       return getComments(db, request.params.id)
@@ -108,52 +86,30 @@ export async function commentRoutes(
   typedApp.patch(
     '/api/comments/:id',
     { schema: { params: CommentIdParams, body: UpdateCommentBody } },
-    async (request, reply) => {
-      try {
-        const updated = editComment(
-          db,
-          request.params.id,
-          request.body.content,
-          eventBus
-        )
+    async request => {
+      const updated = editComment(
+        db,
+        request.params.id,
+        request.body.content,
+        eventBus
+      )
 
-        if (!updated) {
-          reply.code(404)
-          return {
-            error: 'Not Found',
-            message: `Comment ${request.params.id} not found`,
-            statusCode: 404
-          }
-        }
-
-        return updated
-      } catch (error) {
-        if (error instanceof ValidationError) {
-          reply.code(400)
-          return {
-            error: 'Bad Request',
-            message: error.message,
-            statusCode: 400
-          }
-        }
-        throw error
+      if (!updated) {
+        throw new NotFoundError(`Comment ${request.params.id} not found`)
       }
+
+      return updated
     }
   )
 
   typedApp.patch(
     '/api/comments/:id/resolve',
     { schema: { params: CommentIdParams } },
-    async (request, reply) => {
+    async request => {
       const updated = resolveComment(db, request.params.id, eventBus)
 
       if (!updated) {
-        reply.code(404)
-        return {
-          error: 'Not Found',
-          message: `Comment ${request.params.id} not found`,
-          statusCode: 404
-        }
+        throw new NotFoundError(`Comment ${request.params.id} not found`)
       }
 
       return updated
@@ -163,16 +119,11 @@ export async function commentRoutes(
   typedApp.patch(
     '/api/comments/:id/unresolve',
     { schema: { params: CommentIdParams } },
-    async (request, reply) => {
+    async request => {
       const updated = unresolveComment(db, request.params.id, eventBus)
 
       if (!updated) {
-        reply.code(404)
-        return {
-          error: 'Not Found',
-          message: `Comment ${request.params.id} not found`,
-          statusCode: 404
-        }
+        throw new NotFoundError(`Comment ${request.params.id} not found`)
       }
 
       return updated

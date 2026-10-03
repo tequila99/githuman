@@ -1,16 +1,11 @@
+import { ExportNotFoundError } from '../errors/export.ts'
 import type { DatabaseSync } from 'node:sqlite'
-import type {
-  Comment,
-  DiffFile,
-  DiffLine,
-  Review,
-  ReviewStatus
-} from '../../shared/types.ts'
+import type { Comment } from '../../shared/comments/types.ts'
+import type { DiffFile, DiffLine } from '../../shared/diff/types.ts'
+import type { Review, ReviewStatus } from '../../shared/reviews/types.ts'
 import { findReviewById } from '../repositories/review.repo.ts'
 import { listCommentsByReview } from '../repositories/comment.repo.ts'
 import { getFileAtRef } from './git.service.ts'
-
-export class ExportNotFoundError extends Error {}
 
 const STATUS_LABELS: Record<ReviewStatus, string> = {
   in_progress: 'в процессе',

@@ -1,4 +1,4 @@
-import type { ServerEventType } from '../shared/types.ts'
+import type { ServerEventType } from '../shared/events/types.ts'
 
 export type { ServerEventType }
 
