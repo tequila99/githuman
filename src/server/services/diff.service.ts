@@ -261,11 +261,15 @@ export async function getCommitsDiff(
   return buildDiffFiles(repoPath, [from, to], from, to)
 }
 
-/** `mtime:size` of a file in the worktree. It changes with every save, and it costs no read. */
+/**
+ * `mtime:ctime:inode:size` of a file in the worktree. It costs no read. The inode catches
+ * a file replaced by rename. Known limit: an edit of the same size within one timestamp
+ * tick of the file system keeps the stamp.
+ */
 async function worktreeStamp(repoPath: string, path: string): Promise<string> {
   try {
     const info = await stat(resolveWithinRepo(repoPath, path))
-    return `${info.mtimeMs}:${info.size}`
+    return `${info.mtimeMs}:${info.ctimeMs}:${info.ino}:${info.size}`
   } catch {
     return GONE_STAMP
   }

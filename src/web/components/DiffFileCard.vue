@@ -116,7 +116,12 @@ const hunksState = computed<'loading' | 'error' | 'ready'>(() => {
   return props.detail ? 'ready' : 'loading'
 })
 
-const { hunkTokens } = useFileHighlight(fullFile, () => props.expanded)
+// A summary without hunks is an empty file: skip it. The review page passes no `detail`
+// and always has its hunks, so `hunksLoaded` covers it.
+const { hunkTokens } = useFileHighlight(
+  fullFile,
+  () => props.expanded && (props.detail !== undefined || props.hunksLoaded)
+)
 
 const showFullFile = computed({
   get: () => viewMode.value === 'full',

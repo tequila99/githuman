@@ -1,5 +1,7 @@
+import type { DiffSourceName } from '../../shared/diff/types.ts'
+
 /** Side of the working copy diff that the Changes view shows. */
-export type DiffSource = 'staged' | 'unstaged'
+export type DiffSource = DiffSourceName
 
 /** One path can be in both Staged and Unstaged, so the source is part of the key. */
 export function cardStateKey(source: DiffSource, path: string): string {
