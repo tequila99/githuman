@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import type { EventBus } from '../event-bus.ts'
 import { safeSend } from '../utils/sse.ts'
 import type { ServerHello } from '../../shared/events/types.ts'
+import { EventStreamSchema } from '../../shared/events/schemas.ts'
 
 export interface EventRoutesOptions {
   eventBus: EventBus
@@ -16,23 +17,39 @@ export async function eventRoutes(
   const { eventBus, instanceId } = opts
   const hello: ServerHello = { instanceId }
 
-  app.get('/api/events', { sse: true }, async (request, reply) => {
-    reply.sse.keepAlive()
-    await reply.sse.send({ event: 'connected', data: hello })
-    // The client can leave during the await; a later `onClose` would never run.
-    if (!reply.sse.isConnected) {
-      return
-    }
+  app.get(
+    '/api/events',
+    {
+      sse: true,
+      schema: {
+        tags: ['events'],
+        summary: 'Stream of review, comment and file changes',
+        response: {
+          200: {
+            description: 'An SSE stream that stays open.',
+            content: { 'text/event-stream': { schema: EventStreamSchema } }
+          }
+        }
+      }
+    },
+    async (request, reply) => {
+      reply.sse.keepAlive()
+      await reply.sse.send({ event: 'connected', data: hello })
+      // The client can leave during the await; a later `onClose` would never run.
+      if (!reply.sse.isConnected) {
+        return
+      }
 
-    const unsubscribe = eventBus.subscribe(event => {
-      safeSend(reply.sse, {
-        event: event.type,
-        data: { reviewId: event.reviewId }
+      const unsubscribe = eventBus.subscribe(event => {
+        safeSend(reply.sse, {
+          event: event.type,
+          data: { reviewId: event.reviewId }
+        })
       })
-    })
 
-    reply.sse.onClose(() => {
-      unsubscribe()
-    })
-  })
+      reply.sse.onClose(() => {
+        unsubscribe()
+      })
+    }
+  )
 }

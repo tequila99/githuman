@@ -1,5 +1,4 @@
 import { BadRequestError } from '../errors/http.ts'
-import { Type, type Static } from '@sinclair/typebox'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import type { FastifyInstance } from 'fastify'
 import {
@@ -10,28 +9,25 @@ import {
   getFilesAtRef,
   getFileAtRef
 } from '../services/git.service.ts'
+import {
+  DiscardBody,
+  FileContentQuery,
+  FileContentResponseSchema,
+  FileParams,
+  FileTreeResponseSchema,
+  OkSchema,
+  OptionalPathsBody,
+  RepositoryInfoSchema,
+  TreeParams
+} from '../../shared/git/schemas.ts'
+import { ERROR_RESPONSES } from '../../shared/http/schemas.ts'
+
+// OpenAPI group of these routes.
+const TAGS = ['git']
 
 export interface GitRoutesOptions {
   repositoryPath: string
 }
-
-const TreeParams = Type.Object({
-  ref: Type.String({ minLength: 1 })
-})
-
-const FileContentQuery = Type.Object({
-  ref: Type.String({ minLength: 1 })
-})
-
-/** Body for `/stage` and `/unstage`: an omitted/empty `paths` means "all". */
-const OptionalPathsBody = Type.Object({
-  paths: Type.Optional(Type.Array(Type.String()))
-})
-
-/** Body for `/discard`: `paths` is required — no "discard everything". */
-const DiscardBody = Type.Object({
-  paths: Type.Array(Type.String(), { minItems: 1 })
-})
 
 export async function gitRoutes(
   app: FastifyInstance,
@@ -40,17 +36,34 @@ export async function gitRoutes(
   const { repositoryPath } = opts
   const typedApp = app.withTypeProvider<TypeBoxTypeProvider>()
 
-  app.get('/api/git/info', async () => {
-    return getRepositoryInfo(repositoryPath)
-  })
+  typedApp.get(
+    '/api/git/info',
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Repository facts',
+        response: { 200: RepositoryInfoSchema, ...ERROR_RESPONSES }
+      }
+    },
+    async () => {
+      return getRepositoryInfo(repositoryPath)
+    }
+  )
 
-  typedApp.post<{ Body: Static<typeof OptionalPathsBody> }>(
+  typedApp.post(
     '/api/git/stage',
-    { schema: { body: OptionalPathsBody } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Stage paths',
+        body: OptionalPathsBody,
+        response: { 200: OkSchema, ...ERROR_RESPONSES }
+      }
+    },
     async request => {
       try {
         await stagePaths(repositoryPath, request.body.paths ?? [])
-        return { ok: true }
+        return { ok: true as const }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to stage'
         throw new BadRequestError(message, { cause: err })
@@ -58,13 +71,20 @@ export async function gitRoutes(
     }
   )
 
-  typedApp.post<{ Body: Static<typeof OptionalPathsBody> }>(
+  typedApp.post(
     '/api/git/unstage',
-    { schema: { body: OptionalPathsBody } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Unstage paths',
+        body: OptionalPathsBody,
+        response: { 200: OkSchema, ...ERROR_RESPONSES }
+      }
+    },
     async request => {
       try {
         await unstagePaths(repositoryPath, request.body.paths ?? [])
-        return { ok: true }
+        return { ok: true as const }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to unstage'
         throw new BadRequestError(message, { cause: err })
@@ -72,13 +92,20 @@ export async function gitRoutes(
     }
   )
 
-  typedApp.post<{ Body: Static<typeof DiscardBody> }>(
+  typedApp.post(
     '/api/git/discard',
-    { schema: { body: DiscardBody } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Discard working-tree changes of paths',
+        body: DiscardBody,
+        response: { 200: OkSchema, ...ERROR_RESPONSES }
+      }
+    },
     async request => {
       try {
         await discardPaths(repositoryPath, request.body.paths)
-        return { ok: true }
+        return { ok: true as const }
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Failed to discard changes'
@@ -87,9 +114,16 @@ export async function gitRoutes(
     }
   )
 
-  typedApp.get<{ Params: Static<typeof TreeParams> }>(
+  typedApp.get(
     '/api/git/tree/:ref',
-    { schema: { params: TreeParams } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'List files at a ref',
+        params: TreeParams,
+        response: { 200: FileTreeResponseSchema, ...ERROR_RESPONSES }
+      }
+    },
     async request => {
       const { ref } = request.params
 
@@ -104,12 +138,17 @@ export async function gitRoutes(
     }
   )
 
-  typedApp.get<{
-    Querystring: Static<typeof FileContentQuery>
-    Params: { '*': string }
-  }>(
+  typedApp.get(
     '/api/git/file/*',
-    { schema: { querystring: FileContentQuery } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Read one file at a ref',
+        params: FileParams,
+        querystring: FileContentQuery,
+        response: { 200: FileContentResponseSchema, ...ERROR_RESPONSES }
+      }
+    },
     async request => {
       const filePath = request.params['*']
       const { ref } = request.query

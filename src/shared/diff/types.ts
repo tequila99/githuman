@@ -1,47 +1,26 @@
-/**
- * Shared types between server and web client
- */
+import type { Static } from '@sinclair/typebox'
+import type {
+  DiffFileSchema,
+  DiffFileStatusSchema,
+  DiffFileSummarySchema,
+  DiffHunkSchema,
+  DiffLineSchema,
+  DiffLineTypeSchema,
+  DiffSourceNameSchema
+} from './schemas.ts'
 
-export type DiffLineType = 'added' | 'removed' | 'context'
+export type DiffLineType = Static<typeof DiffLineTypeSchema>
 
-export interface DiffLine {
-  type: DiffLineType
-  content: string
-  oldLineNumber: number | null
-  newLineNumber: number | null
-}
+export type DiffLine = Static<typeof DiffLineSchema>
 
-export interface DiffHunk {
-  oldStart: number
-  oldLines: number
-  newStart: number
-  newLines: number
-  lines: DiffLine[]
-}
+export type DiffHunk = Static<typeof DiffHunkSchema>
 
-export type DiffFileStatus = 'added' | 'modified' | 'deleted' | 'renamed'
+export type DiffFileStatus = Static<typeof DiffFileStatusSchema>
 
-export interface DiffFile {
-  oldPath: string
-  newPath: string
-  status: DiffFileStatus
-  additions: number
-  deletions: number
-  isBinary: boolean
-  hunks: DiffHunk[]
-}
+export type DiffFile = Static<typeof DiffFileSchema>
 
 /** Diff source behind `/api/diff/:source/files` and `/api/diff/:source/file`. */
-export type DiffSourceName = 'staged' | 'unstaged'
+export type DiffSourceName = Static<typeof DiffSourceNameSchema>
 
 /** A diff file without hunks (ADR 0033). */
-export interface DiffFileSummary {
-  oldPath: string
-  newPath: string
-  status: DiffFileStatus
-  additions: number
-  deletions: number
-  isBinary: boolean
-  /** Changes whenever the file content or its diff changes. Equal signatures mean equal hunks. */
-  signature: string
-}
+export type DiffFileSummary = Static<typeof DiffFileSummarySchema>

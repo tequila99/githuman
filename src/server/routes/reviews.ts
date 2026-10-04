@@ -1,5 +1,4 @@
 import { NotFoundError, BadRequestError } from '../errors/http.ts'
-import { Type } from '@sinclair/typebox'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import type { FastifyInstance } from 'fastify'
 import type { DatabaseSync } from 'node:sqlite'
@@ -12,42 +11,19 @@ import {
 } from '../services/review.service.ts'
 import { getRepositoryInfo } from '../services/git.service.ts'
 import type { EventBus } from '../event-bus.ts'
+import {
+  CreateReviewBody,
+  ReviewIdParams,
+  ReviewSchema,
+  ReviewSummarySchema,
+  ReviewsQuery,
+  UpdateReviewBody
+} from '../../shared/reviews/schemas.ts'
+import { ERROR_RESPONSES, NoContentSchema } from '../../shared/http/schemas.ts'
+import { Type } from '@sinclair/typebox'
 
-const CreateReviewBody = Type.Object({
-  sourceType: Type.Optional(
-    Type.Union([
-      Type.Literal('local'),
-      Type.Literal('staged'),
-      Type.Literal('unstaged'),
-      Type.Literal('branch'),
-      Type.Literal('commits')
-    ])
-  ),
-  sourceRef: Type.Optional(Type.String()),
-  baseRef: Type.Optional(Type.String()),
-  name: Type.Optional(Type.String())
-})
-
-const ReviewsQuery = Type.Object({
-  branch: Type.Optional(Type.String()),
-  search: Type.Optional(Type.String()),
-  createdFrom: Type.Optional(Type.String()),
-  createdTo: Type.Optional(Type.String()),
-  /** Comma-separated file paths — reviews matching any of them are returned. */
-  files: Type.Optional(Type.String())
-})
-
-const UpdateReviewBody = Type.Object({
-  status: Type.Optional(
-    Type.Union([
-      Type.Literal('in_progress'),
-      Type.Literal('approved'),
-      Type.Literal('changes_requested')
-    ])
-  )
-})
-
-const ReviewIdParams = Type.Object({ id: Type.String() })
+// OpenAPI group of these routes.
+const TAGS = ['reviews']
 
 export interface ReviewRoutesOptions {
   repositoryPath: string
@@ -64,7 +40,17 @@ export async function reviewRoutes(
 
   typedApp.post(
     '/api/reviews',
-    { schema: { body: CreateReviewBody } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Create a review from the current diff',
+        body: CreateReviewBody,
+        response: {
+          201: { ...ReviewSchema, description: 'The new review.' },
+          ...ERROR_RESPONSES
+        }
+      }
+    },
     async (request, reply) => {
       const review = await createReview(
         db,
@@ -79,7 +65,19 @@ export async function reviewRoutes(
 
   typedApp.get(
     '/api/reviews',
-    { schema: { querystring: ReviewsQuery } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'List reviews, newest first',
+        querystring: ReviewsQuery,
+        response: {
+          200: Type.Array(ReviewSummarySchema, {
+            description: 'Reviews without snapshots.'
+          }),
+          ...ERROR_RESPONSES
+        }
+      }
+    },
     async request => {
       const { branch, search, createdFrom, createdTo, files } = request.query
       const resolvedBranch =
@@ -99,7 +97,14 @@ export async function reviewRoutes(
 
   typedApp.get(
     '/api/reviews/:id',
-    { schema: { params: ReviewIdParams } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Get a review with its snapshot',
+        params: ReviewIdParams,
+        response: { 200: ReviewSchema, ...ERROR_RESPONSES }
+      }
+    },
     async request => {
       const review = getReview(db, request.params.id)
 
@@ -113,7 +118,18 @@ export async function reviewRoutes(
 
   typedApp.patch(
     '/api/reviews/:id',
-    { schema: { params: ReviewIdParams, body: UpdateReviewBody } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Change the review status',
+        params: ReviewIdParams,
+        body: UpdateReviewBody,
+        response: {
+          200: { ...ReviewSchema, description: 'The changed review.' },
+          ...ERROR_RESPONSES
+        }
+      }
+    },
     async request => {
       if (!request.body.status) {
         throw new BadRequestError('"status" is required')
@@ -136,7 +152,14 @@ export async function reviewRoutes(
 
   typedApp.delete(
     '/api/reviews/:id',
-    { schema: { params: ReviewIdParams } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Delete a review and its comments',
+        params: ReviewIdParams,
+        response: { 204: NoContentSchema, ...ERROR_RESPONSES }
+      }
+    },
     async (request, reply) => {
       if (!getReview(db, request.params.id)) {
         throw new NotFoundError(`Review ${request.params.id} not found`)

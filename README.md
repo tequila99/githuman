@@ -114,6 +114,13 @@ node dist/cli/index.js serve --db-prefix myteam-   # .githuman/myteam-reviews.db
 node dist/cli/index.js list --db-prefix ""         # .githuman/reviews.db (оригинальный githuman)
 ```
 
+### HTTP API
+
+Сервер отдаёт OpenAPI-спецификацию своего API по адресу `/api/openapi.json`
+(OpenAPI 3.1, всегда). Swagger UI — на `/api/docs`, только с флагом
+`--api-docs` (`pnpm run dev:server` включает его сам). Агентские маршруты
+попадают в спецификацию, только когда сервер их отдаёт (loopback-хост).
+
 ## Разработка
 
 Два процесса нужны одновременно — backend (Fastify, автоперезапуск при
@@ -134,7 +141,7 @@ githuman — запустите `dev:server` из cwd того репозито�
 ```bash
 cd /path/to/other/repo
 node --watch-path=/path/to/githuman/src \
-  /path/to/githuman/src/cli/index.ts serve --no-open
+  /path/to/githuman/src/cli/index.ts serve --no-open --api-docs
 ```
 
 Прочие команды:

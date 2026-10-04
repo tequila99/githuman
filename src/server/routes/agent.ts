@@ -1,5 +1,5 @@
-import { NotFoundError } from '../errors/http.ts'
-import type { Static } from '@sinclair/typebox'
+import { BadRequestError, NotFoundError } from '../errors/http.ts'
+import { Type } from '@sinclair/typebox'
 import {
   SessionParams,
   PermissionParams,
@@ -8,8 +8,18 @@ import {
   FileSearchQuery,
   PromptBody,
   PermissionBody,
-  ConfigBody
+  ConfigBody,
+  AgentPresetInfoSchema,
+  AgentSessionInfoSchema,
+  AgentFileSearchResponseSchema,
+  AgentEventsHeaders,
+  AgentStreamSchema
 } from '../../shared/agents/schemas.ts'
+import {
+  ApiErrorSchema,
+  ERROR_RESPONSES,
+  NoContentSchema
+} from '../../shared/http/schemas.ts'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import type { FastifyInstance } from 'fastify'
 import type { DatabaseSync } from 'node:sqlite'
@@ -28,6 +38,18 @@ import { findReviewById } from '../repositories/review.repo.ts'
 /** Room for a handful of max-size base64 attachments; the schema caps each one. */
 const PROMPT_BODY_LIMIT =
   5 * Math.ceil((MAX_ATTACHMENT_BYTES * 4) / 3) + 1024 * 1024
+
+// OpenAPI group of these routes.
+const TAGS = ['agent']
+
+// The spec shows the local-origin guard on each operation, not only on the tag.
+const AGENT_ERROR_RESPONSES = {
+  ...ERROR_RESPONSES,
+  403: {
+    ...ApiErrorSchema,
+    description: 'Host or Origin of the request is not local.'
+  }
+}
 export interface AgentRoutesOptions {
   registry: AgentSessionRegistry
   db: DatabaseSync
@@ -50,13 +72,56 @@ export async function agentRoutes(
     fileIndex.close()
   })
 
-  typedApp.get('/api/agent/presets', async () => registry.listPresets())
+  typedApp.get(
+    '/api/agent/presets',
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'List agent presets',
+        response: {
+          200: Type.Array(AgentPresetInfoSchema, {
+            description: 'Presets from the config.'
+          }),
+          ...AGENT_ERROR_RESPONSES
+        }
+      }
+    },
+    async () => registry.listPresets()
+  )
 
-  typedApp.get('/api/agent/sessions', async () => registry.list())
-
-  typedApp.post<{ Body: Static<typeof CreateSessionBody> }>(
+  typedApp.get(
     '/api/agent/sessions',
-    { schema: { body: CreateSessionBody } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'List chat sessions',
+        response: {
+          200: Type.Array(AgentSessionInfoSchema, {
+            description: 'Open and closed sessions.'
+          }),
+          ...AGENT_ERROR_RESPONSES
+        }
+      }
+    },
+    async () => registry.list()
+  )
+
+  typedApp.post(
+    '/api/agent/sessions',
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Start a chat session',
+        body: CreateSessionBody,
+        response: {
+          201: {
+            ...AgentSessionInfoSchema,
+            description: 'The session. The agent starts in the background.'
+          },
+          ...AGENT_ERROR_RESPONSES
+        }
+      }
+    },
     async (request, reply) => {
       const { presetId, reviewId, name } = request.body
       if (reviewId !== undefined && !findReviewById(db, reviewId)) {
@@ -70,9 +135,16 @@ export async function agentRoutes(
     }
   )
 
-  typedApp.get<{ Params: Static<typeof SessionParams> }>(
+  typedApp.get(
     '/api/agent/sessions/:id',
-    { schema: { params: SessionParams } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Get a chat session',
+        params: SessionParams,
+        response: { 200: AgentSessionInfoSchema, ...AGENT_ERROR_RESPONSES }
+      }
+    },
     async request => {
       const session = registry.get(request.params.id)
       if (!session) {
@@ -82,24 +154,39 @@ export async function agentRoutes(
     }
   )
 
-  typedApp.delete<{ Params: Static<typeof SessionParams> }>(
+  typedApp.delete(
     '/api/agent/sessions/:id',
-    { schema: { params: SessionParams } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Close a chat session and stop its agent',
+        params: SessionParams,
+        response: { 204: NoContentSchema, ...AGENT_ERROR_RESPONSES }
+      }
+    },
     async (request, reply) => {
       if (!registry.close(request.params.id)) {
         throw new NotFoundError('Session not found')
       }
-      return reply.code(204).send()
+      return reply.code(204).send(null)
     }
   )
 
-  typedApp.post<{
-    Params: Static<typeof SessionParams>
-    Body: Static<typeof PromptBody>
-  }>(
+  typedApp.post(
     '/api/agent/sessions/:id/prompt',
     {
-      schema: { params: SessionParams, body: PromptBody },
+      schema: {
+        tags: TAGS,
+        summary: 'Send a message to the agent',
+        description:
+          'The answer comes over GET /api/agent/events. 202 means the session took the message.',
+        params: SessionParams,
+        body: PromptBody,
+        response: {
+          202: Type.Null({ description: 'The session took the message.' }),
+          ...AGENT_ERROR_RESPONSES
+        }
+      },
       bodyLimit: PROMPT_BODY_LIMIT
     },
     async (request, reply) => {
@@ -118,29 +205,41 @@ export async function agentRoutes(
       })
       session.prompt(blocks, request.body)
 
-      return reply.code(202).send()
+      return reply.code(202).send(null)
     }
   )
 
-  typedApp.post<{ Params: Static<typeof SessionParams> }>(
+  typedApp.post(
     '/api/agent/sessions/:id/cancel',
-    { schema: { params: SessionParams } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Cancel the current turn',
+        params: SessionParams,
+        response: { 204: NoContentSchema, ...AGENT_ERROR_RESPONSES }
+      }
+    },
     async (request, reply) => {
       const session = registry.get(request.params.id)
       if (!session) {
         throw new NotFoundError('Session not found')
       }
       await session.cancel()
-      return reply.code(204).send()
+      return reply.code(204).send(null)
     }
   )
 
-  typedApp.post<{
-    Params: Static<typeof PermissionParams>
-    Body: Static<typeof PermissionBody>
-  }>(
+  typedApp.post(
     '/api/agent/sessions/:id/permissions/:requestId',
-    { schema: { params: PermissionParams, body: PermissionBody } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Answer a permission request',
+        params: PermissionParams,
+        body: PermissionBody,
+        response: { 204: NoContentSchema, ...AGENT_ERROR_RESPONSES }
+      }
+    },
     async (request, reply) => {
       const session = registry.get(request.params.id)
       if (
@@ -151,34 +250,49 @@ export async function agentRoutes(
       ) {
         throw new NotFoundError('No such pending permission request')
       }
-      return reply.code(204).send()
+      return reply.code(204).send(null)
     }
   )
 
-  typedApp.post<{
-    Params: Static<typeof SessionParams>
-    Body: Static<typeof ConfigBody>
-  }>(
+  typedApp.post(
     '/api/agent/sessions/:id/config',
-    { schema: { params: SessionParams, body: ConfigBody } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Change an agent setting',
+        params: SessionParams,
+        body: ConfigBody,
+        response: { 204: NoContentSchema, ...AGENT_ERROR_RESPONSES }
+      }
+    },
     async (request, reply) => {
       const session = registry.get(request.params.id)
       if (!session) {
         throw new NotFoundError('Session not found')
       }
 
-      await session.setConfig(request.body.configId, request.body.value)
+      // The schema has no type for `value` (see ConfigBody), so the route checks it.
+      const { configId, value } = request.body
+      if (typeof value !== 'string' && typeof value !== 'boolean') {
+        throw new BadRequestError('"value" must be a string or a boolean')
+      }
+      await session.setConfig(configId, value)
 
-      return reply.code(204).send()
+      return reply.code(204).send(null)
     }
   )
 
-  typedApp.post<{
-    Params: Static<typeof SessionParams>
-    Body: Static<typeof AutoApproveBody>
-  }>(
+  typedApp.post(
     '/api/agent/sessions/:id/auto-approve',
-    { schema: { params: SessionParams, body: AutoApproveBody } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Switch auto-approve of a session',
+        params: SessionParams,
+        body: AutoApproveBody,
+        response: { 204: NoContentSchema, ...AGENT_ERROR_RESPONSES }
+      }
+    },
     async (request, reply) => {
       const session = registry.get(request.params.id)
       if (!session) {
@@ -187,13 +301,23 @@ export async function agentRoutes(
 
       session.setAutoApprove(request.body.enabled)
 
-      return reply.code(204).send()
+      return reply.code(204).send(null)
     }
   )
 
-  typedApp.get<{ Querystring: Static<typeof FileSearchQuery> }>(
+  typedApp.get(
     '/api/agent/files',
-    { schema: { querystring: FileSearchQuery } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Find repository files for the context picker',
+        querystring: FileSearchQuery,
+        response: {
+          200: AgentFileSearchResponseSchema,
+          ...AGENT_ERROR_RESPONSES
+        }
+      }
+    },
     async request => ({
       files: await fileIndex.search(
         request.query.q ?? '',
@@ -205,38 +329,56 @@ export async function agentRoutes(
   // One stream for every chat (ADR 0024): browsers allow ~6 connections per
   // origin over HTTP/1.1, so a stream per session would starve the page's own
   // requests. Event ids are shared across sessions, so `Last-Event-ID` works.
-  typedApp.get('/api/agent/events', { sse: true }, async (request, reply) => {
-    const lastEventId = Number(request.headers['last-event-id'])
-    reply.sse.keepAlive()
-    // Flushes the headers: with no session yet nothing else would be sent, and
-    // the browser would not consider the stream open.
-    await reply.sse.send({ event: 'connected', data: {} })
-    // The client can leave during the await. `onClose` callbacks run once, so
-    // one added after the close would never run and the listener would leak.
-    if (!reply.sse.isConnected) {
-      return
-    }
-    const unsubscribe = registry.subscribe(
-      message => {
-        if (message.type === 'event') {
-          safeSend(reply.sse, {
-            id: String(message.envelope.id),
-            event: 'agent',
-            data: message.envelope
-          })
-        } else if (message.type === 'gap') {
-          safeSend(reply.sse, {
-            event: 'gap',
-            data: { sessionId: message.sessionId }
-          })
-        } else if (message.type === 'state') {
-          safeSend(reply.sse, { event: 'state', data: message.state })
-        } else {
-          safeSend(reply.sse, { event: 'sessions', data: {} })
+  typedApp.get(
+    '/api/agent/events',
+    {
+      sse: true,
+      schema: {
+        tags: TAGS,
+        summary: 'Stream of all chat sessions',
+        headers: AgentEventsHeaders,
+        response: {
+          200: {
+            description: 'An SSE stream that stays open.',
+            content: { 'text/event-stream': { schema: AgentStreamSchema } }
+          },
+          ...AGENT_ERROR_RESPONSES
         }
-      },
-      Number.isInteger(lastEventId) ? lastEventId : 0
-    )
-    reply.sse.onClose(unsubscribe)
-  })
+      }
+    },
+    async (request, reply) => {
+      const lastEventId = Number(request.headers['last-event-id'])
+      reply.sse.keepAlive()
+      // Flushes the headers: with no session yet nothing else would be sent, and
+      // the browser would not consider the stream open.
+      await reply.sse.send({ event: 'connected', data: {} })
+      // The client can leave during the await. `onClose` callbacks run once, so
+      // one added after the close would never run and the listener would leak.
+      if (!reply.sse.isConnected) {
+        return
+      }
+      const unsubscribe = registry.subscribe(
+        message => {
+          if (message.type === 'event') {
+            safeSend(reply.sse, {
+              id: String(message.envelope.id),
+              event: 'agent',
+              data: message.envelope
+            })
+          } else if (message.type === 'gap') {
+            safeSend(reply.sse, {
+              event: 'gap',
+              data: { sessionId: message.sessionId }
+            })
+          } else if (message.type === 'state') {
+            safeSend(reply.sse, { event: 'state', data: message.state })
+          } else {
+            safeSend(reply.sse, { event: 'sessions', data: {} })
+          }
+        },
+        Number.isInteger(lastEventId) ? lastEventId : 0
+      )
+      reply.sse.onClose(unsubscribe)
+    }
+  )
 }

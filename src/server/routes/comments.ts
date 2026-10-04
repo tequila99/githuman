@@ -13,32 +13,17 @@ import {
   unresolveComment
 } from '../services/comment.service.ts'
 import type { EventBus } from '../event-bus.ts'
+import {
+  CommentIdParams,
+  CommentSchema,
+  CreateCommentBody,
+  UpdateCommentBody
+} from '../../shared/comments/schemas.ts'
+import { ReviewIdParams } from '../../shared/reviews/schemas.ts'
+import { ERROR_RESPONSES, NoContentSchema } from '../../shared/http/schemas.ts'
 
-// Null goes first in each union: Fastify's Ajv coerces types, and with
-// Integer (or String) first it turns a JSON null into 0 (or "") before the
-// Null branch is ever tried — a file-level comment would be stored as line 0.
-const CreateCommentBody = Type.Object({
-  filePath: Type.String({ minLength: 1 }),
-  lineNumber: Type.Optional(Type.Union([Type.Null(), Type.Integer()])),
-  lineNumberEnd: Type.Optional(Type.Union([Type.Null(), Type.Integer()])),
-  lineType: Type.Optional(
-    Type.Union([
-      Type.Null(),
-      Type.Literal('added'),
-      Type.Literal('removed'),
-      Type.Literal('context')
-    ])
-  ),
-  content: Type.String(),
-  suggestion: Type.Optional(Type.Union([Type.Null(), Type.String()]))
-})
-
-const UpdateCommentBody = Type.Object({
-  content: Type.String()
-})
-
-const ReviewIdParams = Type.Object({ id: Type.String() })
-const CommentIdParams = Type.Object({ id: Type.String() })
+// OpenAPI group of these routes.
+const TAGS = ['comments']
 
 export interface CommentRoutesOptions {
   db: DatabaseSync
@@ -54,7 +39,18 @@ export async function commentRoutes(
 
   typedApp.post(
     '/api/reviews/:id/comments',
-    { schema: { params: ReviewIdParams, body: CreateCommentBody } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Add a comment to a review',
+        params: ReviewIdParams,
+        body: CreateCommentBody,
+        response: {
+          201: { ...CommentSchema, description: 'The new comment.' },
+          ...ERROR_RESPONSES
+        }
+      }
+    },
     async (request, reply) => {
       if (!getReview(db, request.params.id)) {
         throw new NotFoundError(`Review ${request.params.id} not found`)
@@ -73,7 +69,19 @@ export async function commentRoutes(
 
   typedApp.get(
     '/api/reviews/:id/comments',
-    { schema: { params: ReviewIdParams } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'List comments of a review',
+        params: ReviewIdParams,
+        response: {
+          200: Type.Array(CommentSchema, {
+            description: 'Comments of the review.'
+          }),
+          ...ERROR_RESPONSES
+        }
+      }
+    },
     async request => {
       if (!getReview(db, request.params.id)) {
         throw new NotFoundError(`Review ${request.params.id} not found`)
@@ -85,7 +93,18 @@ export async function commentRoutes(
 
   typedApp.patch(
     '/api/comments/:id',
-    { schema: { params: CommentIdParams, body: UpdateCommentBody } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Change the comment text',
+        params: CommentIdParams,
+        body: UpdateCommentBody,
+        response: {
+          200: { ...CommentSchema, description: 'The changed comment.' },
+          ...ERROR_RESPONSES
+        }
+      }
+    },
     async request => {
       const updated = editComment(
         db,
@@ -104,7 +123,17 @@ export async function commentRoutes(
 
   typedApp.patch(
     '/api/comments/:id/resolve',
-    { schema: { params: CommentIdParams } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Mark a comment as resolved',
+        params: CommentIdParams,
+        response: {
+          200: { ...CommentSchema, description: 'The changed comment.' },
+          ...ERROR_RESPONSES
+        }
+      }
+    },
     async request => {
       const updated = resolveComment(db, request.params.id, eventBus)
 
@@ -118,7 +147,17 @@ export async function commentRoutes(
 
   typedApp.patch(
     '/api/comments/:id/unresolve',
-    { schema: { params: CommentIdParams } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Mark a comment as not resolved',
+        params: CommentIdParams,
+        response: {
+          200: { ...CommentSchema, description: 'The changed comment.' },
+          ...ERROR_RESPONSES
+        }
+      }
+    },
     async request => {
       const updated = unresolveComment(db, request.params.id, eventBus)
 
@@ -132,7 +171,15 @@ export async function commentRoutes(
 
   typedApp.delete(
     '/api/comments/:id',
-    { schema: { params: CommentIdParams } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Delete a comment',
+        description: 'A missing comment also gives 204.',
+        params: CommentIdParams,
+        response: { 204: NoContentSchema, ...ERROR_RESPONSES }
+      }
+    },
     async (request, reply) => {
       removeComment(db, request.params.id, eventBus)
       reply.code(204)
