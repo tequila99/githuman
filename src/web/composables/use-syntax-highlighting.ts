@@ -1,5 +1,11 @@
 import type { HighlighterCore, LanguageInput } from 'shiki/core'
 import type { DiffFile } from '@/api/types'
+import { createWeightedLru } from '@/utils/weighted-lru'
+
+// Counts lines, as a 30 000-line file has about 1.6 million tokens. Only the
+// cards that are open ask for tokens, and the cache saves a second tokenizing
+// when the virtual list mounts such a card again.
+const TOKEN_CACHE_MAX_LINES = 60_000
 
 export interface HighlightedToken {
   content: string
@@ -143,4 +149,49 @@ export async function highlightLines(
   lines: string[]
 ): Promise<(HighlightedToken[] | null)[] | null> {
   return tokenizeLines(languageForPath(path), lines)
+}
+
+const tokenCache = createWeightedLru<
+  DiffFile,
+  (HighlightedToken[] | null)[] | null
+>(TOKEN_CACHE_MAX_LINES, tokens => tokens?.length ?? 1)
+
+// Tokenizing one file blocks the main thread. Expand all can ask for dozens of files
+// at once. The queue runs them one by one and yields between jobs, so input stays live.
+let highlightQueue: Promise<unknown> = Promise.resolve()
+
+function enqueueHighlight<T>(job: () => Promise<T>): Promise<T> {
+  const run = highlightQueue
+    .then(() => new Promise(resolve => setTimeout(resolve, 0)))
+    .then(job)
+  highlightQueue = run.catch(() => undefined)
+  return run
+}
+
+/**
+ * Same as {@link highlightFile}, but remembers the answer per diff file
+ * object. A new object means new content, so it is a new key. Pass the raw
+ * object, not a reactive proxy. A job aborted before its turn does no work
+ * and gives `undefined`: a card that closed or left the window needs no tokens.
+ */
+export function highlightFileCached(
+  file: DiffFile,
+  signal?: AbortSignal
+): Promise<(HighlightedToken[] | null)[] | null | undefined> {
+  return enqueueHighlight(async () => {
+    // An earlier job in the queue may have tokenized this file already.
+    const cached = tokenCache.get(file)
+    if (cached !== undefined) return cached
+    if (signal?.aborted) return undefined
+    const tokens = await highlightFile(file)
+    tokenCache.set(file, tokens)
+    return tokens
+  })
+}
+
+/** The tokens `highlightFileCached` already holds, without starting work. */
+export function cachedHighlight(
+  file: DiffFile
+): (HighlightedToken[] | null)[] | null | undefined {
+  return tokenCache.get(file)
 }

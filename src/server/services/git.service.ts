@@ -274,6 +274,155 @@ function statusCodeToStatus(code: string): DiffFileStatus {
 }
 
 /**
+ * Removes the extra record of a merge conflict. During a conflict, `git diff` prints an
+ * `U` record with zero blob ids and also a normal record for the same path. The normal
+ * record has the real blob ids and counts, so it stays.
+ */
+function dedupeUnmerged<T extends { newPath: string }>(
+  records: { code: string; item: T }[]
+): T[] {
+  const normalPaths = new Set(
+    records
+      .filter(record => record.code !== 'U')
+      .map(record => record.item.newPath)
+  )
+  return records
+    .filter(
+      record => record.code !== 'U' || !normalPaths.has(record.item.newPath)
+    )
+    .map(record => record.item)
+}
+
+export interface ChangedSummary extends ChangedPath {
+  additions: number
+  deletions: number
+  isBinary: boolean
+  /** Blob id of the old side: HEAD for `--cached`, the index for the worktree diff. */
+  oldOid: string
+  /** Blob id of the new side. Git prints all zeros when the new side is the worktree. */
+  newOid: string
+}
+
+interface RawRecord extends ChangedPath {
+  code: string
+  oldOid: string
+  newOid: string
+}
+
+interface NumstatRecord {
+  /** The new path. For a rename, git prints both paths and this is the second one. */
+  path: string
+  additions: number
+  deletions: number
+  isBinary: boolean
+}
+
+/**
+ * Parses the output of `git diff --raw --numstat -z`. Git prints all raw records first:
+ * a `:<modes> <old oid> <new oid> <status>` token, then one path, or two for a rename or copy.
+ * The numstat records follow: `<added>\t<removed>\t<path>` in one token. For a rename, the
+ * path part is empty, and two path tokens follow. Paths are read by position, so a path
+ * with `:`, a TAB or a line feed does not break the parse.
+ */
+export function parseRawNumstat(stdout: string): {
+  raw: RawRecord[]
+  numstat: NumstatRecord[]
+} {
+  const tokens = stdout.split('\0')
+  // With -z, the output ends with NUL, so the last token is empty.
+  if (tokens[tokens.length - 1] === '') tokens.pop()
+  const raw: RawRecord[] = []
+  const numstat: NumstatRecord[] = []
+  let i = 0
+  while (i < tokens.length && tokens[i].startsWith(':')) {
+    const fields = tokens[i++].split(' ')
+    const code = fields[4] ?? 'M'
+    const oldOid = fields[2] ?? ''
+    const newOid = fields[3] ?? ''
+    const status = statusCodeToStatus(code)
+    if (code[0] === 'R' || code[0] === 'C') {
+      const oldPath = tokens[i++]
+      const newPath = tokens[i++]
+      raw.push({ code, oldPath, newPath, status, oldOid, newOid })
+    } else {
+      const path = tokens[i++]
+      raw.push({ code, oldPath: path, newPath: path, status, oldOid, newOid })
+    }
+  }
+  while (i < tokens.length) {
+    const token = tokens[i++]
+    // Only the first two TABs separate fields: a path can hold a TAB too.
+    const firstTab = token.indexOf('\t')
+    const secondTab = token.indexOf('\t', firstTab + 1)
+    const added = token.slice(0, firstTab)
+    const removed = token.slice(firstTab + 1, secondTab)
+    let path = token.slice(secondTab + 1)
+    if (path === '') {
+      i++ // the old path of the rename
+      path = tokens[i++]
+    }
+    const isBinary = added === '-'
+    numstat.push({
+      path,
+      additions: isBinary ? 0 : Number(added),
+      deletions: isBinary ? 0 : Number(removed),
+      isBinary
+    })
+  }
+  return { raw, numstat }
+}
+
+/**
+ * Joins raw and numstat records. They come from one git run in the same order, so they
+ * line up by position. A path mismatch means the parse went wrong: then the join goes by path.
+ */
+function joinRawNumstat(
+  raw: RawRecord[],
+  numstat: NumstatRecord[]
+): { code: string; item: ChangedSummary }[] {
+  const aligned =
+    raw.length === numstat.length &&
+    raw.every((record, i) => record.newPath === numstat[i].path)
+  if (!aligned) {
+    process.emitWarning(
+      `git diff --raw --numstat: ${raw.length} raw and ${numstat.length} numstat records do not line up; joining by path`
+    )
+  }
+  const byPath = aligned
+    ? undefined
+    : new Map(numstat.map(record => [record.path, record]))
+  return raw.map(({ code, ...record }, i) => {
+    const counts = aligned ? numstat[i] : byPath?.get(record.newPath)
+    return {
+      code,
+      item: {
+        ...record,
+        additions: counts?.additions ?? 0,
+        deletions: counts?.deletions ?? 0,
+        isBinary: counts?.isBinary ?? false
+      }
+    }
+  })
+}
+
+/**
+ * Lists changed paths with line counts and both blob ids, without reading file contents.
+ * One git run prints both formats, so the records describe one state of the repository.
+ */
+export async function listChangedSummaries(
+  repoPath: string,
+  diffArgs: string[]
+): Promise<ChangedSummary[]> {
+  const { stdout } = await execFileAsync(
+    'git',
+    ['diff', '--raw', '--numstat', '--no-abbrev', '-M', '-z', ...diffArgs],
+    { cwd: repoPath, encoding: 'utf-8', maxBuffer: 1024 * 1024 * 100 }
+  )
+  const { raw, numstat } = parseRawNumstat(stdout)
+  return dedupeUnmerged(joinRawNumstat(raw, numstat))
+}
+
+/**
  * Lists changed paths for a diff, given the git ref arguments that would
  * normally follow `git diff --name-status -M` (e.g. `['--cached']` for
  * staged changes, or `[base, 'HEAD']` for a branch comparison).
@@ -295,7 +444,7 @@ export async function listChangedPaths(
   // tab with NUL, so the whole output is a flat stream of NUL-separated
   // tokens: <status> <path>, or <status> <oldPath> <newPath> for renames.
   const tokens = stdout.split('\0').filter(token => token !== '')
-  const results: ChangedPath[] = []
+  const results: { code: string; item: ChangedPath }[] = []
   let i = 0
   while (i < tokens.length) {
     const code = tokens[i++]
@@ -304,14 +453,14 @@ export async function listChangedPaths(
     if (code[0] === 'R' || code[0] === 'C') {
       const oldPath = tokens[i++]
       const newPath = tokens[i++]
-      results.push({ oldPath, newPath, status })
+      results.push({ code, item: { oldPath, newPath, status } })
     } else {
       const path = tokens[i++]
-      results.push({ oldPath: path, newPath: path, status })
+      results.push({ code, item: { oldPath: path, newPath: path, status } })
     }
   }
 
-  return results
+  return dedupeUnmerged(results)
 }
 
 /** Lists paths that git has never tracked (respects .gitignore). */

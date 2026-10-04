@@ -46,11 +46,8 @@ const indent = 8 + props.level * 12
         </div>
       </q-item-section>
       <q-item-section class="text-mono">
-        <div class="ellipsis file-tree-node__label">
+        <div class="ellipsis file-tree-node__label" :title="node.path">
           {{ node.name }}
-          <q-tooltip anchor="top middle" self="bottom middle">{{
-            node.path
-          }}</q-tooltip>
         </div>
       </q-item-section>
       <q-item-section
@@ -76,11 +73,8 @@ const indent = 8 + props.level * 12
         <q-icon name="insert_drive_file" size="xs" color="grey-6" />
       </q-item-section>
       <q-item-section class="text-mono">
-        <div class="ellipsis file-tree-node__label">
+        <div class="ellipsis file-tree-node__label" :title="node.path">
           {{ node.name }}
-          <q-tooltip anchor="top middle" self="bottom middle">{{
-            node.path
-          }}</q-tooltip>
         </div>
       </q-item-section>
       <q-item-section v-if="node.isChanged" side>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useCardState } from '@/composables/use-card-state'
 import CancelButton from './buttons/CancelButton.vue'
 import CreateButton from './buttons/CreateButton.vue'
 
@@ -10,21 +10,55 @@ const props = withDefaults(
     submitLabel: string
     /** Line(s) the comment being composed will be anchored to, shown next to the action buttons. */
     lineRange?: { start: number; end: number } | null
+    /**
+     * Slot that keeps the unsent text in the card state store, so it survives the card leaving
+     * the virtual list. Unset, the text is local to the form.
+     */
+    draftKey?: string | undefined
+    /**
+     * Sends the text. The form owns the text: it clears it only when this resolves,
+     * and keeps it when this rejects.
+     */
+    send: (content: string) => Promise<void>
   }>(),
   { lineRange: null }
 )
 const emit = defineEmits<{
-  (e: 'submit', content: string): void
   (e: 'cancel'): void
 }>()
 
 const { t } = useI18n()
-const content = ref(props.initialContent ?? '')
+const scope = props.draftKey ? {} : { local: true }
+const content = useCardState(
+  `draft:${props.draftKey}`,
+  () => props.initialContent ?? '',
+  scope
+)
+// In the store next to the text: a card that left the window and came back before the
+// answer must not send the same text again.
+const busy = useCardState(`busy:${props.draftKey}`, () => false, scope)
+// Text came back from the store: the user is mid-way, so the field must not grab focus again.
+const restored = content.value !== (props.initialContent ?? '')
 
-function submit() {
+async function submit() {
   const trimmed = content.value.trim()
-  if (!trimmed) return
-  emit('submit', trimmed)
+  if (!trimmed || busy.value) return
+  busy.value = true
+  try {
+    await props.send(trimmed)
+    // The text cannot change while the form is busy, so this clears only the sent text.
+    content.reset()
+  } catch {
+    // The provider of the action already showed the error. The text stays for a new try.
+  } finally {
+    busy.reset()
+  }
+}
+
+function cancel() {
+  if (busy.value) return
+  content.reset()
+  emit('cancel')
 }
 </script>
 
@@ -34,10 +68,11 @@ function submit() {
       v-model="content"
       dense
       outlined
-      autofocus
+      :autofocus="!restored"
       type="textarea"
       autogrow
       :placeholder="t('reviews.comments.placeholder')"
+      :readonly="busy"
       @keyup.ctrl.enter="submit"
     />
     <div class="row items-center justify-between q-mt-xs">
@@ -53,11 +88,12 @@ function submit() {
       </span>
       <q-space />
       <div class="row q-gutter-x-sm">
-        <CancelButton size="sm" @click="emit('cancel')" />
+        <CancelButton size="sm" :disable="busy" @click="cancel" />
         <CreateButton
           size="sm"
           :label="submitLabel"
           :disable="!content.trim()"
+          :loading="busy"
           @click="submit"
         />
       </div>

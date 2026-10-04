@@ -11,10 +11,9 @@ import StatusSwitcher from '@/components/StatusSwitcher.vue'
 import AppPage from '@/components/AppPage.vue'
 import DownloadButton from '@/components/buttons/DownloadButton.vue'
 import type { ReviewStatus } from '@/api/types'
-import { useNotifyError } from '@/composables/use-notify-error'
+import { provideCommentActions } from '@/composables/use-comment-actions'
 
 const { t } = useI18n()
-const notifyError = useNotifyError()
 const route = useRoute()
 const router = useRouter()
 const store = useReviewDetailStore()
@@ -74,26 +73,17 @@ function changeStatus(status: ReviewStatus) {
   void store.setStatus(status)
 }
 
-async function notifyOnError(action: () => Promise<unknown>) {
-  try {
-    await action()
-  } catch (err) {
-    notifyError(t('reviews.comments.error'), err)
-  }
-}
-
-function editComment(id: string, content: string) {
-  void notifyOnError(() => store.editComment(id, content))
-}
-function deleteComment(id: string) {
-  void notifyOnError(() => store.deleteComment(id))
-}
-function resolveComment(id: string) {
-  void notifyOnError(() => store.resolveComment(id))
-}
-function unresolveComment(id: string) {
-  void notifyOnError(() => store.unresolveComment(id))
-}
+// A saved review gets no new comments (`DiffFileCard` is not commentable here), but its
+// comments can change.
+provideCommentActions({
+  create: async () => {
+    throw new Error('A saved review gets no new comments')
+  },
+  edit: (id, content) => store.editComment(id, content),
+  remove: id => store.deleteComment(id),
+  resolve: id => store.resolveComment(id),
+  unresolve: id => store.unresolveComment(id)
+})
 
 function goBack() {
   void router.push('/reviews')
@@ -149,10 +139,6 @@ function goBack() {
         no-full-file
         @toggle="toggleFile(pathOf(file))"
         @expand="expandFile(pathOf(file))"
-        @edit-comment="editComment"
-        @delete-comment="deleteComment"
-        @resolve-comment="resolveComment"
-        @unresolve-comment="unresolveComment"
       />
     </q-scroll-area>
   </AppPage>

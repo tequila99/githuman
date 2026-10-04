@@ -1,23 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import type { Comment } from '@/api/types'
+import { useCardState } from '@/composables/use-card-state'
+import {
+  ignoreShownError,
+  useCommentActions
+} from '@/composables/use-comment-actions'
 import CommentForm from './CommentForm.vue'
 import DeleteButton from './buttons/DeleteButton.vue'
 import EditButton from './buttons/EditButton.vue'
 
 const props = defineProps<{ comment: Comment; readonly?: boolean }>()
-const emit = defineEmits<{
-  (e: 'edit', content: string): void
-  (e: 'delete'): void
-  (e: 'resolve'): void
-  (e: 'unresolve'): void
-}>()
 
 const $q = useQuasar()
 const { t } = useI18n()
-const editing = ref(false)
+// In the card state store: an edit in progress survives the card leaving the virtual list.
+const editing = useCardState(`edit:${props.comment.id}`, () => false)
+const actions = useCommentActions()
 
 function confirmDelete() {
   $q.dialog({
@@ -34,20 +34,25 @@ function confirmDelete() {
       flat: true
     }
   }).onOk(() => {
-    emit('delete')
+    ignoreShownError(actions.remove(props.comment.id))
   })
 }
 
-function submitEdit(content: string) {
-  emit('edit', content)
-  editing.value = false
+// The form stays open until the server accepts the edit; a failed edit keeps the text.
+async function submitEdit(content: string) {
+  await actions.edit(props.comment.id, content)
+  editing.reset()
+}
+
+function cancelEdit() {
+  editing.reset()
 }
 
 function toggleResolved() {
   if (props.comment.resolved) {
-    emit('unresolve')
+    ignoreShownError(actions.unresolve(props.comment.id))
   } else {
-    emit('resolve')
+    ignoreShownError(actions.resolve(props.comment.id))
   }
 }
 </script>
@@ -60,9 +65,10 @@ function toggleResolved() {
     <CommentForm
       v-if="editing && !readonly"
       :initial-content="comment.content"
+      :draft-key="`edit:${comment.id}`"
       :submit-label="t('reviews.comments.save')"
-      @submit="submitEdit"
-      @cancel="editing = false"
+      :send="submitEdit"
+      @cancel="cancelEdit"
     />
     <template v-else>
       <div class="comment-item__body">{{ comment.content }}</div>

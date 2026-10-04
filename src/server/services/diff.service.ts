@@ -1,21 +1,38 @@
 import { diffLines } from 'diff'
+import { stat } from 'node:fs/promises'
 import type {
   DiffFile,
+  DiffFileSummary,
+  DiffSourceName,
   DiffFileStatus,
   DiffHunk,
   DiffLine
 } from '../../shared/diff/types.ts'
 import {
   assertSafeRef,
+  listChangedSummaries,
+  resolveWithinRepo,
   getFileAtRef,
   getFilesAtRefBatch,
   listChangedPaths,
   listUntrackedPaths
 } from './git.service.ts'
-import type { FileAtRef } from './git.service.ts'
+import type { ChangedSummary, FileAtRef } from './git.service.ts'
 
 /** Unchanged lines kept around each change in a hunk, as in `git diff`. */
 const CONTEXT_LINES = 3
+
+/** Stamp of a worktree file that cannot be read. */
+const GONE_STAMP = 'gone'
+
+/**
+ * Line count and binary flag of untracked files, by repository and path. A refetch runs on
+ * every save, so an untracked file is read again only when its stamp changes.
+ */
+const untrackedCounts = new Map<
+  string,
+  { stamp: string; additions: number; isBinary: boolean }
+>()
 
 export interface DiffFileMeta {
   oldPath: string
@@ -242,4 +259,142 @@ export async function getCommitsDiff(
   assertSafeRef(from)
   assertSafeRef(to)
   return buildDiffFiles(repoPath, [from, to], from, to)
+}
+
+/**
+ * `mtime:ctime:inode:size` of a file in the worktree. It costs no read. The inode catches
+ * a file replaced by rename. Known limit: an edit of the same size within one timestamp
+ * tick of the file system keeps the stamp.
+ */
+async function worktreeStamp(repoPath: string, path: string): Promise<string> {
+  try {
+    const info = await stat(resolveWithinRepo(repoPath, path))
+    return `${info.mtimeMs}:${info.ctimeMs}:${info.ino}:${info.size}`
+  } catch {
+    return GONE_STAMP
+  }
+}
+
+function countLines(content: string): number {
+  return splitLines(content).length
+}
+
+/**
+ * Builds a signature from both sides of the diff. Equal signatures must mean equal hunks,
+ * so the old side counts too: a change of only HEAD or only the index changes the hunks.
+ */
+function signatureOf(
+  change: Omit<ChangedSummary, 'newOid' | 'oldOid'>,
+  oldSide: string,
+  newSide: string
+): string {
+  return [
+    change.status,
+    change.oldPath,
+    change.newPath,
+    change.additions,
+    change.deletions,
+    oldSide,
+    newSide
+  ].join('|')
+}
+
+/** Counts the lines of an untracked file. The file is read only when its stamp changed. */
+async function untrackedSummary(
+  repoPath: string,
+  path: string
+): Promise<DiffFileSummary> {
+  const stamp = await worktreeStamp(repoPath, path)
+  const key = `${repoPath}\0${path}`
+  let counts = untrackedCounts.get(key)
+  if (!counts || counts.stamp !== stamp) {
+    const file = await getFileAtRef(repoPath, 'WORKTREE', path)
+    counts = {
+      stamp,
+      additions: file.isBinary ? 0 : countLines(file.content),
+      isBinary: file.isBinary
+    }
+    if (stamp === GONE_STAMP) {
+      untrackedCounts.delete(key)
+    } else {
+      untrackedCounts.set(key, counts)
+    }
+  }
+  const change = {
+    oldPath: path,
+    newPath: path,
+    status: 'added' as const,
+    additions: counts.additions,
+    deletions: 0,
+    isBinary: counts.isBinary
+  }
+  return { ...change, signature: signatureOf(change, '', stamp) }
+}
+
+/** Drops the cached counts of files that are no longer untracked in this repository. */
+function pruneUntrackedCounts(repoPath: string, untrackedPaths: string[]) {
+  const prefix = `${repoPath}\0`
+  const alive = new Set(untrackedPaths.map(path => prefix + path))
+  for (const key of untrackedCounts.keys()) {
+    if (key.startsWith(prefix) && !alive.has(key)) untrackedCounts.delete(key)
+  }
+}
+
+/**
+ * Lists the files of one diff side with counts and a signature, but no hunks (ADR 0033).
+ * Counts come from git, the hunks of `getFileDiff` from `diffLines`: they may differ by a few lines.
+ */
+export async function getDiffSummaries(
+  repoPath: string,
+  source: DiffSourceName
+): Promise<DiffFileSummary[]> {
+  if (source === 'staged') {
+    const changes = await listChangedSummaries(repoPath, ['--cached'])
+    return changes.map(({ oldOid, newOid, ...change }) => ({
+      ...change,
+      signature: signatureOf(change, oldOid, newOid)
+    }))
+  }
+
+  const [changes, untrackedPaths] = await Promise.all([
+    listChangedSummaries(repoPath, []),
+    listUntrackedPaths(repoPath)
+  ])
+  // The new side is the worktree: git prints zeros for its blob id, so a stamp stands in.
+  const tracked = await Promise.all(
+    changes.map(async ({ oldOid, newOid: _newOid, ...change }) => ({
+      ...change,
+      signature: signatureOf(
+        change,
+        oldOid,
+        await worktreeStamp(repoPath, change.newPath)
+      )
+    }))
+  )
+  const untracked = await Promise.all(
+    untrackedPaths.map(path => untrackedSummary(repoPath, path))
+  )
+  pruneUntrackedCounts(repoPath, untrackedPaths)
+  return [...tracked, ...untracked]
+}
+
+/**
+ * Builds the diff of one file. The caller passes the summary's paths and status, so no
+ * whole-repository listing runs per file. Untracked files have no index entry: their old side is empty.
+ */
+export async function getFileDiff(
+  repoPath: string,
+  source: DiffSourceName,
+  meta: Pick<DiffFileMeta, 'oldPath' | 'newPath' | 'status'>
+): Promise<DiffFile> {
+  const [oldRef, newRef] =
+    source === 'staged' ? ['HEAD', 'INDEX'] : ['INDEX', 'WORKTREE']
+  const [oldFile, newFile] = await Promise.all([
+    getFileAtRef(repoPath, oldRef, meta.oldPath),
+    getFileAtRef(repoPath, newRef, meta.newPath)
+  ])
+  return computeFileDiff(oldFile.content, newFile.content, {
+    ...meta,
+    isBinary: oldFile.isBinary || newFile.isBinary
+  })
 }

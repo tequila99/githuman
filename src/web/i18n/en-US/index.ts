@@ -41,6 +41,8 @@ export default {
     fullFileDeleted: 'The file no longer exists on disk',
     fullFileLoadError: 'Could not read the file from disk',
     noTextChanges: 'No text changes',
+    hunksLoading: 'Loading the changes of this file',
+    hunksLoadError: 'Could not load the changes of this file',
     showFullFile: 'Show full file',
     fileActions: 'File actions',
     previewMarkdown: 'Preview markdown',

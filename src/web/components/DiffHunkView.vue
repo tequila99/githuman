@@ -1,15 +1,24 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, watchEffect } from 'vue'
 import type { Comment, DiffHunk, DiffLineType } from '@/api/types'
 import DiffLineRow from '@/components/DiffLineRow.vue'
+import RowSegment from '@/components/RowSegment.vue'
+import { groupRows, ROW_HEIGHT } from '@/utils/row-segments'
 import CommentThread from './CommentThread.vue'
-import {
-  useLineDragSelect,
-  type DragSelection
-} from '@/composables/use-line-drag-select'
+import { useLineDragSelect } from '@/composables/use-line-drag-select'
 import type { HighlightedToken } from '@/composables/use-syntax-highlighting'
+import { useCardState } from '@/composables/use-card-state'
+import { useCommentActions } from '@/composables/use-comment-actions'
+import {
+  checkAnchor,
+  createAnchor,
+  type AnchorLine,
+  type CommentAnchor
+} from '@/utils/comment-anchor'
 
 const props = defineProps<{
+  /** File the hunk belongs to: a new comment is created for it. */
+  path: string
   hunk: DiffHunk
   lineTokens?: (HighlightedToken[] | null)[] | null
   /** Active review for the current branch — enables gutter drag-select and comment threads (see ADR 0018). */
@@ -22,21 +31,7 @@ const props = defineProps<{
   wrap?: boolean
 }>()
 
-const emit = defineEmits<{
-  (
-    e: 'create-comment',
-    input: {
-      lineNumber: number
-      lineNumberEnd: number
-      lineType: DiffLineType
-      content: string
-    }
-  ): void
-  (e: 'edit-comment', id: string, content: string): void
-  (e: 'delete-comment', id: string): void
-  (e: 'resolve-comment', id: string): void
-  (e: 'unresolve-comment', id: string): void
-}>()
+const actions = useCommentActions()
 
 const header = computed(
   () =>
@@ -51,17 +46,52 @@ const header = computed(
 // lineType, which this same rule won't re-anchor to the right row on
 // reload. Known, accepted MVP limitation — the comment itself is never
 // lost, only its inline position.
-const pending = ref<DragSelection | null>(null)
-const pendingLineType = ref<DiffLineType>('context')
+// One unsent comment per card and view, in the card state store: it survives the card
+// leaving the virtual list. The anchor keeps the text of the selected lines, so the form
+// never shows next to other text after an edit (see `comment-anchor.ts`).
+const pending = useCardState<
+  (CommentAnchor & { lineType: DiffLineType }) | null
+>('pending:diff', () => null)
+
+function anchorLines(column: string): AnchorLine[] {
+  return props.hunk.lines.map(line => ({
+    key: column === 'old' ? line.oldLineNumber : line.newLineNumber,
+    text: `${line.type}\u0000${line.content}`
+  }))
+}
+
+const anchorState = computed(() =>
+  pending.value
+    ? checkAnchor(pending.value, anchorLines(pending.value.column))
+    : 'absent'
+)
+
+// This hunk holds the anchored lines, but their text changed: drop the anchor. The text
+// of the form stays in its own slot and comes back with the next selection in the card.
+watchEffect(() => {
+  if (anchorState.value === 'stale') pending.reset()
+})
+
+/** The anchor, when it points to valid lines of this hunk. */
+const ownAnchor = computed(() =>
+  anchorState.value === 'valid' ? pending.value : null
+)
 
 const drag = useLineDragSelect(selection => {
-  pending.value = selection
   const startLine = props.hunk.lines.find(line =>
     selection.column === 'old'
       ? line.oldLineNumber === selection.startKey
       : line.newLineNumber === selection.startKey
   )
-  pendingLineType.value = startLine?.type ?? 'context'
+  pending.value = {
+    ...createAnchor(
+      selection.column,
+      selection.startKey,
+      selection.endKey,
+      anchorLines(selection.column)
+    ),
+    lineType: startLine?.type ?? 'context'
+  }
 })
 
 function handleMousedown(column: 'old' | 'new', key: number | null) {
@@ -77,10 +107,10 @@ function handleMouseenter(column: 'old' | 'new', key: number | null) {
 function isSelected(column: 'old' | 'new', key: number | null): boolean {
   if (!props.commentable || key === null) return false
   if (
-    pending.value &&
-    pending.value.column === column &&
-    key >= pending.value.startKey &&
-    key <= pending.value.endKey
+    ownAnchor.value &&
+    ownAnchor.value.column === column &&
+    key >= ownAnchor.value.startKey &&
+    key <= ownAnchor.value.endKey
   ) {
     return true
   }
@@ -136,17 +166,18 @@ const visibleLines = computed(() => {
     }))
     .filter(entry => !props.commentsOnly || isWithinAnyComment(entry.line))
 })
+const grouping = computed(() => groupRows(visibleLines.value))
 const pendingLineRange = computed(() =>
-  pending.value
-    ? { start: pending.value.startKey, end: pending.value.endKey }
+  ownAnchor.value
+    ? { start: ownAnchor.value.startKey, end: ownAnchor.value.endKey }
     : null
 )
 
 function isPendingFormRow(column: 'old' | 'new', key: number | null): boolean {
   return (
-    !!pending.value &&
-    pending.value.column === column &&
-    key === pending.value.endKey
+    !!ownAnchor.value &&
+    ownAnchor.value.column === column &&
+    key === ownAnchor.value.endKey
   )
 }
 
@@ -160,52 +191,67 @@ function showNewForm(line: {
   )
 }
 
-function submitNewComment(content: string) {
-  if (!pending.value) return
-  emit('create-comment', {
-    lineNumber: pending.value.startKey,
-    lineNumberEnd: pending.value.endKey,
-    lineType: pendingLineType.value,
+// The form clears its own text after success; the anchor goes only then too, so a
+// failed send keeps the form where it was.
+async function submitNewComment(content: string) {
+  const anchor = ownAnchor.value
+  if (!anchor) return
+  await actions.create({
+    filePath: props.path,
+    lineNumber: anchor.startKey,
+    lineNumberEnd: anchor.endKey,
+    lineType: anchor.lineType,
     content
   })
-  pending.value = null
+  pending.reset()
 }
 
 function cancelNewComment() {
-  pending.value = null
+  pending.reset()
 }
 </script>
 
 <template>
   <div v-if="!commentsOnly || visibleLines.length > 0" class="diff-hunk">
     <div class="diff-hunk__header text-mono text-primary">{{ header }}</div>
-    <template v-for="{ line, index, comments } in visibleLines" :key="index">
-      <DiffLineRow
-        :line="line"
-        :tokens="lineTokens?.[index]"
-        :selectable="commentable"
-        :wrap="wrap"
-        :old-selected="isSelected('old', line.oldLineNumber)"
-        :new-selected="isSelected('new', line.newLineNumber)"
-        @old-mousedown="handleMousedown('old', line.oldLineNumber)"
-        @old-mouseenter="handleMouseenter('old', line.oldLineNumber)"
-        @new-mousedown="handleMousedown('new', line.newLineNumber)"
-        @new-mouseenter="handleMouseenter('new', line.newLineNumber)"
-      />
-      <CommentThread
-        v-if="comments.length > 0 || showNewForm(line)"
-        :comments="comments"
-        :readonly="!commentsEditable"
-        :show-new-form="showNewForm(line)"
-        :pending-line-range="pendingLineRange"
-        @submit-new="submitNewComment"
-        @cancel-new="cancelNewComment"
-        @edit="(id, content) => emit('edit-comment', id, content)"
-        @delete="id => emit('delete-comment', id)"
-        @resolve="id => emit('resolve-comment', id)"
-        @unresolve="id => emit('unresolve-comment', id)"
-      />
-    </template>
+    <component
+      :is="grouping.segmented ? RowSegment : 'div'"
+      v-for="group in grouping.groups"
+      :key="group.start"
+      v-bind="
+        grouping.segmented
+          ? {
+              minHeight: group.rows.length * ROW_HEIGHT,
+              keep: group.rows.some(({ line }) => showNewForm(line))
+            }
+          : {}
+      "
+    >
+      <template v-for="{ line, index, comments } in group.rows" :key="index">
+        <DiffLineRow
+          :line="line"
+          :tokens="lineTokens?.[index]"
+          :selectable="commentable"
+          :wrap="wrap"
+          :old-selected="isSelected('old', line.oldLineNumber)"
+          :new-selected="isSelected('new', line.newLineNumber)"
+          @old-mousedown="handleMousedown('old', line.oldLineNumber)"
+          @old-mouseenter="handleMouseenter('old', line.oldLineNumber)"
+          @new-mousedown="handleMousedown('new', line.newLineNumber)"
+          @new-mouseenter="handleMouseenter('new', line.newLineNumber)"
+        />
+        <CommentThread
+          v-if="comments.length > 0 || showNewForm(line)"
+          :comments="comments"
+          :readonly="!commentsEditable"
+          :show-new-form="showNewForm(line)"
+          :pending-line-range="pendingLineRange"
+          :new-draft-key="'new:diff'"
+          :submit-new="submitNewComment"
+          @cancel-new="cancelNewComment"
+        />
+      </template>
+    </component>
   </div>
 </template>
 

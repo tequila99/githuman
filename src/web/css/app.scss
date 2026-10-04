@@ -92,3 +92,70 @@ body.body--dark {
     font-size: 16px;
   }
 }
+
+// Changes areas (diff cards, file list rows) hold thousands of Quasar
+// helpers. Each `.q-focus-helper` and each `.q-toggle__thumb::before` gets its
+// own compositor layer, and that made `Layerize` dominate scrolling (ADR 0032).
+// Here the helpers are hidden. An `::after` overlay on the hovered or focused
+// element draws the same tint, so only one element at a time pays for it.
+// Opacities match Quasar pixel values within one RGB unit.
+$changes-hover-light: 0.09;
+$changes-hover-dark: 0.14;
+$changes-focus: 0.22;
+
+.diff-file-card,
+.file-list-item {
+  // `display: none` keeps Quasar's `focus()` call on the helper from moving
+  // focus, so a mouse click leaves the button focused. No ring is drawn then.
+  .q-focus-helper,
+  .q-toggle__thumb::before {
+    display: none;
+  }
+
+  .q-hoverable:hover::after,
+  .q-hoverable:focus-visible::after,
+  .q-manual-focusable--focused::after,
+  &.q-hoverable:hover::after,
+  &.q-hoverable:focus-visible::after,
+  &.q-manual-focusable--focused::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    // The overlay is the last child; it must not take mouse events.
+    pointer-events: none;
+    background: currentcolor;
+    opacity: $changes-hover-light;
+  }
+
+  .q-hoverable:focus-visible::after,
+  .q-manual-focusable--focused::after,
+  &.q-hoverable:focus-visible::after,
+  &.q-manual-focusable--focused::after {
+    opacity: $changes-focus;
+  }
+
+  // The thumb halo is hidden above, so the toggle needs its own focus ring.
+  .q-toggle:focus-visible .q-toggle__inner {
+    outline: 2px solid currentcolor;
+    outline-offset: 2px;
+    border-radius: 12px;
+  }
+}
+
+body.body--dark {
+  .diff-file-card,
+  .file-list-item {
+    .q-hoverable:hover::after,
+    &.q-hoverable:hover::after {
+      opacity: $changes-hover-dark;
+    }
+
+    .q-hoverable:focus-visible::after,
+    .q-manual-focusable--focused::after,
+    &.q-hoverable:focus-visible::after,
+    &.q-manual-focusable--focused::after {
+      opacity: $changes-focus;
+    }
+  }
+}
