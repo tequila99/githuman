@@ -97,3 +97,15 @@ test('parseListArgs reads --db-prefix', () => {
     dbPrefix: 'custom-'
   })
 })
+
+test('runList({json: true}) leaves out the snapshot (#56)', () => {
+  const db = createTestDatabase()
+  createReview(db, makeReview())
+
+  const [item] = JSON.parse(runList(db, { json: true })) as Record<
+    string,
+    unknown
+  >[]
+
+  assert.equal('snapshotData' in item, false)
+})

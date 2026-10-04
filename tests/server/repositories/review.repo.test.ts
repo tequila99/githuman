@@ -205,3 +205,19 @@ test('listReviews filters by filePaths via the review_files index, without dupli
   assert.deepEqual(list.map(r => r.id).sort(), ['r1', 'r2'])
   db.close()
 })
+
+test('listReviews returns summaries without the snapshot, also through the files join (#56)', () => {
+  const db = createTestDatabase()
+  createReview(db, makeReview({ id: 'r1' }))
+  insertReviewFiles(db, 'r1', ['a.txt'])
+
+  for (const list of [
+    listReviews(db),
+    listReviews(db, { filePaths: ['a.txt'] })
+  ]) {
+    assert.equal(list.length, 1)
+    assert.equal(list[0].id, 'r1')
+    assert.equal('snapshotData' in list[0], false)
+  }
+  db.close()
+})

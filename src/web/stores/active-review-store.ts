@@ -8,6 +8,7 @@ import type {
   ReviewStatus,
   ReviewSummary
 } from '@/api/types'
+import { toReviewSummary } from '@/utils/review-summary'
 
 /**
  * The review comments on the Changes page attach to — the most recently
@@ -54,8 +55,8 @@ export const useActiveReviewStore = defineStore('active-review', () => {
   }
 
   /** Adopts a review created elsewhere (ReviewCreateDialog.vue's `created` event) as active. */
-  function setActiveReview(review: ReviewSummary) {
-    activeReview.value = review
+  function setActiveReview(review: Review) {
+    activeReview.value = toReviewSummary(review)
     comments.value = []
   }
 

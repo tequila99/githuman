@@ -3,6 +3,7 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import { apiGet, apiPost } from '@/api/client'
 import type { CreateReviewRequest, Review, ReviewSummary } from '@/api/types'
 import { errorMessage } from '@/utils/error-message'
+import { toReviewSummary } from '@/utils/review-summary'
 
 export interface ReviewFilters {
   search: string
@@ -46,7 +47,7 @@ export const useReviewsStore = defineStore('reviews', () => {
 
   async function createReview(input: CreateReviewRequest): Promise<Review> {
     const review = await apiPost<Review>('/api/reviews', input)
-    reviews.value = [review, ...reviews.value]
+    reviews.value = [toReviewSummary(review), ...reviews.value]
     return review
   }
 
