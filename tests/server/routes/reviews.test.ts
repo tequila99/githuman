@@ -399,3 +399,34 @@ test('DELETE /api/reviews/:id for an unknown id returns 404', async t => {
   })
   assert.equal(response.statusCode, 404)
 })
+
+test('GET /api/reviews omits snapshotData; GET /api/reviews/:id keeps it (#56)', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+  await stageOneChange(fixture.dir, fixture.git)
+
+  const db = createTestDatabase()
+  const app = buildApp({ repositoryPath: fixture.dir, db })
+  t.after(async () => {
+    await app.close()
+  })
+
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/reviews',
+    payload: { sourceType: 'staged' }
+  })
+  const { id } = created.json<{ id: string }>()
+
+  const list = (await app.inject({ method: 'GET', url: '/api/reviews' })).json<
+    Record<string, unknown>[]
+  >()
+  assert.equal(list.length, 1)
+  assert.equal(list[0].id, id)
+  assert.equal('snapshotData' in list[0], false)
+
+  const one = (
+    await app.inject({ method: 'GET', url: `/api/reviews/${id}` })
+  ).json<{ snapshotData: string }>()
+  assert.ok(JSON.parse(one.snapshotData).length > 0)
+})

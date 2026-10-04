@@ -11,6 +11,7 @@ import {
 import { UniqueNameError } from '../../../src/server/errors/reviews.ts'
 import { insertReviewFiles } from '../../../src/server/repositories/review-file.repo.ts'
 import type { Review } from '../../../src/shared/reviews/types.ts'
+import { toReviewSummary } from '../../../src/shared/reviews/summary.ts'
 
 function makeReview(overrides: Partial<Review> = {}): Review {
   const now = new Date().toISOString()
@@ -203,5 +204,20 @@ test('listReviews filters by filePaths via the review_files index, without dupli
   const list = listReviews(db, { filePaths: ['a.txt', 'b.txt'] })
 
   assert.deepEqual(list.map(r => r.id).sort(), ['r1', 'r2'])
+  db.close()
+})
+
+test('listReviews returns summaries without the snapshot, also through the files join (#56)', () => {
+  const db = createTestDatabase()
+  createReview(db, makeReview({ id: 'r1' }))
+  insertReviewFiles(db, 'r1', ['a.txt'])
+
+  for (const list of [
+    listReviews(db),
+    listReviews(db, { filePaths: ['a.txt'] })
+  ]) {
+    // Equal to the full review minus the snapshot: a missing or extra column fails.
+    assert.deepEqual(list, [toReviewSummary(findReviewById(db, 'r1')!)])
+  }
   db.close()
 })

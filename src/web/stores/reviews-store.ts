@@ -1,8 +1,9 @@
 import { ref } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { apiGet, apiPost } from '@/api/client'
-import type { CreateReviewRequest, Review } from '@/api/types'
+import type { CreateReviewRequest, Review, ReviewSummary } from '@/api/types'
 import { errorMessage } from '@/utils/error-message'
+import { toReviewSummary } from '@/utils/review-summary'
 
 export interface ReviewFilters {
   search: string
@@ -24,7 +25,7 @@ function buildQuery(filters: Partial<ReviewFilters>): string {
 }
 
 export const useReviewsStore = defineStore('reviews', () => {
-  const reviews = ref<Review[]>([])
+  const reviews = ref<ReviewSummary[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -33,7 +34,7 @@ export const useReviewsStore = defineStore('reviews', () => {
     error.value = null
 
     try {
-      reviews.value = await apiGet<Review[]>(
+      reviews.value = await apiGet<ReviewSummary[]>(
         `/api/reviews${buildQuery(filters)}`
       )
     } catch (err) {
@@ -46,7 +47,7 @@ export const useReviewsStore = defineStore('reviews', () => {
 
   async function createReview(input: CreateReviewRequest): Promise<Review> {
     const review = await apiPost<Review>('/api/reviews', input)
-    reviews.value = [review, ...reviews.value]
+    reviews.value = [toReviewSummary(review), ...reviews.value]
     return review
   }
 

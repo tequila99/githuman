@@ -5,8 +5,10 @@ import type {
   Comment,
   CreateCommentRequest,
   Review,
-  ReviewStatus
+  ReviewStatus,
+  ReviewSummary
 } from '@/api/types'
+import { toReviewSummary } from '@/utils/review-summary'
 
 /**
  * The review comments on the Changes page attach to — the most recently
@@ -15,7 +17,7 @@ import type {
  * store has to first figure out *which* review that is.
  */
 export const useActiveReviewStore = defineStore('active-review', () => {
-  const activeReview = ref<Review | null>(null)
+  const activeReview = ref<ReviewSummary | null>(null)
   const comments = ref<Comment[]>([])
   const loading = ref(false)
 
@@ -36,7 +38,7 @@ export const useActiveReviewStore = defineStore('active-review', () => {
     loading.value = true
 
     try {
-      const reviews = await apiGet<Review[]>('/api/reviews')
+      const reviews = await apiGet<ReviewSummary[]>('/api/reviews')
       const inProgress = reviews
         .filter(review => review.status === 'in_progress')
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -54,7 +56,7 @@ export const useActiveReviewStore = defineStore('active-review', () => {
 
   /** Adopts a review created elsewhere (ReviewCreateDialog.vue's `created` event) as active. */
   function setActiveReview(review: Review) {
-    activeReview.value = review
+    activeReview.value = toReviewSummary(review)
     comments.value = []
   }
 

@@ -1,14 +1,17 @@
 import { UniqueNameError } from '../errors/reviews.ts'
 import type { DatabaseSync } from 'node:sqlite'
-import type { Review, ReviewStatus } from '../../shared/reviews/types.ts'
+import type {
+  Review,
+  ReviewStatus,
+  ReviewSummary
+} from '../../shared/reviews/types.ts'
 
-interface ReviewRow {
+interface ReviewSummaryRow {
   id: string
   repository_path: string
   base_ref: string | null
   source_type: Review['sourceType']
   source_ref: string | null
-  snapshot_data: string
   status: ReviewStatus
   name: string | null
   branch: string | null
@@ -16,20 +19,45 @@ interface ReviewRow {
   updated_at: string
 }
 
-function rowToReview(row: ReviewRow): Review {
+interface ReviewRow extends ReviewSummaryRow {
+  snapshot_data: string
+}
+
+// Every column but snapshot_data: the list doesn't need the diff, and it is
+// requested on each review/comment event (#56). Update this list when
+// ReviewSummaryRow changes: a missing column reads as undefined, silently.
+const SUMMARY_COLUMNS = [
+  'id',
+  'repository_path',
+  'base_ref',
+  'source_type',
+  'source_ref',
+  'status',
+  'name',
+  'branch',
+  'created_at',
+  'updated_at'
+]
+  .map(column => `reviews.${column}`)
+  .join(', ')
+
+function rowToSummary(row: ReviewSummaryRow): ReviewSummary {
   return {
     id: row.id,
     repositoryPath: row.repository_path,
     baseRef: row.base_ref,
     sourceType: row.source_type,
     sourceRef: row.source_ref,
-    snapshotData: row.snapshot_data,
     status: row.status,
     name: row.name,
     branch: row.branch,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }
+}
+
+function rowToReview(row: ReviewRow): Review {
+  return { ...rowToSummary(row), snapshotData: row.snapshot_data }
 }
 
 export function createReview(db: DatabaseSync, review: Review): Review {
@@ -85,7 +113,7 @@ export interface ListReviewsFilters {
 export function listReviews(
   db: DatabaseSync,
   filters: ListReviewsFilters = {}
-): Review[] {
+): ReviewSummary[] {
   const { branch, search, createdFrom, createdTo, filePaths } = filters
   const conditions: string[] = []
   const params: (string | number)[] = []
@@ -115,13 +143,13 @@ export function listReviews(
     conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
   const rows = db
     .prepare(
-      `SELECT DISTINCT reviews.* FROM reviews
+      `SELECT DISTINCT ${SUMMARY_COLUMNS} FROM reviews
        ${joins.join(' ')}
        ${whereClause}
        ORDER BY reviews.created_at DESC`
     )
-    .all(...params) as unknown as ReviewRow[]
-  const reviews = rows.map(rowToReview)
+    .all(...params) as unknown as ReviewSummaryRow[]
+  const reviews = rows.map(rowToSummary)
 
   // Done in JS, not SQL `LOWER()`/`NOCASE` (ASCII-only in SQLite without the
   // ICU extension) — `String.prototype.toLowerCase()` handles Cyrillic and
