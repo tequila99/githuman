@@ -34,8 +34,9 @@ defineEmits<{ (e: 'click'): void }>()
 const { t } = useI18n()
 const { stage, unstage, discard } = useFileActions()
 const activeReview = useActiveReviewStore()
+const path = computed(() => pathOf(props.file))
 const commentCount = computed(
-  () => activeReview.commentsByFile.get(pathOf(props.file))?.length ?? 0
+  () => activeReview.commentsByFile.get(path.value)?.length ?? 0
 )
 </script>
 
@@ -44,6 +45,7 @@ const commentCount = computed(
     v-ripple
     clickable
     dense
+    class="file-list-item"
     :active="selected"
     active-class="file-list-item--selected"
     @click="$emit('click')"
@@ -58,11 +60,8 @@ const commentCount = computed(
     <q-item-section class="text-mono">
       <!-- The name shrinks with an ellipsis; the badge never does, so it stays visible. -->
       <div class="file-list-item__path-row row no-wrap items-center">
-        <span class="ellipsis file-list-item__path-label">
-          {{ pathOf(file) }}
-          <q-tooltip anchor="top middle" self="bottom middle">{{
-            pathOf(file)
-          }}</q-tooltip>
+        <span class="ellipsis file-list-item__path-label" :title="path">
+          {{ path }}
         </span>
         <CommentCountBadge
           v-if="commentCount > 0"
@@ -88,10 +87,9 @@ const commentCount = computed(
           size="sm"
           icon="undo"
           :aria-label="t('changes.actions.discard')"
-          @click.stop="discard(pathOf(file))"
-        >
-          <q-tooltip>{{ t('changes.actions.discard') }}</q-tooltip>
-        </q-btn>
+          :title="t('changes.actions.discard')"
+          @click.stop="discard(path)"
+        />
         <q-btn
           v-ripple
           flat
@@ -100,10 +98,9 @@ const commentCount = computed(
           size="sm"
           icon="add"
           :aria-label="t('changes.actions.stage')"
-          @click.stop="stage(pathOf(file))"
-        >
-          <q-tooltip>{{ t('changes.actions.stage') }}</q-tooltip>
-        </q-btn>
+          :title="t('changes.actions.stage')"
+          @click.stop="stage(path)"
+        />
       </template>
       <q-btn
         v-else
@@ -114,10 +111,9 @@ const commentCount = computed(
         size="sm"
         icon="remove"
         :aria-label="t('changes.actions.unstage')"
-        @click.stop="unstage(pathOf(file))"
-      >
-        <q-tooltip>{{ t('changes.actions.unstage') }}</q-tooltip>
-      </q-btn>
+        :title="t('changes.actions.unstage')"
+        @click.stop="unstage(path)"
+      />
     </q-item-section>
   </q-item>
 </template>

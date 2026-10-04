@@ -2,14 +2,17 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { execFile } from 'node:child_process'
 import { createTempGitRepo } from '../helpers/git-fixture.ts'
 import {
   computeFileDiff,
   getStagedDiff,
   getUnstagedDiff,
   getBranchDiff,
-  getCommitsDiff
+  getCommitsDiff,
+  getDiffSummaries
 } from '../../../src/server/services/diff.service.ts'
+import type { DiffFileSummary } from '../../../src/shared/diff/types.ts'
 
 test('computeFileDiff: added file — all lines are "added", no old line numbers', () => {
   const result = computeFileDiff('', 'line1\nline2\n', {
@@ -477,4 +480,112 @@ test('getUnstagedDiff: an untracked binary file does not throw and is marked isB
   assert.equal(files.length, 1)
   assert.equal(files[0].isBinary, true)
   assert.deepEqual(files[0].hunks, [])
+})
+
+/** Runs git with `input` on stdin and returns the trimmed stdout. */
+function gitWithInput(cwd: string, args: string[], input: string) {
+  return new Promise<string>((resolve, reject) => {
+    const child = execFile('git', args, { cwd }, (err, stdout) =>
+      err ? reject(err) : resolve(stdout.trim())
+    )
+    child.stdin?.end(input)
+  })
+}
+
+function signatureOf(summaries: DiffFileSummary[], path: string): string {
+  const summary = summaries.find(s => s.newPath === path)
+  assert.ok(summary, `no summary for ${path}`)
+  return summary.signature
+}
+
+test('getDiffSummaries: the unstaged signature changes when only the index changes', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'index1\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('base')
+  writeFileSync(join(fixture.dir, 'a.txt'), 'worktree\n')
+  const before = await getDiffSummaries(fixture.dir, 'unstaged')
+
+  // Put another blob in the index without a touch of the worktree file.
+  const otherBlob = await gitWithInput(
+    fixture.dir,
+    ['hash-object', '-w', '--stdin'],
+    'index2\n'
+  )
+  await fixture.git.raw([
+    'update-index',
+    '--cacheinfo',
+    `100644,${otherBlob},a.txt`
+  ])
+  const after = await getDiffSummaries(fixture.dir, 'unstaged')
+
+  const [beforeFile] = before
+  const [afterFile] = after
+  assert.equal(beforeFile.additions, afterFile.additions)
+  assert.equal(beforeFile.deletions, afterFile.deletions)
+  assert.notEqual(signatureOf(after, 'a.txt'), signatureOf(before, 'a.txt'))
+})
+
+test('getDiffSummaries: the staged signature changes when only HEAD changes', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'head1\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('base')
+  writeFileSync(join(fixture.dir, 'a.txt'), 'staged\n')
+  await fixture.git.add('a.txt')
+  const before = await getDiffSummaries(fixture.dir, 'staged')
+
+  // A new HEAD commit with other content for a.txt. The index stays as it is.
+  const headBlob = await gitWithInput(
+    fixture.dir,
+    ['hash-object', '-w', '--stdin'],
+    'head2\n'
+  )
+  const newTree = await gitWithInput(
+    fixture.dir,
+    ['mktree'],
+    `100644 blob ${headBlob}\ta.txt\n`
+  )
+  const commit = (
+    await fixture.git.raw(['commit-tree', newTree, '-p', 'HEAD', '-m', 'head2'])
+  ).trim()
+  await fixture.git.raw(['update-ref', 'HEAD', commit])
+  const after = await getDiffSummaries(fixture.dir, 'staged')
+
+  assert.equal(before[0].additions, after[0].additions)
+  assert.equal(before[0].deletions, after[0].deletions)
+  assert.notEqual(signatureOf(after, 'a.txt'), signatureOf(before, 'a.txt'))
+})
+
+test('getDiffSummaries: an untracked file gets new counts and a new signature after an edit', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'base.txt'), 'base\n')
+  await fixture.git.add('base.txt')
+  await fixture.git.commit('base')
+  writeFileSync(join(fixture.dir, 'u.txt'), 'a\nb\n')
+  writeFileSync(join(fixture.dir, 'u.bin'), Buffer.from([0, 1, 2, 0]))
+
+  const first = await getDiffSummaries(fixture.dir, 'unstaged')
+  const firstText = first.find(s => s.newPath === 'u.txt')
+  assert.equal(firstText?.additions, 2)
+  assert.equal(firstText?.status, 'added')
+  const binary = first.find(s => s.newPath === 'u.bin')
+  assert.equal(binary?.isBinary, true)
+  assert.equal(binary?.additions, 0)
+
+  // Same stamp: same answer from the cache.
+  const again = await getDiffSummaries(fixture.dir, 'unstaged')
+  assert.equal(signatureOf(again, 'u.txt'), signatureOf(first, 'u.txt'))
+
+  await new Promise(resolve => setTimeout(resolve, 20))
+  writeFileSync(join(fixture.dir, 'u.txt'), 'a\nb\nc\n')
+  const second = await getDiffSummaries(fixture.dir, 'unstaged')
+  assert.equal(second.find(s => s.newPath === 'u.txt')?.additions, 3)
+  assert.notEqual(signatureOf(second, 'u.txt'), signatureOf(first, 'u.txt'))
 })

@@ -2,12 +2,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { writeFileSync, unlinkSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { createTempGitRepo } from '../helpers/git-fixture.ts'
+import { createTempGitRepo, type GitFixture } from '../helpers/git-fixture.ts'
 import {
   getFileAtRef,
   getFilesAtRef,
   getFilesAtRefBatch,
   listChangedPaths,
+  listChangedSummaries,
+  parseRawNumstat,
   listUntrackedPaths,
   getRepositoryInfo,
   stagePaths,
@@ -658,4 +660,167 @@ test('getFilesAtRef rejects a ref starting with "-" instead of passing it to git
   t.after(fixture.cleanup)
 
   await assert.rejects(getFilesAtRef(fixture.dir, '--output=/tmp/pwned'))
+})
+
+test('parseRawNumstat reads raw and numstat records, with a rename and a binary file', () => {
+  const zero = '0'.repeat(40)
+  const a = 'a'.repeat(40)
+  const b = 'b'.repeat(40)
+  const stdout = [
+    `:100644 100644 ${a} ${b} M`,
+    'm.txt',
+    `:100644 100644 ${a} ${a} R100`,
+    'old.txt',
+    'new.txt',
+    `:100644 000000 ${a} ${zero} D`,
+    'gone.bin',
+    '2\t1\tm.txt',
+    '0\t0\t',
+    'old.txt',
+    'new.txt',
+    '-\t-\tgone.bin',
+    ''
+  ].join('\0')
+
+  const { raw, numstat } = parseRawNumstat(stdout)
+
+  assert.deepEqual(
+    raw.map(r => [r.code, r.oldPath, r.newPath, r.status, r.oldOid, r.newOid]),
+    [
+      ['M', 'm.txt', 'm.txt', 'modified', a, b],
+      ['R100', 'old.txt', 'new.txt', 'renamed', a, a],
+      ['D', 'gone.bin', 'gone.bin', 'deleted', a, zero]
+    ]
+  )
+  assert.deepEqual(numstat, [
+    { path: 'm.txt', additions: 2, deletions: 1, isBinary: false },
+    { path: 'new.txt', additions: 0, deletions: 0, isBinary: false },
+    { path: 'gone.bin', additions: 0, deletions: 0, isBinary: true }
+  ])
+})
+
+test('parseRawNumstat keeps a TAB, a line feed or a leading ":" inside a path', () => {
+  const oid = 'a'.repeat(40)
+  const paths = ['\tfirst.txt', 'mid\tdle.txt', 'line\nfeed.txt', ':colon.txt']
+  const stdout = [
+    ...paths.flatMap(path => [`:100644 100644 ${oid} ${oid} M`, path]),
+    ...paths.map((path, i) => `${i + 1}\t0\t${path}`),
+    ''
+  ].join('\0')
+
+  const { raw, numstat } = parseRawNumstat(stdout)
+
+  assert.deepEqual(
+    raw.map(r => r.newPath),
+    paths
+  )
+  assert.deepEqual(
+    numstat.map(r => [r.path, r.additions]),
+    paths.map((path, i) => [path, i + 1])
+  )
+})
+
+test('listChangedSummaries gives each file its own counts, with odd paths and a binary file', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'base.txt'), 'base\n')
+  await fixture.git.add('base.txt')
+  await fixture.git.commit('base')
+
+  const files: [string, string | Buffer][] = [
+    ['\tfirst.txt', 'a\nb\n'],
+    ['mid\tdle.txt', 'a\n'],
+    ['line\nfeed.txt', 'a\nb\nc\nd\n'],
+    ['привет.txt', 'a\nb\nc\n'],
+    ['image.bin', Buffer.from([0, 1, 2, 0, 3])],
+    ['z.txt', 'a\nb\nc\n']
+  ]
+  for (const [path, content] of files) {
+    writeFileSync(join(fixture.dir, path), content)
+  }
+  await fixture.git.raw(['add', '-A'])
+
+  const summaries = await listChangedSummaries(fixture.dir, ['--cached'])
+  const byPath = new Map(summaries.map(s => [s.newPath, s]))
+
+  assert.equal(summaries.length, files.length)
+  assert.equal(byPath.get('\tfirst.txt')?.additions, 2)
+  assert.equal(byPath.get('mid\tdle.txt')?.additions, 1)
+  assert.equal(byPath.get('line\nfeed.txt')?.additions, 4)
+  assert.equal(byPath.get('привет.txt')?.additions, 3)
+  assert.equal(byPath.get('image.bin')?.isBinary, true)
+  assert.equal(byPath.get('z.txt')?.additions, 3)
+  for (const summary of summaries) {
+    assert.equal(summary.status, 'added')
+    assert.match(summary.newOid, /^[0-9a-f]{40}$/)
+  }
+})
+
+test('listChangedSummaries reports a deletion and a rename with blob ids of both sides', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'old.txt'), 'a\nb\nc\nd\n')
+  writeFileSync(join(fixture.dir, 'gone.txt'), 'x\ny\n')
+  await fixture.git.add(['old.txt', 'gone.txt'])
+  await fixture.git.commit('base')
+  await fixture.git.mv('old.txt', 'new.txt')
+  await fixture.git.rm('gone.txt')
+
+  const summaries = await listChangedSummaries(fixture.dir, ['--cached'])
+  const byPath = new Map(summaries.map(s => [s.newPath, s]))
+
+  const renamed = byPath.get('new.txt')
+  assert.equal(renamed?.status, 'renamed')
+  assert.equal(renamed?.oldPath, 'old.txt')
+  assert.equal(renamed?.oldOid, renamed?.newOid)
+  const deleted = byPath.get('gone.txt')
+  assert.equal(deleted?.status, 'deleted')
+  assert.equal(deleted?.deletions, 2)
+  assert.match(deleted?.oldOid ?? '', /^[0-9a-f]{40}$/)
+})
+
+async function createMergeConflict(fixture: GitFixture) {
+  writeFileSync(join(fixture.dir, 'f.txt'), 'a\nb\n')
+  writeFileSync(join(fixture.dir, 'g.txt'), 'x\n')
+  await fixture.git.add(['f.txt', 'g.txt'])
+  await fixture.git.commit('base')
+  await fixture.git.checkoutLocalBranch('other')
+  writeFileSync(join(fixture.dir, 'f.txt'), 'a\nB\n')
+  await fixture.git.commit('other', ['f.txt'])
+  await fixture.git.checkout('main')
+  writeFileSync(join(fixture.dir, 'f.txt'), 'a\nC\n')
+  await fixture.git.commit('main', ['f.txt'])
+  // simple-git does not reject on the conflict exit code, so check the result.
+  await fixture.git.raw(['merge', 'other']).catch(() => undefined)
+  assert.deepEqual((await fixture.git.status()).conflicted, ['f.txt'])
+  writeFileSync(join(fixture.dir, 'g.txt'), 'x\ny\n')
+}
+
+test('listChangedSummaries lists a conflicted file once, in both diff sides', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+  await createMergeConflict(fixture)
+
+  const unstaged = await listChangedSummaries(fixture.dir, [])
+  assert.deepEqual(unstaged.map(s => s.newPath).sort(), ['f.txt', 'g.txt'])
+  const conflicted = unstaged.find(s => s.newPath === 'f.txt')
+  assert.notEqual(conflicted?.additions, 0)
+  assert.equal(unstaged.find(s => s.newPath === 'g.txt')?.additions, 1)
+
+  const staged = await listChangedSummaries(fixture.dir, ['--cached'])
+  assert.deepEqual(
+    staged.map(s => s.newPath),
+    ['f.txt']
+  )
+})
+
+test('listChangedPaths lists a conflicted file once', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+  await createMergeConflict(fixture)
+
+  const paths = await listChangedPaths(fixture.dir, [])
+  assert.deepEqual(paths.map(p => p.newPath).sort(), ['f.txt', 'g.txt'])
 })

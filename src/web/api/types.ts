@@ -15,7 +15,8 @@ export type {
   DiffLineType,
   DiffLine,
   DiffHunk,
-  DiffFile
+  DiffFile,
+  DiffFileSummary
 } from '../../shared/diff/types.ts'
 export type { ApiError } from '../../shared/http/types.ts'
 export type {

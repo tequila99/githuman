@@ -2,8 +2,25 @@ import { ref } from 'vue'
 import { apiGet } from '@/api/client'
 import type { FileContentResponse } from '@/api/types'
 import { errorMessage } from '@/utils/error-message'
+import { createWeightedLru } from '@/utils/weighted-lru'
 
-export function useFileContent() {
+// Lines kept by the content cache. The cache is per module, so it outlives a component:
+// the virtual list unmounts a card that leaves the window, and the card must come back
+// with its lines at once, so its height does not jump while the file loads again.
+const CONTENT_CACHE_MAX_LINES = 100_000
+
+type CachedContent = Pick<FileContentResponse, 'lines' | 'isBinary'>
+
+const contentCache = createWeightedLru<string, CachedContent>(
+  CONTENT_CACHE_MAX_LINES,
+  data => data.lines.length + 1
+)
+
+/**
+ * `cache`: show the last read of a file at once and refresh it in the background.
+ * Without it, a new file starts empty, as before.
+ */
+export function useFileContent(options: { cache?: boolean } = {}) {
   const lines = ref<string[]>([])
   const isBinary = ref(false)
   const loading = ref(false)
@@ -23,6 +40,11 @@ export function useFileContent() {
     if (key !== lastKey) {
       reset()
       lastKey = key
+      const cached = options.cache ? contentCache.get(key) : undefined
+      if (cached) {
+        lines.value = cached.lines
+        isBinary.value = cached.isBinary
+      }
     }
     const requestId = ++latestRequestId
     loading.value = true
@@ -36,6 +58,9 @@ export function useFileContent() {
       lines.value = data.lines
       isBinary.value = data.isBinary
       error.value = null
+      if (options.cache) {
+        contentCache.set(key, { lines: data.lines, isBinary: data.isBinary })
+      }
     } catch (e) {
       if (requestId !== latestRequestId) return
       error.value = errorMessage(e)

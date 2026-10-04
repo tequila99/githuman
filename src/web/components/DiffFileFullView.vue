@@ -20,19 +20,11 @@ const props = withDefaults(
   { commentable: false, comments: () => [] }
 )
 
-const emit = defineEmits<{
-  (
-    e: 'create-comment',
-    input: { lineNumber: number; lineNumberEnd: number; content: string }
-  ): void
-  (e: 'edit-comment', id: string, content: string): void
-  (e: 'delete-comment', id: string): void
-  (e: 'resolve-comment', id: string): void
-  (e: 'unresolve-comment', id: string): void
-}>()
-
 const { t } = useI18n()
-const { lines, isBinary, loading, error, fetchContent } = useFileContent()
+// The cache shows the lines at once when the virtual list mounts the card again.
+const { lines, isBinary, loading, error, fetchContent } = useFileContent({
+  cache: true
+})
 
 // Always the file on disk, even on the Staged tab: full-file comments are
 // numbered against one version everywhere, the markdown export included (#39).
@@ -89,10 +81,5 @@ const deletedOnDisk = computed(() =>
     :comments-editable="commentsEditable"
     :comments="comments"
     :wrap="wrap"
-    @create-comment="input => emit('create-comment', input)"
-    @edit-comment="(id, content) => emit('edit-comment', id, content)"
-    @delete-comment="id => emit('delete-comment', id)"
-    @resolve-comment="id => emit('resolve-comment', id)"
-    @unresolve-comment="id => emit('unresolve-comment', id)"
   />
 </template>
