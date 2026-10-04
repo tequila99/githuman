@@ -4,7 +4,8 @@ import type {
   CreateReviewRequest,
   Review,
   ReviewSourceType,
-  ReviewStatus
+  ReviewStatus,
+  ReviewSummary
 } from '../../shared/reviews/types.ts'
 import type { DiffFile } from '../../shared/diff/types.ts'
 import {
@@ -212,7 +213,7 @@ export function getReview(db: DatabaseSync, id: string): Review | null {
 export function getReviews(
   db: DatabaseSync,
   filters: ListReviewsFilters = {}
-): Review[] {
+): ReviewSummary[] {
   return listReviews(db, filters)
 }
 

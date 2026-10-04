@@ -15,14 +15,13 @@ export type ReviewSourceType =
   | 'branch'
   | 'commits'
 
-export interface Review {
+/** A review without its snapshot: what `GET /api/reviews` lists (#56). */
+export interface ReviewSummary {
   id: string
   repositoryPath: string
   baseRef: string | null
   sourceType: ReviewSourceType
   sourceRef: string | null
-  /** JSON-serialized DiffFile[] snapshot, frozen at creation time (see ADR 0003). */
-  snapshotData: string
   status: ReviewStatus
   /** User-provided or auto-generated ("source + date/time") name. Unique within `branch` (see ADR 0017). */
   name: string | null
@@ -30,6 +29,11 @@ export interface Review {
   branch: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface Review extends ReviewSummary {
+  /** JSON-serialized DiffFile[] snapshot, frozen at creation time (see ADR 0003). */
+  snapshotData: string
 }
 
 export interface CreateReviewRequest {

@@ -22,6 +22,7 @@ export type { ApiError } from '../../shared/http/types.ts'
 export type {
   ReviewStatus,
   ReviewSourceType,
+  ReviewSummary,
   Review,
   CreateReviewRequest,
   UpdateReviewRequest
