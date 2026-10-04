@@ -2,13 +2,12 @@ import type { HighlighterCore, LanguageInput } from 'shiki/core'
 import type { DiffFile } from '@/api/types'
 import { createWeightedLru } from '@/utils/weighted-lru'
 
-// Counts lines, as a 30 000-line file has about 1.6 million tokens. Only the
-// cards that are open ask for tokens, and the cache saves a second tokenizing
-// when the virtual list mounts such a card again. On a diff of 60 000 lines,
-// a full cache of 60 000 lines held about 125 MB of heap (#58). At 20 000
-// lines it holds about 30 MB. A scroll back of 12 screens then tokenizes no
-// card again. A lower limit saved only 5 MB more. A file larger than the limit
-// stays in the cache alone.
+// Counts lines. Only the cards that are open ask for tokens, and the cache
+// saves a second tokenizing when the virtual list mounts such a card again.
+// Tokens take much more heap than hunks (#58). With 20 000 lines, a scroll
+// back of about 12 screens does not tokenize a card again. A file larger than
+// the limit stays in the cache only until the cache gets the next file. A
+// mounted card keeps its own tokens, so this costs time only after a remount.
 const TOKEN_CACHE_MAX_LINES = 20_000
 
 export interface HighlightedToken {
