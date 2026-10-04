@@ -96,6 +96,7 @@ export async function startServer(
     repositoryPath,
     db,
     watchFiles: true,
+    apiDocs: options.apiDocs === true,
     // Agents can run commands, so they are only offered on a loopback bind.
     ...(isLoopbackHost(options.host)
       ? {

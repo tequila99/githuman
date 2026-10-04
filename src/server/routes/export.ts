@@ -1,13 +1,14 @@
-import { Type, type Static } from '@sinclair/typebox'
+import { Type } from '@sinclair/typebox'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import type { FastifyInstance } from 'fastify'
 import type { DatabaseSync } from 'node:sqlite'
 import { exportAsJson, exportAsMarkdown } from '../services/export.service.ts'
-
-const ExportParams = Type.Object({ id: Type.String() })
-const ExportQuery = Type.Object({
-  format: Type.Union([Type.Literal('json'), Type.Literal('markdown')])
-})
+import {
+  ExportQuery,
+  ReviewExportSchema,
+  ReviewIdParams
+} from '../../shared/reviews/schemas.ts'
+import { ERROR_RESPONSES } from '../../shared/http/schemas.ts'
 
 export interface ExportRoutesOptions {
   db: DatabaseSync
@@ -22,12 +23,28 @@ export async function exportRoutes(
   const { db, repositoryPath } = opts
   const typedApp = app.withTypeProvider<TypeBoxTypeProvider>()
 
-  typedApp.get<{
-    Params: Static<typeof ExportParams>
-    Querystring: Static<typeof ExportQuery>
-  }>(
+  typedApp.get(
     '/api/reviews/:id/export',
-    { schema: { params: ExportParams, querystring: ExportQuery } },
+    {
+      schema: {
+        tags: ['reviews'],
+        summary: 'Export a review with its comments',
+        params: ReviewIdParams,
+        querystring: ExportQuery,
+        response: {
+          200: {
+            description: 'The review as JSON or as a markdown report.',
+            content: {
+              'application/json': { schema: ReviewExportSchema },
+              'text/markdown': {
+                schema: Type.String({ description: 'Markdown report.' })
+              }
+            }
+          },
+          ...ERROR_RESPONSES
+        }
+      }
+    },
     async (request, reply) => {
       if (request.query.format === 'json') {
         return exportAsJson(db, request.params.id)

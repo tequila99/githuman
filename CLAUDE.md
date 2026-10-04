@@ -142,6 +142,17 @@ userPath)` напрямую.
   окружения `GITHUMAN_DB_PREFIX`; пустая строка — осознанный режим прямой
   работы с файлами оригинала. Сама директория `.githuman/` не
   переименовывается — префиксуются только файлы внутри неё.
+- **Схемы роутов — в `src/shared/<domain>/schemas.ts`, типы — `Static` от них**
+  (#55): `types.ts` берёт схему через `import type`. Сущности и ответы —
+  `XxxSchema`, запросы — `...Body/Query/Params`. У каждого поля и схемы есть
+  `description` (проверяет `tests/server/routes/openapi.test.ts`). Fastify пишет
+  ответ по схеме и молча отбрасывает лишние поля, поэтому новый ответ требует
+  теста на полное тело (`response-schemas.test.ts`). Перечисления — `Type.Union`
+  литералов, nullable в ответе — `Nullable()`: тип-провайдер Fastify выводит
+  типы через TypeBox 1.x и не понимает `Type.Unsafe`. TypeBox не попадает в
+  веб-бандл: runtime-импорт `@sinclair/typebox` и `schemas.ts` в `src/web` и
+  `src/shared` запрещает `no-restricted-imports`. `/api/openapi.json` есть
+  всегда, Swagger UI (`/api/docs`) — только с `--api-docs` (его включает `dev:server`).
 - **Общие доменные типы реально импортируются фронтендом**, не копируются
   вручную — `src/web/api/types.ts` лишь реэкспортирует доменные контракты.
   Не возвращать `src/shared` в exclude vue-tsc: это уже приводило к

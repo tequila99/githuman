@@ -5,33 +5,19 @@ import type {
   PromptBody,
   AutoApproveBody,
   ConfigBody,
-  PermissionBody
+  PermissionBody,
+  AgentPresetInfoSchema,
+  AgentSessionStatusSchema,
+  AgentSessionInfoSchema,
+  AgentFileSearchResponseSchema
 } from './schemas.ts'
 
 /** An ACP agent the user can start a chat session with (see `server/config/agents.ts`). */
-export interface AgentPresetInfo {
-  id: string
-  title: string
-  /** The launcher binary was found in PATH. Says nothing about login/auth. */
-  available: boolean
-  /** The agent applies edits without ever asking (pi-acp sends no permission requests). */
-  autoApprovesEdits: boolean
-}
+export type AgentPresetInfo = Static<typeof AgentPresetInfoSchema>
 
-export type AgentSessionStatus = 'starting' | 'ready' | 'busy' | 'closed'
+export type AgentSessionStatus = Static<typeof AgentSessionStatusSchema>
 
-export interface AgentSessionInfo {
-  id: string
-  presetId: string
-  /** What the chat is called in the UI. */
-  name: string
-  status: AgentSessionStatus
-  reviewId: string | null
-  /** The server answers the agent's permission requests itself (see `AgentChatEvent` `auto-approve`). */
-  autoApprove: boolean
-  /** Why the session ended, when it ended because it could not start. */
-  error: string | null
-}
+export type AgentSessionInfo = Static<typeof AgentSessionInfoSchema>
 
 export type CreateAgentSessionRequest = Static<typeof CreateSessionBody>
 
@@ -155,9 +141,9 @@ export interface AgentStreamEnvelope extends AgentChatEnvelope {
 
 export type AgentSetAutoApproveRequest = Static<typeof AutoApproveBody>
 
-export interface AgentFileSearchResponse {
-  files: string[]
-}
+export type AgentFileSearchResponse = Static<
+  typeof AgentFileSearchResponseSchema
+>
 
 /**
  * A per-session setting the agent exposes (ACP `configOptions`): usually
