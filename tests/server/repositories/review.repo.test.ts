@@ -11,6 +11,7 @@ import {
 import { UniqueNameError } from '../../../src/server/errors/reviews.ts'
 import { insertReviewFiles } from '../../../src/server/repositories/review-file.repo.ts'
 import type { Review } from '../../../src/shared/reviews/types.ts'
+import { toReviewSummary } from '../../../src/shared/reviews/summary.ts'
 
 function makeReview(overrides: Partial<Review> = {}): Review {
   const now = new Date().toISOString()
@@ -215,9 +216,8 @@ test('listReviews returns summaries without the snapshot, also through the files
     listReviews(db),
     listReviews(db, { filePaths: ['a.txt'] })
   ]) {
-    assert.equal(list.length, 1)
-    assert.equal(list[0].id, 'r1')
-    assert.equal('snapshotData' in list[0], false)
+    // Equal to the full review minus the snapshot: a missing or extra column fails.
+    assert.deepEqual(list, [toReviewSummary(findReviewById(db, 'r1')!)])
   }
   db.close()
 })

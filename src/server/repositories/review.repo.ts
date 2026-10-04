@@ -24,8 +24,8 @@ interface ReviewRow extends ReviewSummaryRow {
 }
 
 // Every column but snapshot_data: the list doesn't need the diff, and it is
-// requested on each review/comment event (#56). Keep in step with
-// ReviewSummaryRow: a column missing here reads as undefined, silently.
+// requested on each review/comment event (#56). Update this list when
+// ReviewSummaryRow changes: a missing column reads as undefined, silently.
 const SUMMARY_COLUMNS = [
   'id',
   'repository_path',
