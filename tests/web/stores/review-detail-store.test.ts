@@ -64,6 +64,7 @@ test('a status change keeps the file objects and holds no snapshot (#57)', async
 
   assert.equal(store.review?.status, 'approved')
   assert.equal(store.files, filesBefore, 'the same array, so cards keep state')
+  assert.ok(store.review)
   assert.equal('snapshotData' in store.review, false)
 })
 
