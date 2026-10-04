@@ -29,7 +29,10 @@ export const FileContentResponseSchema = Type.Object(
   {
     path: Type.String({ description: 'Repository-relative path.' }),
     ref: Type.String({ description: 'Ref from the request.' }),
-    content: Type.String({ description: 'Full file text.' }),
+    content: Type.String({
+      description:
+        'Full file text. Empty for a binary file or a file that is not at the ref.'
+    }),
     lines: Type.Array(Type.String(), {
       description: 'Lines of the text. Empty for a binary file.'
     }),

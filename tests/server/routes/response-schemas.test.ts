@@ -1,6 +1,7 @@
 import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
-import { writeFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createTempGitRepo } from '../helpers/git-fixture.ts'
 import { buildApp } from '../../../src/server/app.ts'
@@ -25,9 +26,13 @@ import {
   exportAsJson,
   exportAsMarkdown
 } from '../../../src/server/services/export.service.ts'
+import { getAppVersion } from '../../../src/server/app-version.ts'
 import { toReviewSummary } from '../../../src/shared/reviews/summary.ts'
 import type { Comment } from '../../../src/shared/comments/types.ts'
 import type { Review } from '../../../src/shared/reviews/types.ts'
+
+/** A small ACP agent that starts, answers and offers settings. */
+const FAKE_AGENT = join(import.meta.dirname, '../fixtures/fake-acp-agent.ts')
 
 // Fastify writes a response through its schema and drops fields that the
 // schema does not have. Each test compares a whole body with the value that
@@ -236,6 +241,10 @@ test('review, comment and export routes return whole bodies', async t => {
     url: `/api/comments/${lineId}/unresolve`
   })
   assert.equal(unresolved.json().resolved, false)
+  assert.deepEqual(
+    unresolved.json(),
+    json(listCommentsByReview(db, review.id).find(c => c.id === lineId))
+  )
 
   const exported = await app.inject(
     `/api/reviews/${review.id}/export?format=json`
@@ -255,17 +264,17 @@ test('review, comment and export routes return whole bodies', async t => {
   })
   assert.equal(patched.json().status, 'approved')
   assert.deepEqual(
-    toReviewSummary(patched.json<Review>()),
-    toReviewSummary(json(findReviewById(db, review.id)) as Review)
+    patched.json(),
+    json(toReviewSummary(findReviewById(db, review.id)!))
   )
 })
 
 test('app routes return whole bodies', async t => {
   const { app } = await setup(t)
   assert.deepEqual((await app.inject('/health')).json(), { status: 'ok' })
-  const info = (await app.inject('/api/app-info')).json()
-  assert.deepEqual(Object.keys(info), ['version'])
-  assert.equal(typeof info.version, 'string')
+  assert.deepEqual((await app.inject('/api/app-info')).json(), {
+    version: getAppVersion()
+  })
 })
 
 test('errors keep code, error, message and statusCode', async t => {
@@ -303,11 +312,16 @@ test('agent routes return whole bodies', async t => {
   const fixture = await createTempGitRepo()
   t.after(fixture.cleanup)
   writeFileSync(join(fixture.dir, 'a.txt'), 'a\n')
-  const db = createTestDatabase()
   const app = buildApp({
     repositoryPath: fixture.dir,
-    db,
     agentPresets: [
+      {
+        id: 'fake',
+        title: 'Fake',
+        command: process.execPath,
+        args: [FAKE_AGENT],
+        autoApprovesEdits: false
+      },
       {
         id: 'broken',
         title: 'Broken',
@@ -319,46 +333,139 @@ test('agent routes return whole bodies', async t => {
   })
   t.after(() => app.close())
 
-  const presets = await app.inject('/api/agent/presets')
-  assert.deepEqual(presets.json(), [
-    {
-      id: 'broken',
-      title: 'Broken',
-      available: false,
-      autoApprovesEdits: true
-    }
+  assert.deepEqual((await app.inject('/api/agent/presets')).json(), [
+    { id: 'fake', title: 'Fake', available: true, autoApprovesEdits: false },
+    { id: 'broken', title: 'Broken', available: false, autoApprovesEdits: true }
   ])
+
+  /** Starts a session and waits until it leaves `starting`. */
+  async function start(payload: object) {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/agent/sessions',
+      payload
+    })
+    assert.equal(created.statusCode, 201)
+    let info = created.json()
+    const deadline = Date.now() + 10_000
+    while (info.status === 'starting') {
+      assert.ok(Date.now() < deadline, 'the session did not start')
+      await new Promise(resolve => setTimeout(resolve, 20))
+      info = (await app.inject(`/api/agent/sessions/${info.id}`)).json()
+    }
+    return info
+  }
 
   const review = (
     await app.inject({ method: 'POST', url: '/api/reviews', payload: {} })
   ).json<Review>()
-  const created = await app.inject({
-    method: 'POST',
-    url: '/api/agent/sessions',
-    payload: { presetId: 'broken', reviewId: review.id, name: 'Chat' }
+  const ready = await start({ presetId: 'fake', name: 'Ready' })
+  assert.deepEqual(ready, {
+    id: ready.id,
+    presetId: 'fake',
+    name: 'Ready',
+    status: 'ready',
+    reviewId: null,
+    autoApprove: false,
+    error: null
   })
-  assert.equal(created.statusCode, 201)
-  const id = created.json().id as string
-  const deadline = Date.now() + 10_000
-  let info = created.json()
-  while (info.status !== 'closed') {
-    assert.ok(Date.now() < deadline, 'the session did not close')
-    await new Promise(resolve => setTimeout(resolve, 20))
-    info = (await app.inject(`/api/agent/sessions/${id}`)).json()
-  }
-  assert.deepEqual(Object.keys(info).sort(), [
-    'autoApprove',
-    'error',
-    'id',
-    'name',
-    'presetId',
-    'reviewId',
-    'status'
+  const broken = await start({
+    presetId: 'broken',
+    name: 'Broken',
+    reviewId: review.id
+  })
+  assert.deepEqual(broken, {
+    id: broken.id,
+    presetId: 'broken',
+    name: 'Broken',
+    status: 'closed',
+    reviewId: review.id,
+    autoApprove: false,
+    error: broken.error
+  })
+  assert.equal(typeof broken.error, 'string')
+  assert.deepEqual((await app.inject('/api/agent/sessions')).json(), [
+    ready,
+    broken
   ])
-  assert.equal(info.reviewId, review.id)
-  assert.equal(typeof info.error, 'string')
-  assert.deepEqual((await app.inject('/api/agent/sessions')).json(), [info])
 
   const files = await app.inject('/api/agent/files?q=a')
   assert.deepEqual(files.json(), { files: ['a.txt'] })
+
+  // 202 keeps an empty body, as before the response schema.
+  const prompted = await app.inject({
+    method: 'POST',
+    url: `/api/agent/sessions/${ready.id}/prompt`,
+    payload: { text: 'hello' }
+  })
+  assert.equal(prompted.statusCode, 202)
+  assert.equal(prompted.body, '')
+})
+
+test('a config value that is not a string or a boolean gives GHT_AGENT_CONFIG', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+  const app = buildApp({
+    repositoryPath: fixture.dir,
+    agentPresets: [
+      {
+        id: 'fake',
+        title: 'Fake',
+        command: process.execPath,
+        args: [FAKE_AGENT],
+        autoApprovesEdits: false
+      }
+    ]
+  })
+  t.after(() => app.close())
+  let info = (
+    await app.inject({
+      method: 'POST',
+      url: '/api/agent/sessions',
+      payload: { presetId: 'fake' }
+    })
+  ).json()
+  const deadline = Date.now() + 10_000
+  while (info.status === 'starting') {
+    assert.ok(Date.now() < deadline, 'the session did not start')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    info = (await app.inject(`/api/agent/sessions/${info.id}`)).json()
+  }
+
+  const url = `/api/agent/sessions/${info.id}/config`
+  for (const value of [1, null, { on: true }]) {
+    const response = await app.inject({
+      method: 'POST',
+      url,
+      payload: { configId: 'turbo', value }
+    })
+    assert.equal(response.statusCode, 400, JSON.stringify(value))
+    assert.equal(response.json().code, 'GHT_AGENT_CONFIG')
+  }
+})
+
+test('the agent guard and server errors keep the error body', async t => {
+  const notRepo = mkdtempSync(join(tmpdir(), 'githuman-not-repo-'))
+  t.after(() => rmSync(notRepo, { recursive: true, force: true }))
+  const app = buildApp({ repositoryPath: notRepo, agentPresets: [] })
+  t.after(() => app.close())
+
+  const forbidden = await app.inject({
+    url: '/api/agent/presets',
+    headers: { host: 'hostile.example' }
+  })
+  assert.equal(forbidden.statusCode, 403)
+  assert.deepEqual(Object.keys(forbidden.json()).sort(), [
+    'code',
+    'error',
+    'message',
+    'statusCode'
+  ])
+
+  const failed = await app.inject('/api/git/info')
+  assert.equal(failed.statusCode, 500)
+  const body = failed.json()
+  assert.equal(body.statusCode, 500)
+  assert.equal(body.error, 'Internal Server Error')
+  assert.equal(typeof body.message, 'string')
 })

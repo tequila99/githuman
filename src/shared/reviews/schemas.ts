@@ -47,7 +47,7 @@ const reviewSummaryFields = {
   sourceRef: Nullable(
     Type.String({
       description:
-        'Source ref for branch or commits reviews: a commit list for commits. Else null.'
+        'Branch name for branch, the newer ref ("to") for commits. Else null.'
     })
   ),
   status: ReviewStatusSchema,
@@ -75,8 +75,7 @@ export const ReviewSchema = Type.Object(
   {
     ...reviewSummaryFields,
     snapshotData: Type.String({
-      description:
-        'JSON array of DiffFile, frozen at creation (ADR 0003). The server does not parse it.'
+      description: 'JSON array of DiffFile, frozen at creation (ADR 0003).'
     })
   },
   { description: 'A review with its diff snapshot.' }

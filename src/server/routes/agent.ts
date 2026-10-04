@@ -1,4 +1,4 @@
-import { BadRequestError, NotFoundError } from '../errors/http.ts'
+import { NotFoundError } from '../errors/http.ts'
 import { Type } from '@sinclair/typebox'
 import {
   SessionParams,
@@ -50,6 +50,7 @@ const AGENT_ERROR_RESPONSES = {
     description: 'Host or Origin of the request is not local.'
   }
 }
+
 export interface AgentRoutesOptions {
   registry: AgentSessionRegistry
   db: DatabaseSync
@@ -183,7 +184,8 @@ export async function agentRoutes(
         params: SessionParams,
         body: PromptBody,
         response: {
-          202: Type.Null({ description: 'The session took the message.' }),
+          // No content type: the answer has no body, as before the schema.
+          202: { description: 'The session took the message. No body.' },
           ...AGENT_ERROR_RESPONSES
         }
       },
@@ -205,7 +207,7 @@ export async function agentRoutes(
       })
       session.prompt(blocks, request.body)
 
-      return reply.code(202).send(null)
+      return reply.code(202).send()
     }
   )
 
@@ -271,12 +273,7 @@ export async function agentRoutes(
         throw new NotFoundError('Session not found')
       }
 
-      // The schema has no type for `value` (see ConfigBody), so the route checks it.
-      const { configId, value } = request.body
-      if (typeof value !== 'string' && typeof value !== 'boolean') {
-        throw new BadRequestError('"value" must be a string or a boolean')
-      }
-      await session.setConfig(configId, value)
+      await session.setConfig(request.body.configId, request.body.value)
 
       return reply.code(204).send(null)
     }

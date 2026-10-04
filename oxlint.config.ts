@@ -113,7 +113,7 @@ export default defineConfig({
             ],
             patterns: [
               {
-                regex: '/shared/[^/]+/schemas(\\.ts)?$',
+                regex: '(^|/)schemas(\\.ts)?$',
                 allowTypeImports: true,
                 message: 'Import schemas only as types outside schemas.ts.'
               }

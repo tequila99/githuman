@@ -1,4 +1,5 @@
 import { NotFoundError, BadRequestError } from '../errors/http.ts'
+import { Type } from '@sinclair/typebox'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import type { FastifyInstance } from 'fastify'
 import type { DatabaseSync } from 'node:sqlite'
@@ -20,7 +21,6 @@ import {
   UpdateReviewBody
 } from '../../shared/reviews/schemas.ts'
 import { ERROR_RESPONSES, NoContentSchema } from '../../shared/http/schemas.ts'
-import { Type } from '@sinclair/typebox'
 
 // OpenAPI group of these routes.
 const TAGS = ['reviews']
@@ -125,7 +125,10 @@ export async function reviewRoutes(
         params: ReviewIdParams,
         body: UpdateReviewBody,
         response: {
-          200: { ...ReviewSchema, description: 'The changed review.' },
+          200: {
+            ...ReviewSummarySchema,
+            description: 'The changed review without its snapshot (#57).'
+          },
           ...ERROR_RESPONSES
         }
       }
