@@ -1,44 +1,27 @@
-export type ReviewStatus = 'in_progress' | 'approved' | 'changes_requested'
+import type { Static } from '@sinclair/typebox'
+import type {
+  CreateReviewBody,
+  ReviewExportSchema,
+  ReviewSchema,
+  ReviewSourceTypeSchema,
+  ReviewStatusSchema,
+  ReviewSummarySchema,
+  UpdateReviewBody
+} from './schemas.ts'
 
-/**
- * 'local' snapshots staged + unstaged diffs together — the only source type
- * the "Start review" UI offers, since a review's comments apply to both
- * regardless of which tab they were left on (see ADR 0018). 'staged'/
- * 'unstaged' remain valid API inputs (kept for API callers that want one
- * side only) but have no UI entry point anymore. 'branch'/'commits' are
- * unrelated future-MVP source types (ADR 0017), unaffected by this.
- */
-export type ReviewSourceType =
-  | 'local'
-  | 'staged'
-  | 'unstaged'
-  | 'branch'
-  | 'commits'
+export type ReviewStatus = Static<typeof ReviewStatusSchema>
 
-export interface Review {
-  id: string
-  repositoryPath: string
-  baseRef: string | null
-  sourceType: ReviewSourceType
-  sourceRef: string | null
-  /** JSON-serialized DiffFile[] snapshot, frozen at creation time (see ADR 0003). */
-  snapshotData: string
-  status: ReviewStatus
-  /** User-provided or auto-generated ("source + date/time") name. Unique within `branch` (see ADR 0017). */
-  name: string | null
-  /** Git branch the repository was on when the review was created — a static snapshot, not recomputed (see ADR 0017). */
-  branch: string | null
-  createdAt: string
-  updatedAt: string
-}
+/** Meaning of each value: `ReviewSourceTypeSchema` in `./schemas.ts`. */
+export type ReviewSourceType = Static<typeof ReviewSourceTypeSchema>
 
-export interface CreateReviewRequest {
-  sourceType?: ReviewSourceType
-  sourceRef?: string
-  baseRef?: string
-  name?: string
-}
+/** A review without its snapshot: what `GET /api/reviews` lists (#56). */
+export type ReviewSummary = Static<typeof ReviewSummarySchema>
 
-export interface UpdateReviewRequest {
-  status?: ReviewStatus
-}
+export type Review = Static<typeof ReviewSchema>
+
+/** Body of `GET /api/reviews/:id/export?format=json`. */
+export type ReviewExport = Static<typeof ReviewExportSchema>
+
+export type CreateReviewRequest = Static<typeof CreateReviewBody>
+
+export type UpdateReviewRequest = Static<typeof UpdateReviewBody>

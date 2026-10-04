@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { Review, ReviewStatus } from '@/api/types'
+import type { ReviewStatus, ReviewSummary } from '@/api/types'
 
 // Keep status colors consistent across this component.
 const STATUS_COLOR: Record<ReviewStatus, string> = {
@@ -10,7 +10,7 @@ const STATUS_COLOR: Record<ReviewStatus, string> = {
   changes_requested: 'negative'
 }
 
-const props = defineProps<{ review: Review }>()
+const props = defineProps<{ review: ReviewSummary }>()
 defineEmits<{ (e: 'click'): void }>()
 
 const { t } = useI18n()

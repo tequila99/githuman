@@ -7,6 +7,8 @@ export interface ServeOptions {
   /** Optional so programmatic callers (tests, embedders) can omit it and get
    *  the same flag/env/default resolution `resolveReviewsDbPath` applies. */
   dbPrefix?: string
+  /** Serves Swagger UI at `/api/docs` (`--api-docs`). */
+  apiDocs?: boolean
 }
 
 const DEFAULT_PORT = 3847
@@ -71,7 +73,8 @@ export function parseServeArgs(argv: string[]): ServeOptions {
       host: { type: 'string' },
       open: { type: 'boolean', default: true },
       'no-open': { type: 'boolean', default: false },
-      'db-prefix': { type: 'string' }
+      'db-prefix': { type: 'string' },
+      'api-docs': { type: 'boolean', default: false }
     },
     strict: false
   })
@@ -87,5 +90,7 @@ export function parseServeArgs(argv: string[]): ServeOptions {
     typeof values['db-prefix'] === 'string' ? values['db-prefix'] : undefined
   )
 
-  return { port, host, open, dbPrefix }
+  const apiDocs = values['api-docs'] === true
+
+  return { port, host, open, dbPrefix, apiDocs }
 }

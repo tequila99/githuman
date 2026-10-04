@@ -1,6 +1,6 @@
 {
   "name": "@tequila99/githuman",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Review AI agent code changes before commit — Vue edition",
   "homepage": "https://github.com/tequila99/githuman#readme",
   "bugs": {
@@ -24,7 +24,7 @@
   },
   "scripts": {
     "dev": "quasar dev",
-    "dev:server": "node --watch-path=src/server --watch-path=src/cli --watch-path=src/shared src/cli/index.ts serve --no-open",
+    "dev:server": "node --watch-path=src/server --watch-path=src/cli --watch-path=src/shared src/cli/index.ts serve --no-open --api-docs",
     "clean": "rm -rf dist",
     "build": "pnpm run build:server && pnpm run build:web",
     "build:server": "tsc -p tsconfig.build.json && chmod +x dist/cli/index.js",

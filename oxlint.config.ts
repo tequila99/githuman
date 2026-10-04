@@ -97,6 +97,36 @@ export default defineConfig({
 
   overrides: [
     {
+      // The web bundle must not get TypeBox (#55). Web and shared code import
+      // schemas only as types; only `schemas.ts` files may load TypeBox.
+      files: ['src/web/**', 'src/shared/**'],
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            paths: [
+              {
+                name: '@sinclair/typebox',
+                allowTypeImports: true,
+                message: 'Load TypeBox only in shared/<domain>/schemas.ts.'
+              }
+            ],
+            patterns: [
+              {
+                regex: '(^|/)schemas(\\.ts)?$',
+                allowTypeImports: true,
+                message: 'Import schemas only as types outside schemas.ts.'
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      files: ['src/shared/**/schemas.ts'],
+      rules: { 'no-restricted-imports': 'off' }
+    },
+    {
       // node:test's `test(name, fn)` returns a Promise that Node itself
       // awaits internally via the test runner — not awaiting/void-ing it at
       // the call site is the standard, correct usage, not a bug. Casts on

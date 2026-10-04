@@ -1,9 +1,11 @@
-export interface RepositoryInfo {
-  name: string
-  branch: string
-  remote: string | null
-  path: string
-}
+import type { Static } from '@sinclair/typebox'
+import type {
+  FileContentResponseSchema,
+  FileTreeResponseSchema,
+  RepositoryInfoSchema
+} from './schemas.ts'
+
+export type RepositoryInfo = Static<typeof RepositoryInfoSchema>
 
 export interface FileTreeNode {
   name: string
@@ -16,17 +18,7 @@ export interface FileTreeNode {
   children?: FileTreeNode[] | undefined
 }
 
-export interface FileTreeResponse {
-  ref: string
-  files: string[]
-}
+export type FileTreeResponse = Static<typeof FileTreeResponseSchema>
 
 /** Response shape of `GET /api/git/file/*` (see src/server/routes/git.ts). */
-export interface FileContentResponse {
-  path: string
-  ref: string
-  content: string
-  lines: string[]
-  lineCount: number
-  isBinary: boolean
-}
+export type FileContentResponse = Static<typeof FileContentResponseSchema>

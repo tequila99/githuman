@@ -278,8 +278,9 @@ export class AgentSession {
    * Changes a session setting (model, mode, …) and returns the agent's new
    * full set of options. Validated against what the agent itself offered, so
    * an unknown id or value is rejected here rather than sent on.
+   * `value` is `unknown`: the route schema gives it no type (see ConfigBody).
    */
-  async setConfig(configId: string, value: string | boolean): Promise<void> {
+  async setConfig(configId: string, value: unknown): Promise<void> {
     const connection = this.#connection
     const sessionId = this.#acpSessionId
     if (this.#status !== 'ready' || !connection || !sessionId) {
@@ -294,9 +295,10 @@ export class AgentSession {
       throw new AgentConfigError(`Unknown setting "${configId}"`)
     }
     if (
-      option.type === 'boolean'
+      (typeof value !== 'boolean' && typeof value !== 'string') ||
+      (option.type === 'boolean'
         ? typeof value !== 'boolean'
-        : !option.options?.some(c => c.value === value)
+        : !option.options?.some(c => c.value === value))
     ) {
       throw new AgentConfigError(`Invalid value for "${option.name}"`)
     }

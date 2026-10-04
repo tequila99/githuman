@@ -5,93 +5,18 @@ import { join } from 'node:path'
 import { createTempGitRepo } from '../helpers/git-fixture.ts'
 import { buildApp } from '../../../src/server/app.ts'
 
-test('GET /api/diff/staged returns the current staged diff', async t => {
+test('GET /api/diff/staged and /api/diff/unstaged are gone (#55)', async t => {
   const fixture = await createTempGitRepo()
   t.after(fixture.cleanup)
-
-  writeFileSync(join(fixture.dir, 'a.txt'), 'v1\n')
-  await fixture.git.add('a.txt')
-  await fixture.git.commit('add a.txt')
-  writeFileSync(join(fixture.dir, 'a.txt'), 'v2\n')
-  await fixture.git.add('a.txt')
-
   const app = buildApp({ repositoryPath: fixture.dir })
   t.after(async () => {
     await app.close()
   })
 
-  const response = await app.inject({ method: 'GET', url: '/api/diff/staged' })
-
-  assert.equal(response.statusCode, 200)
-  const files = response.json()
-  assert.equal(files.length, 1)
-  assert.equal(files[0].newPath, 'a.txt')
-})
-
-test('GET /api/diff/staged returns [] when the repository has no commits and nothing staged', async t => {
-  const fixture = await createTempGitRepo()
-  t.after(fixture.cleanup)
-
-  const app = buildApp({ repositoryPath: fixture.dir })
-  t.after(async () => {
-    await app.close()
-  })
-
-  const response = await app.inject({ method: 'GET', url: '/api/diff/staged' })
-
-  assert.equal(response.statusCode, 200)
-  assert.deepEqual(response.json(), [])
-})
-
-test('GET /api/diff/unstaged returns unstaged tracked edits plus untracked new files', async t => {
-  const fixture = await createTempGitRepo()
-  t.after(fixture.cleanup)
-
-  writeFileSync(join(fixture.dir, 'a.txt'), 'v1\n')
-  await fixture.git.add('a.txt')
-  await fixture.git.commit('add a.txt')
-  writeFileSync(join(fixture.dir, 'a.txt'), 'v2\n')
-  writeFileSync(join(fixture.dir, 'new-file.txt'), 'brand new\n')
-
-  const app = buildApp({ repositoryPath: fixture.dir })
-  t.after(async () => {
-    await app.close()
-  })
-
-  const response = await app.inject({
-    method: 'GET',
-    url: '/api/diff/unstaged'
-  })
-
-  assert.equal(response.statusCode, 200)
-  const files = response.json()
-  const byPath = Object.fromEntries(
-    files.map((f: { newPath: string }) => [f.newPath, f])
-  )
-  assert.equal(byPath['a.txt'].status, 'modified')
-  assert.equal(byPath['new-file.txt'].status, 'added')
-})
-
-test('GET /api/diff/unstaged returns [] when there is nothing unstaged or untracked', async t => {
-  const fixture = await createTempGitRepo()
-  t.after(fixture.cleanup)
-
-  writeFileSync(join(fixture.dir, 'a.txt'), 'v1\n')
-  await fixture.git.add('a.txt')
-  await fixture.git.commit('add a.txt')
-
-  const app = buildApp({ repositoryPath: fixture.dir })
-  t.after(async () => {
-    await app.close()
-  })
-
-  const response = await app.inject({
-    method: 'GET',
-    url: '/api/diff/unstaged'
-  })
-
-  assert.equal(response.statusCode, 200)
-  assert.deepEqual(response.json(), [])
+  for (const url of ['/api/diff/staged', '/api/diff/unstaged']) {
+    const response = await app.inject({ method: 'GET', url })
+    assert.equal(response.statusCode, 404, url)
+  }
 })
 
 test('GET /api/diff/branch returns the diff against the given base', async t => {

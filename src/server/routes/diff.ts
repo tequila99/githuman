@@ -1,10 +1,8 @@
 import { BadRequestError } from '../errors/http.ts'
-import { Type, type Static } from '@sinclair/typebox'
+import { Type } from '@sinclair/typebox'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import type { FastifyInstance } from 'fastify'
 import {
-  getStagedDiff,
-  getUnstagedDiff,
   getBranchDiff,
   getCommitsDiff,
   getDiffSummaries,
@@ -12,30 +10,18 @@ import {
 } from '../services/diff.service.ts'
 import { resolveWithinRepo } from '../services/git.service.ts'
 import { errorMessage } from '../../shared/utils/error-message.ts'
+import {
+  BranchQuery,
+  CommitsQuery,
+  DiffFileSchema,
+  DiffFileSummarySchema,
+  FileQuery,
+  SourceParams
+} from '../../shared/diff/schemas.ts'
+import { ERROR_RESPONSES } from '../../shared/http/schemas.ts'
 
-const BranchQuery = Type.Object({
-  base: Type.String({ minLength: 1 })
-})
-
-const CommitsQuery = Type.Object({
-  from: Type.String({ minLength: 1 }),
-  to: Type.String({ minLength: 1 })
-})
-
-const SourceParams = Type.Object({
-  source: Type.Union([Type.Literal('staged'), Type.Literal('unstaged')])
-})
-
-const FileQuery = Type.Object({
-  path: Type.String({ minLength: 1 }),
-  oldPath: Type.Optional(Type.String({ minLength: 1 })),
-  status: Type.Union([
-    Type.Literal('added'),
-    Type.Literal('modified'),
-    Type.Literal('deleted'),
-    Type.Literal('renamed')
-  ])
-})
+// OpenAPI group of these routes.
+const TAGS = ['diff']
 
 export interface DiffRoutesOptions {
   repositoryPath: string
@@ -48,27 +34,39 @@ export async function diffRoutes(
   const { repositoryPath } = opts
   const typedApp = app.withTypeProvider<TypeBoxTypeProvider>()
 
-  typedApp.get('/api/diff/staged', async () => {
-    return getStagedDiff(repositoryPath)
-  })
-
-  typedApp.get('/api/diff/unstaged', async () => {
-    return getUnstagedDiff(repositoryPath)
-  })
-
   // Files without hunks, then one file with hunks: the list stays small (ADR 0033).
-  typedApp.get<{ Params: Static<typeof SourceParams> }>(
+  typedApp.get(
     '/api/diff/:source/files',
-    { schema: { params: SourceParams } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'List changed files without hunks',
+        params: SourceParams,
+        response: {
+          200: Type.Array(DiffFileSummarySchema, {
+            description: 'Changed files of the side.'
+          }),
+          ...ERROR_RESPONSES
+        }
+      }
+    },
     async request => getDiffSummaries(repositoryPath, request.params.source)
   )
 
-  typedApp.get<{
-    Params: Static<typeof SourceParams>
-    Querystring: Static<typeof FileQuery>
-  }>(
+  typedApp.get(
     '/api/diff/:source/file',
-    { schema: { params: SourceParams, querystring: FileQuery } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Get one changed file with hunks',
+        params: SourceParams,
+        querystring: FileQuery,
+        response: {
+          200: { ...DiffFileSchema, description: 'The file with its hunks.' },
+          ...ERROR_RESPONSES
+        }
+      }
+    },
     async request => {
       const { path, oldPath, status } = request.query
       // Only a path outside the repository is a bad request. Other errors stay server errors.
@@ -86,9 +84,22 @@ export async function diffRoutes(
     }
   )
 
-  typedApp.get<{ Querystring: Static<typeof BranchQuery> }>(
+  typedApp.get(
     '/api/diff/branch',
-    { schema: { querystring: BranchQuery } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Diff of HEAD against a ref',
+        description: 'No UI calls it yet. It is kept for branch reviews.',
+        querystring: BranchQuery,
+        response: {
+          200: Type.Array(DiffFileSchema, {
+            description: 'Changed files with hunks.'
+          }),
+          ...ERROR_RESPONSES
+        }
+      }
+    },
     async request => {
       try {
         return await getBranchDiff(repositoryPath, request.query.base)
@@ -99,9 +110,22 @@ export async function diffRoutes(
     }
   )
 
-  typedApp.get<{ Querystring: Static<typeof CommitsQuery> }>(
+  typedApp.get(
     '/api/diff/commits',
-    { schema: { querystring: CommitsQuery } },
+    {
+      schema: {
+        tags: TAGS,
+        summary: 'Diff between two refs',
+        description: 'No UI calls it yet. It is kept for commit reviews.',
+        querystring: CommitsQuery,
+        response: {
+          200: Type.Array(DiffFileSchema, {
+            description: 'Changed files with hunks.'
+          }),
+          ...ERROR_RESPONSES
+        }
+      }
+    },
     async request => {
       try {
         return await getCommitsDiff(

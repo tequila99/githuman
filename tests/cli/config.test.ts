@@ -13,8 +13,13 @@ test('parseServeArgs returns defaults when no flags given', () => {
     port: 3847,
     host: 'localhost',
     open: true,
-    dbPrefix: DEFAULT_DB_PREFIX
+    dbPrefix: DEFAULT_DB_PREFIX,
+    apiDocs: false
   })
+})
+
+test('parseServeArgs reads --api-docs', () => {
+  assert.equal(parseServeArgs(['--api-docs']).apiDocs, true)
 })
 
 test('parseServeArgs reads --db-prefix', () => {

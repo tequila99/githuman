@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify'
 import fastifyStatic from '@fastify/static'
+import fastifySwagger from '@fastify/swagger'
+import fastifySwaggerUi from '@fastify/swagger-ui'
 // @fastify/sse's published types declare an ESM default export that doesn't match
 // its actual CJS runtime shape, so the default import resolves to the whole module
 // namespace under NodeNext — cast it back to the plugin function type.
@@ -18,6 +20,8 @@ import { commentRoutes } from './routes/comments.ts'
 import { exportRoutes } from './routes/export.ts'
 import { eventRoutes } from './routes/events.ts'
 import { agentRoutes } from './routes/agent.ts'
+import { openApiRoutes } from './routes/openapi.ts'
+import { openApiOptions } from './config/openapi.ts'
 import { createSessionRegistry } from './services/agent/session-registry.ts'
 import type { AgentPreset } from '../shared/agents/types.ts'
 import { createTestDatabase } from './db/index.ts'
@@ -45,6 +49,11 @@ export interface BuildAppOptions {
    * only for a loopback bind. Tests pass a fake-agent preset.
    */
   agentPresets?: readonly AgentPreset[]
+  /**
+   * Serves Swagger UI at `/api/docs`. Off by default: `dev:server` and the
+   * `--api-docs` flag turn it on. `/api/openapi.json` is always served.
+   */
+  apiDocs?: boolean
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -54,6 +63,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const eventBus = options.eventBus ?? createEventBus()
 
   app.register(fastifySse)
+  // The spec collects routes as they are added, so it comes before them.
+  app.register(fastifySwagger, openApiOptions())
+  if (options.apiDocs) {
+    app.register(fastifySwaggerUi, { routePrefix: '/api/docs' })
+  }
+  app.register(openApiRoutes)
   app.register(healthRoutes)
   app.register(appInfoRoutes)
   app.register(diffRoutes, { repositoryPath })
