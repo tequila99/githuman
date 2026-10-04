@@ -102,6 +102,17 @@ export function findReviewById(db: DatabaseSync, id: string): Review | null {
   return row ? rowToReview(row) : null
 }
 
+/** Reads a review without its snapshot, for callers that only need its fields (#57). */
+export function findReviewSummaryById(
+  db: DatabaseSync,
+  id: string
+): ReviewSummary | null {
+  const row = db
+    .prepare(`SELECT ${SUMMARY_COLUMNS} FROM reviews WHERE id = ?`)
+    .get(id) as ReviewSummaryRow | undefined
+  return row ? rowToSummary(row) : null
+}
+
 export interface ListReviewsFilters {
   branch?: string
   search?: string
@@ -169,7 +180,7 @@ export function updateReviewStatus(
   db: DatabaseSync,
   id: string,
   status: ReviewStatus
-): Review | null {
+): ReviewSummary | null {
   const updatedAt = new Date().toISOString()
   const result = db
     .prepare('UPDATE reviews SET status = ?, updated_at = ? WHERE id = ?')
@@ -179,5 +190,5 @@ export function updateReviewStatus(
     return null
   }
 
-  return findReviewById(db, id)
+  return findReviewSummaryById(db, id)
 }

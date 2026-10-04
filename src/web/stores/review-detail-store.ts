@@ -1,9 +1,16 @@
-import { ref, computed } from 'vue'
+import { ref, computed, shallowRef } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { apiDelete, apiGet, apiPatch } from '@/api/client'
 import { decodeGitPath } from '@/utils/git-path'
-import type { Comment, DiffFile, Review, ReviewStatus } from '@/api/types'
+import type {
+  Comment,
+  DiffFile,
+  Review,
+  ReviewStatus,
+  ReviewSummary
+} from '@/api/types'
 import { errorMessage } from '@/utils/error-message'
+import { toReviewSummary } from '@/utils/review-summary'
 
 function decodeDiffFile(file: DiffFile): DiffFile {
   return {
@@ -14,16 +21,13 @@ function decodeDiffFile(file: DiffFile): DiffFile {
 }
 
 export const useReviewDetailStore = defineStore('review-detail', () => {
-  const review = ref<Review | null>(null)
+  const review = ref<ReviewSummary | null>(null)
+  // Parsed once per load and kept apart from `review`: a status change must not
+  // replace the file objects, or every card loses its mode and highlight cache (#57).
+  const files = shallowRef<DiffFile[]>([])
   const comments = ref<Comment[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
-
-  const files = computed<DiffFile[]>(() => {
-    if (!review.value) return []
-    const snapshot: DiffFile[] = JSON.parse(review.value.snapshotData)
-    return snapshot.map(decodeDiffFile)
-  })
 
   const commentsByFile = computed<Map<string, Comment[]>>(() => {
     const map = new Map<string, Comment[]>()
@@ -47,10 +51,13 @@ export const useReviewDetailStore = defineStore('review-detail', () => {
         apiGet<Review>(`/api/reviews/${reviewId}`),
         apiGet<Comment[]>(`/api/reviews/${reviewId}/comments`)
       ])
-      review.value = loadedReview
+      const snapshot: DiffFile[] = JSON.parse(loadedReview.snapshotData)
+      files.value = snapshot.map(decodeDiffFile)
+      review.value = toReviewSummary(loadedReview)
       comments.value = loadedComments
     } catch (err) {
       review.value = null
+      files.value = []
       comments.value = []
       error.value = errorMessage(err)
     } finally {
@@ -68,9 +75,10 @@ export const useReviewDetailStore = defineStore('review-detail', () => {
 
   async function setStatus(status: ReviewStatus) {
     if (!review.value) return
-    review.value = await apiPatch<Review>(`/api/reviews/${review.value.id}`, {
-      status
-    })
+    review.value = await apiPatch<ReviewSummary>(
+      `/api/reviews/${review.value.id}`,
+      { status }
+    )
   }
 
   async function editComment(id: string, content: string) {

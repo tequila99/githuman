@@ -222,7 +222,7 @@ export function setReviewStatus(
   id: string,
   status: ReviewStatus,
   eventBus?: EventBus
-): Review | null {
+): ReviewSummary | null {
   const updated = updateReviewStatusRepo(db, id, status)
   if (updated) {
     eventBus?.publish({ type: 'review:updated', reviewId: updated.id })
