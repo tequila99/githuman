@@ -34,7 +34,7 @@ export const AutoApproveBody = Type.Object(
       description: 'The server answers permission requests itself.'
     })
   },
-  { description: 'Auto-approve switch of one session (ADR 0024).' }
+  { description: 'Auto-approve switch of one session.' }
 )
 export const FileSearchQuery = Type.Object({
   q: Type.Optional(

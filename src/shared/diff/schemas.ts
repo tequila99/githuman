@@ -82,10 +82,10 @@ export const DiffFileSummarySchema = Type.Object(
     ...diffFileFields,
     signature: Type.String({
       description:
-        'Changes when the file content or its diff changes. Equal signatures mean equal hunks (ADR 0034).'
+        'Changes when the file content or its diff changes. Equal signatures mean equal hunks.'
     })
   },
-  { description: 'Diff of one file without hunks (ADR 0033).' }
+  { description: 'Diff of one file without hunks.' }
 )
 
 export const SourceParams = Type.Object({ source: DiffSourceNameSchema })

@@ -13,7 +13,7 @@ export function openApiOptions(): SwaggerOptions {
         title: 'githuman',
         version: getAppVersion(),
         description:
-          'HTTP API of the local githuman server. The API has no authentication (ADR 0008).'
+          'HTTP API of the local githuman server. The API has no authentication: the tool is local.'
       },
       tags: [
         { name: 'diff', description: 'Changes of the working tree and refs.' },
@@ -25,7 +25,7 @@ export function openApiOptions(): SwaggerOptions {
         {
           name: 'agent',
           description:
-            'Agent chats (ADR 0023). The server has these routes only on a loopback host, and each request needs a local Host and Origin.'
+            'Agent chats. The server has these routes only on a loopback host, and each request needs a local Host and Origin.'
         }
       ]
     }

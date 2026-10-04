@@ -127,7 +127,7 @@ export async function reviewRoutes(
         response: {
           200: {
             ...ReviewSummarySchema,
-            description: 'The changed review without its snapshot (#57).'
+            description: 'The changed review without its snapshot.'
           },
           ...ERROR_RESPONSES
         }

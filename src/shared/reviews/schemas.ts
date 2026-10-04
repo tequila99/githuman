@@ -54,13 +54,12 @@ const reviewSummaryFields = {
   name: Nullable(
     Type.String({
       description:
-        'User or generated name ("source + date/time"). Unique within branch (ADR 0017).'
+        'User or generated name ("source + date/time"). Unique within branch.'
     })
   ),
   branch: Nullable(
     Type.String({
-      description:
-        'Branch at creation. The server does not update it (ADR 0017).'
+      description: 'Branch at creation. The server does not update it.'
     })
   ),
   createdAt: Type.String({ description: 'Creation time, ISO 8601.' }),
@@ -68,14 +67,14 @@ const reviewSummaryFields = {
 }
 
 export const ReviewSummarySchema = Type.Object(reviewSummaryFields, {
-  description: 'A review without its snapshot (#56).'
+  description: 'A review without its snapshot.'
 })
 
 export const ReviewSchema = Type.Object(
   {
     ...reviewSummaryFields,
     snapshotData: Type.String({
-      description: 'JSON array of DiffFile, frozen at creation (ADR 0003).'
+      description: 'JSON array of DiffFile, frozen at creation.'
     })
   },
   { description: 'A review with its diff snapshot.' }

@@ -15,7 +15,7 @@ export const CommentSchema = Type.Object(
     lineNumberEnd: Nullable(
       Type.Integer({
         description:
-          'Last line of a selected range. Equals lineNumber for one line (ADR 0017).'
+          'Last line of a selected range. Equals lineNumber for one line.'
       })
     ),
     lineType: Nullable(DiffLineTypeSchema),
