@@ -1,5 +1,5 @@
 import { defineStore, acceptHMRUpdate } from 'pinia'
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useDiffStore, type DiffSource } from './diff-store'
 import { useFileTree, filterTree } from '@/composables/use-file-tree'
 import { useFileContent } from '@/composables/use-file-content'
@@ -10,6 +10,14 @@ import type { DiffFile, FileTreeNode } from '@/api/types'
 function hasRelevantChild(node: FileTreeNode): boolean {
   if (node.type === 'file') return node.isChanged
   return node.children?.some(hasRelevantChild) ?? false
+}
+
+/** Where the diff panel must scroll. `seq` makes a repeated click on the same file a new request. */
+export interface ScrollRequest {
+  path: string
+  /** Index in `diffFiles`, not in the filtered list: the right panel ignores the filter. */
+  index: number
+  seq: number
 }
 
 export const useFileExplorerStore = defineStore('file-explorer', () => {
@@ -36,6 +44,10 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
   const selectedPath = ref<string | null>(null)
   const expandedFolders = ref<Set<string>>(new Set())
   const expandedFiles = ref<Set<string>>(new Set())
+
+  const scrollRequest = ref<ScrollRequest | null>(null)
+  // The virtual list measures cards once. This counter tells the panel to measure again.
+  const layoutVersion = ref(0)
 
   const diffFiles = computed<DiffFile[]>(() =>
     source.value === 'staged' ? diffStore.stagedFiles : diffStore.unstagedFiles
@@ -89,6 +101,8 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
   watch(source, () => {
     selectedPath.value = null
     expandedFiles.value = new Set()
+    scrollRequest.value = null
+    layoutVersion.value++
   })
 
   watch(selectedPath, path => {
@@ -134,10 +148,12 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
 
   function expandAllFiles() {
     expandedFiles.value = new Set(diffFiles.value.map(pathOf))
+    layoutVersion.value++
   }
 
   function collapseAllFiles() {
     expandedFiles.value = new Set()
+    layoutVersion.value++
   }
 
   function selectFile(path: string) {
@@ -147,11 +163,14 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     if (!expandedFiles.value.has(path)) {
       expandedFiles.value = new Set(expandedFiles.value).add(path)
     }
-    void nextTick(() => {
-      document.getElementById(`diff-file-${path}`)?.scrollIntoView({
-        block: 'nearest'
-      })
-    })
+    // The card may be unmounted. The panel scrolls by index, so the store holds no DOM.
+    const index = diffFiles.value.findIndex(file => pathOf(file) === path)
+    if (index < 0) return
+    scrollRequest.value = {
+      path,
+      index,
+      seq: (scrollRequest.value?.seq ?? 0) + 1
+    }
   }
 
   // file-watcher.service.ts debounces this long before emitting `files:changed` after a git
@@ -212,6 +231,8 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     selectedPath,
     expandedFolders,
     expandedFiles,
+    scrollRequest,
+    layoutVersion,
     tree,
     treeInitialLoading,
     treeError,

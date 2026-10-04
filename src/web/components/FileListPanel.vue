@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
+import type { QScrollArea } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { useDiffStore } from '@/stores/diff-store'
 import { useFileExplorerStore } from '@/stores/file-explorer-store'
@@ -9,6 +11,9 @@ import SearchInput from './SearchInput.vue'
 import FileTreeNode from './FileTreeNode.vue'
 import FileListItem from './FileListItem.vue'
 import BrowseModeToggle from './BrowseModeToggle.vue'
+
+// Row height guess for the file list, in px. Quasar replaces it with measured heights.
+const ROW_HEIGHT_ESTIMATE = 32
 
 const { t } = useI18n()
 
@@ -32,6 +37,11 @@ const {
   filteredTree,
   totalTreeFiles
 } = storeToRefs(explorer)
+
+// `q-virtual-scroll` scrolls this element. A template ref is set after the children
+// mount, so the list renders once it is known.
+const scrollArea = ref<QScrollArea | null>(null)
+const scrollTarget = computed(() => scrollArea.value?.getScrollTarget() ?? null)
 </script>
 
 <template>
@@ -62,6 +72,7 @@ const {
   <q-separator />
 
   <q-scroll-area
+    ref="scrollArea"
     class="col file-list-panel__scroll"
     content-style="padding: 4px 0"
     content-active-style="padding: 4px 0"
@@ -102,14 +113,24 @@ const {
       >
         {{ filter ? t('browse.noMatchingFiles') : t('changes.emptyFileList') }}
       </p>
-      <FileListItem
-        v-for="file in filteredDiffFiles"
-        :key="pathOf(file)"
-        :file="file"
-        :selected="selectedPath === pathOf(file)"
-        :source="source"
-        @click="explorer.selectFile(pathOf(file))"
-      />
+      <!-- The key holds the source: with the same length Quasar would keep the old heights. -->
+      <q-virtual-scroll
+        v-if="scrollTarget"
+        :key="source"
+        :scroll-target="scrollTarget"
+        :items="filteredDiffFiles"
+        :virtual-scroll-item-size="ROW_HEIGHT_ESTIMATE"
+      >
+        <template #default="{ item: file }">
+          <FileListItem
+            :key="pathOf(file)"
+            :file="file"
+            :selected="selectedPath === pathOf(file)"
+            :source="source"
+            @click="explorer.selectFile(pathOf(file))"
+          />
+        </template>
+      </q-virtual-scroll>
     </template>
   </q-scroll-area>
 

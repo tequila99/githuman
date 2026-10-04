@@ -4,7 +4,7 @@ import type { Comment } from '@/api/types'
 import CommentItem from './CommentItem.vue'
 import CommentForm from './CommentForm.vue'
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     comments: Comment[]
     /** Shows the "new comment" form below existing threads when true. */
@@ -13,17 +13,21 @@ const props = withDefaults(
     readonly?: boolean
     /** Line(s) the pending comment is anchored to — forwarded to CommentForm's footer. */
     pendingLineRange?: { start: number; end: number } | null
+    /** Slot for the unsent text of the new-comment form in the card state store — see CommentForm. */
+    newDraftKey?: string | undefined
+    /** Sends a new comment; resolves on success — see CommentForm. */
+    submitNew?: (content: string) => Promise<void>
   }>(),
-  { pendingLineRange: null }
+  {
+    pendingLineRange: null,
+    submitNew: async () => {
+      throw new Error('No submit handler')
+    }
+  }
 )
 
 const emit = defineEmits<{
-  (e: 'submit-new', content: string): void
   (e: 'cancel-new'): void
-  (e: 'edit', id: string, content: string): void
-  (e: 'delete', id: string): void
-  (e: 'resolve', id: string): void
-  (e: 'unresolve', id: string): void
 }>()
 
 const { t } = useI18n()
@@ -36,16 +40,13 @@ const { t } = useI18n()
       :key="comment.id"
       :comment="comment"
       :readonly="readonly"
-      @edit="content => emit('edit', comment.id, content)"
-      @delete="emit('delete', comment.id)"
-      @resolve="emit('resolve', comment.id)"
-      @unresolve="emit('unresolve', comment.id)"
     />
     <CommentForm
       v-if="showNewForm && !readonly"
       :submit-label="t('reviews.comments.submit')"
       :line-range="pendingLineRange"
-      @submit="content => emit('submit-new', content)"
+      :draft-key="newDraftKey"
+      :send="submitNew"
       @cancel="emit('cancel-new')"
     />
   </div>

@@ -1,34 +1,20 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import type {
-  Comment,
-  DiffFile,
-  DiffFileStatus,
-  DiffLineType
-} from '@/api/types'
-import DiffHunkView from '@/components/DiffHunkView.vue'
-import DiffFileFullView from '@/components/DiffFileFullView.vue'
+import { computed, provide, watch } from 'vue'
+import type { Comment, DiffFile } from '@/api/types'
+import DiffFileCardBody from '@/components/DiffFileCardBody.vue'
+import DiffFileCardHeader from '@/components/DiffFileCardHeader.vue'
 import FileCardFrame from '@/components/FileCardFrame.vue'
-import HorizontalScrollBody from '@/components/HorizontalScrollBody.vue'
-import FileCardHeader from '@/components/FileCardHeader.vue'
-import FileHeaderMenu from '@/components/FileHeaderMenu.vue'
-import CommentCountBadge from '@/components/CommentCountBadge.vue'
-import {
-  highlightFile,
-  type HighlightedToken
-} from '@/composables/use-syntax-highlighting'
+import RowSegment from '@/components/RowSegment.vue'
+import { ROW_HEIGHT } from '@/utils/row-segments'
+import { CARD_STATE_KEY, useCardState } from '@/composables/use-card-state'
+import { useFileHighlight } from '@/composables/use-file-highlight'
+import { useHunksOnDemand } from '@/composables/use-hunks-on-demand'
 import { pathOf } from '@/utils/diff-file'
 import { isMarkdown } from '@/utils/file-wrap'
 import type { DiffSource } from '@/stores/diff-store'
 
-// Keep status colors consistent across this component.
-const STATUS_COLOR: Record<DiffFileStatus, string> = {
-  added: 'positive',
-  modified: 'warning',
-  deleted: 'negative',
-  renamed: 'purple'
-}
+// Room for hunk headers and context lines when only the counts are known.
+const HUNK_HEADERS_ESTIMATE = 80
 
 const props = withDefaults(
   defineProps<{
@@ -36,59 +22,101 @@ const props = withDefaults(
     expanded: boolean
     /** Active review for the current branch — enables gutter drag-select and comment threads (see ADR 0018). */
     commentable?: boolean
-    comments?: Comment[]
+    comments?: Comment[] | undefined
     /** Read-only review view (ReviewDetailPage.vue) — diff hunks show only commented lines instead of the full file diff. */
     commentsOnly?: boolean
     /** Whether existing comments show edit/delete/resolve controls — see DiffHunkView.vue. */
     commentsEditable?: boolean
     /** Which side of the diff this card shows — enables "add diff to agent chat" in its menu. */
     agentSource?: DiffSource | undefined
+    /**
+     * Key in the card state store (`cardStateKey`). Set, the card keeps its view mode, line
+     * selection and comment drafts there, so they survive an unmount by the virtual list.
+     * Unset, that state is local to the card.
+     */
+    stateKey?: string | undefined
+    /**
+     * The file with its hunks (ADR 0033). `file` is the list entry without hunks. Unset, `file`
+     * itself holds the hunks (review page).
+     */
+    detail?: DiffFile | undefined
+    /** False while the hunks in `detail` are missing or stale: the card asks for them. */
+    hunksLoaded?: boolean
+    hunksError?: string | undefined
     /** Hides the "show full file" toggle (e.g. in review views where only the diff makes sense). */
     noFullFile?: boolean
   }>(),
-  { commentable: false, comments: () => [], noFullFile: false }
+  {
+    commentable: false,
+    comments: () => [],
+    noFullFile: false,
+    hunksLoaded: true
+  }
 )
 
 const emit = defineEmits<{
   (e: 'toggle'): void
+  (e: 'load-hunks'): void
+  (e: 'retry-hunks'): void
+  /** The card closed: an old error must not stop the next attempt. */
+  (e: 'clear-hunks-error'): void
   (e: 'expand'): void
-  (
-    e: 'create-comment',
-    input: {
-      filePath: string
-      lineNumber: number
-      lineNumberEnd: number
-      lineType: DiffLineType | null
-      content: string
-    }
-  ): void
-  (e: 'edit-comment', id: string, content: string): void
-  (e: 'delete-comment', id: string): void
-  (e: 'resolve-comment', id: string): void
-  (e: 'unresolve-comment', id: string): void
 }>()
 
-const { t } = useI18n()
-
 const path = computed(() => pathOf(props.file))
+const fullFile = computed(() => props.detail ?? props.file)
 
-// Component instance is keyed by path (:key="pathOf(file)" in
-// DiffPanel.vue), so this initializes once per file — no watcher needed.
-const wrap = ref(isMarkdown(path.value))
+// `stateKey` does not change in a live card: a new source makes a new `q-virtual-scroll`
+// (its `:key`), and each slot is keyed by path. So the key is read once here.
+provide(CARD_STATE_KEY, props.stateKey)
 
-// A file's comments span both diff-mode and full-file-mode ranges — split
-// by lineType (null = full-file, see ADR 0017) so each view only sees its
-// own comments; otherwise a diff comment whose lineNumberEnd happens to
-// match a full-file line number (or vice versa) would bleed into the wrong
-// view.
-const diffComments = computed(() =>
-  (props.comments ?? []).filter(c => c.lineType !== null)
-)
-const fullFileComments = computed(() =>
-  (props.comments ?? []).filter(c => c.lineType === null)
+// Without a key (review page), the state stays in the card.
+const ownState = props.stateKey ? { key: props.stateKey } : { local: true }
+const wrap = useCardState('wrap', () => isMarkdown(path.value), ownState)
+const viewMode = useCardState<'diff' | 'full'>(
+  'viewMode',
+  () => 'diff',
+  ownState
 )
 
-const viewMode = ref<'diff' | 'full'>('diff')
+// The full view reads the file from disk and follows its edits (#39), so an edit keeps
+// the mode. A deleted file hides the toggle, so the mode goes back to the diff (ADR 0034).
+watch(
+  () => props.file.status,
+  status => {
+    if (status === 'deleted') viewMode.reset()
+  },
+  { immediate: true }
+)
+
+// Height guess for an open body that is not mounted yet. Expand all opens dozens of
+// cards at once, and only the ones near the window need real rows.
+const bodyHeightEstimate = computed(() =>
+  props.detail
+    ? props.detail.hunks.reduce((sum, hunk) => sum + hunk.lines.length + 1, 0) *
+      ROW_HEIGHT
+    : (props.file.additions + props.file.deletions) * ROW_HEIGHT +
+      HUNK_HEADERS_ESTIMATE
+)
+
+// Only the open body of this card needs its hunks.
+const { bodyMounted } = useHunksOnDemand({
+  expanded: () => props.expanded,
+  loaded: () => props.hunksLoaded,
+  error: () => props.hunksError,
+  version: () => props.file,
+  onNeeded: () => emit('load-hunks'),
+  onCollapsed: () => emit('clear-hunks-error')
+})
+
+// Older hunks stay on screen while new ones load, and also under an error banner.
+const hunksState = computed<'loading' | 'error' | 'ready'>(() => {
+  if (props.hunksLoaded) return 'ready'
+  if (props.hunksError) return 'error'
+  return props.detail ? 'ready' : 'loading'
+})
+
+const { hunkTokens } = useFileHighlight(fullFile, () => props.expanded)
 
 const showFullFile = computed({
   get: () => viewMode.value === 'full',
@@ -101,207 +129,52 @@ const showFullFile = computed({
     }
   }
 })
-
-const highlightedLines = ref<(HighlightedToken[] | null)[] | null>(null)
-
-// Guards against out-of-order highlight results if `file` changes again
-// before the previous highlightFile() call has resolved.
-let latestHighlightRequestId = 0
-
-watch(
-  () => props.file,
-  async file => {
-    const requestId = ++latestHighlightRequestId
-    viewMode.value = 'diff'
-    highlightedLines.value = null
-    const result = await highlightFile(file)
-    if (requestId === latestHighlightRequestId) {
-      highlightedLines.value = result
-    }
-  },
-  { immediate: true }
-)
-
-function tokensForHunk(
-  hunkIndex: number
-): (HighlightedToken[] | null)[] | null {
-  if (!highlightedLines.value) return null
-  const offset = props.file.hunks
-    .slice(0, hunkIndex)
-    .reduce((sum, hunk) => sum + hunk.lines.length, 0)
-  return highlightedLines.value.slice(
-    offset,
-    offset + props.file.hunks[hunkIndex]!.lines.length
-  )
-}
-
-function createDiffComment(input: {
-  lineNumber: number
-  lineNumberEnd: number
-  lineType: DiffLineType
-  content: string
-}) {
-  emit('create-comment', { filePath: path.value, ...input })
-}
-
-function createFullFileComment(input: {
-  lineNumber: number
-  lineNumberEnd: number
-  content: string
-}) {
-  emit('create-comment', { filePath: path.value, lineType: null, ...input })
-}
 </script>
 
 <template>
   <FileCardFrame :id="`diff-file-${path}`" class="diff-file-card">
     <template #header>
-      <q-item
-        v-ripple
-        clickable
-        dense
-        class="diff-file-card__header-item"
-        @click="emit('toggle')"
-      >
-        <FileCardHeader :path="path">
-          <template #leading>
-            <q-icon
-              name="chevron_right"
-              size="xs"
-              class="diff-file-card__chevron"
-              :class="{ 'diff-file-card__chevron--expanded': expanded }"
-            />
-          </template>
-
-          <template #badges>
-            <CommentCountBadge compact :count="comments.length" />
-          </template>
-
-          <div
-            v-if="!noFullFile && file.status !== 'deleted'"
-            class="diff-file-card__toggle-section"
-            @click.stop
-          >
-            <q-toggle
-              v-model="showFullFile"
-              left-label
-              dense
-              size="xs"
-              :label="t('changes.showFullFile')"
-            />
-          </div>
-
-          <div class="diff-file-card__status-section">
-            <q-badge :color="STATUS_COLOR[file.status]" outline rounded>
-              {{ t(`changes.fileStatus.${file.status}`) }}
-            </q-badge>
-          </div>
-
-          <span class="text-caption diff-file-card__stats">
-            <span class="text-positive">+{{ file.additions }}</span>
-            <span class="text-negative q-ml-xs">-{{ file.deletions }}</span>
-          </span>
-
-          <div @click.stop>
-            <FileHeaderMenu
-              v-model="wrap"
-              :path="path"
-              :diff-source="agentSource"
-            />
-          </div>
-        </FileCardHeader>
-      </q-item>
+      <DiffFileCardHeader
+        v-model:show-full-file="showFullFile"
+        v-model:wrap="wrap"
+        :path="path"
+        :status="file.status"
+        :additions="file.additions"
+        :deletions="file.deletions"
+        :expanded="expanded"
+        :comment-count="comments.length"
+        :full-file-toggle="!noFullFile && file.status !== 'deleted'"
+        :agent-source="agentSource"
+        @toggle="emit('toggle')"
+      />
     </template>
 
-    <HorizontalScrollBody
+    <RowSegment
       v-if="expanded"
-      class="diff-file-card__body"
-      :label="path"
+      :min-height="bodyHeightEstimate"
+      @change="mounted => (bodyMounted = mounted)"
     >
-      <DiffFileFullView
-        v-if="viewMode === 'full'"
+      <DiffFileCardBody
+        :file="fullFile"
         :path="path"
+        :view-mode="viewMode"
+        :wrap="wrap"
+        :hunk-tokens="hunkTokens"
+        :hunks-state="hunksState"
+        :hunks-error="hunksError"
+        :loading-height="bodyHeightEstimate"
         :commentable="commentable"
         :comments-editable="commentsEditable"
-        :comments="fullFileComments"
-        :wrap="wrap"
-        @create-comment="createFullFileComment"
-        @edit-comment="(id, content) => emit('edit-comment', id, content)"
-        @delete-comment="id => emit('delete-comment', id)"
-        @resolve-comment="id => emit('resolve-comment', id)"
-        @unresolve-comment="id => emit('unresolve-comment', id)"
+        :comments-only="commentsOnly"
+        :comments="comments"
+        @retry-hunks="emit('retry-hunks')"
       />
-      <template v-else>
-        <p
-          v-if="file.isBinary"
-          class="text-caption text-grey-6 q-pa-md q-mb-none"
-        >
-          {{ t('changes.binaryFile') }}
-        </p>
-        <p
-          v-else-if="file.hunks.length === 0"
-          class="text-caption text-grey-6 q-pa-md q-mb-none"
-        >
-          {{ t('changes.noTextChanges') }}
-        </p>
-        <DiffHunkView
-          v-for="(hunk, index) in file.hunks"
-          :key="index"
-          :hunk="hunk"
-          :line-tokens="tokensForHunk(index)"
-          :commentable="commentable"
-          :comments-editable="commentsEditable"
-          :comments="diffComments"
-          :comments-only="commentsOnly"
-          :wrap="wrap"
-          @create-comment="createDiffComment"
-          @edit-comment="(id, content) => emit('edit-comment', id, content)"
-          @delete-comment="id => emit('delete-comment', id)"
-          @resolve-comment="id => emit('resolve-comment', id)"
-          @unresolve-comment="id => emit('unresolve-comment', id)"
-        />
-      </template>
-    </HorizontalScrollBody>
+    </RowSegment>
   </FileCardFrame>
 </template>
 
 <style scoped>
 .diff-file-card {
   margin-bottom: 8px;
-}
-
-.diff-file-card__header-item {
-  padding: 0;
-  min-height: 0;
-}
-
-.diff-file-card__chevron {
-  transition: transform 0.15s ease;
-}
-
-.diff-file-card__chevron--expanded {
-  transform: rotate(90deg);
-}
-
-.diff-file-card__toggle-section {
-  display: flex;
-  justify-content: flex-end;
-  min-width: 160px;
-}
-
-.diff-file-card__status-section {
-  display: flex;
-  justify-content: flex-end;
-  min-width: 92px;
-}
-
-.diff-file-card__stats {
-  min-width: 76px;
-  display: inline-block;
-  text-align: right;
-}
-
-.diff-file-card__body {
-  border-top: 1px solid rgba(128, 128, 128, 0.2);
 }
 </style>

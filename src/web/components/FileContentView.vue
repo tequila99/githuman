@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, watchEffect } from 'vue'
 import type { Comment } from '@/api/types'
 import FileContentLine from './FileContentLine.vue'
+import RowSegment from './RowSegment.vue'
+import { groupRows, ROW_HEIGHT } from '@/utils/row-segments'
 import CommentThread from './CommentThread.vue'
+import { useCardState } from '@/composables/use-card-state'
+import { useCommentActions } from '@/composables/use-comment-actions'
+import { useLineDragSelect } from '@/composables/use-line-drag-select'
 import {
-  useLineDragSelect,
-  type DragSelection
-} from '@/composables/use-line-drag-select'
+  checkAnchor,
+  createAnchor,
+  type AnchorLine,
+  type CommentAnchor
+} from '@/utils/comment-anchor'
 import {
   highlightLines,
   type HighlightedToken
@@ -23,16 +30,7 @@ const props = defineProps<{
   wrap?: boolean
 }>()
 
-const emit = defineEmits<{
-  (
-    e: 'create-comment',
-    input: { lineNumber: number; lineNumberEnd: number; content: string }
-  ): void
-  (e: 'edit-comment', id: string, content: string): void
-  (e: 'delete-comment', id: string): void
-  (e: 'resolve-comment', id: string): void
-  (e: 'unresolve-comment', id: string): void
-}>()
+const actions = useCommentActions()
 
 const highlightedLines = ref<(HighlightedToken[] | null)[] | null>(null)
 
@@ -58,18 +56,42 @@ watch(
 // Full-file mode has a single gutter column, unlike the two-column diff
 // gutter — the drag-select composable's "column" concept is unused here
 // (always 'full'), only the range math matters (see ADR 0017 AC14).
-const pending = ref<DragSelection | null>(null)
+// The anchor keeps the text of the selected lines: an edit on disk must not move the
+// form next to other text (see `comment-anchor.ts`).
+const pending = useCardState<CommentAnchor | null>('pending:full', () => null)
+
+function anchorLines(): AnchorLine[] {
+  return props.lines.map((text, index) => ({ key: index + 1, text }))
+}
+
+const anchorState = computed(() =>
+  pending.value ? checkAnchor(pending.value, anchorLines()) : 'absent'
+)
+
+// The text of the form stays in its own slot and comes back with the next selection.
+watchEffect(() => {
+  if (anchorState.value === 'stale') pending.reset()
+})
+
+const ownAnchor = computed(() =>
+  anchorState.value === 'valid' ? pending.value : null
+)
 
 const drag = useLineDragSelect(selection => {
-  pending.value = selection
+  pending.value = createAnchor(
+    selection.column,
+    selection.startKey,
+    selection.endKey,
+    anchorLines()
+  )
 })
 
 function isSelected(lineNumber: number): boolean {
   if (!props.commentable) return false
   if (
-    pending.value &&
-    lineNumber >= pending.value.startKey &&
-    lineNumber <= pending.value.endKey
+    ownAnchor.value &&
+    lineNumber >= ownAnchor.value.startKey &&
+    lineNumber <= ownAnchor.value.endKey
   ) {
     return true
   }
@@ -94,9 +116,10 @@ const rows = computed(() => {
     comments: byLine.get(index + 1) ?? []
   }))
 })
+const grouping = computed(() => groupRows(rows.value))
 const pendingLineRange = computed(() =>
-  pending.value
-    ? { start: pending.value.startKey, end: pending.value.endKey }
+  ownAnchor.value
+    ? { start: ownAnchor.value.startKey, end: ownAnchor.value.endKey }
     : null
 )
 
@@ -110,51 +133,67 @@ function handleGutterMouseenter(lineNumber: number) {
   drag.enter('full', lineNumber)
 }
 
-function submitNewComment(content: string) {
-  if (!pending.value) return
-  emit('create-comment', {
-    lineNumber: pending.value.startKey,
-    lineNumberEnd: pending.value.endKey,
+// The anchor goes only after success: a failed send keeps the form where it was.
+async function submitNewComment(content: string) {
+  const anchor = ownAnchor.value
+  if (!anchor) return
+  // `lineType: null` marks a full-file comment (ADR 0017).
+  await actions.create({
+    filePath: props.path,
+    lineType: null,
+    lineNumber: anchor.startKey,
+    lineNumberEnd: anchor.endKey,
     content
   })
-  pending.value = null
+  pending.reset()
 }
 
 function cancelNewComment() {
-  pending.value = null
+  pending.reset()
 }
 </script>
 
 <template>
   <div class="file-content-view">
-    <template
-      v-for="{ line, index, lineNumber, comments } in rows"
-      :key="index"
+    <component
+      :is="grouping.segmented ? RowSegment : 'div'"
+      v-for="group in grouping.groups"
+      :key="group.start"
+      v-bind="
+        grouping.segmented
+          ? {
+              minHeight: group.rows.length * ROW_HEIGHT,
+              keep: group.rows.some(row => ownAnchor?.endKey === row.lineNumber)
+            }
+          : {}
+      "
     >
-      <FileContentLine
-        :line-number="lineNumber"
-        :content="line"
-        :tokens="highlightedLines?.[index]"
-        :selectable="commentable"
-        :selected="isSelected(lineNumber)"
-        :wrap="wrap"
-        @gutter-mousedown="handleGutterMousedown(lineNumber)"
-        @gutter-mouseenter="handleGutterMouseenter(lineNumber)"
-      />
-      <CommentThread
-        v-if="comments.length > 0 || pending?.endKey === lineNumber"
-        :comments="comments"
-        :readonly="!commentsEditable"
-        :show-new-form="pending?.endKey === lineNumber"
-        :pending-line-range="pendingLineRange"
-        @submit-new="submitNewComment"
-        @cancel-new="cancelNewComment"
-        @edit="(id, content) => emit('edit-comment', id, content)"
-        @delete="id => emit('delete-comment', id)"
-        @resolve="id => emit('resolve-comment', id)"
-        @unresolve="id => emit('unresolve-comment', id)"
-      />
-    </template>
+      <template
+        v-for="{ line, index, lineNumber, comments } in group.rows"
+        :key="index"
+      >
+        <FileContentLine
+          :line-number="lineNumber"
+          :content="line"
+          :tokens="highlightedLines?.[index]"
+          :selectable="commentable"
+          :selected="isSelected(lineNumber)"
+          :wrap="wrap"
+          @gutter-mousedown="handleGutterMousedown(lineNumber)"
+          @gutter-mouseenter="handleGutterMouseenter(lineNumber)"
+        />
+        <CommentThread
+          v-if="comments.length > 0 || ownAnchor?.endKey === lineNumber"
+          :comments="comments"
+          :readonly="!commentsEditable"
+          :show-new-form="ownAnchor?.endKey === lineNumber"
+          :pending-line-range="pendingLineRange"
+          new-draft-key="new:full"
+          :submit-new="submitNewComment"
+          @cancel-new="cancelNewComment"
+        />
+      </template>
+    </component>
   </div>
 </template>
 

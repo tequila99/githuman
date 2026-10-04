@@ -2,6 +2,8 @@ import { test, beforeEach, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { setActivePinia, createPinia } from 'pinia'
 import { useFileExplorerStore } from '@/stores/file-explorer-store'
+import { useDiffStore } from '@/stores/diff-store'
+import type { DiffFile } from '@/api/types'
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -298,4 +300,64 @@ test("browse: re-entering doesn't show last session's tree error (#43)", async (
   assert.equal(explorer.treeInitialLoading, true, 'spinner, not the old tree')
   await explorer.refresh()
   assert.equal(explorer.totalTreeFiles, 1)
+})
+
+function fileAt(path: string): DiffFile {
+  return {
+    oldPath: path,
+    newPath: path,
+    status: 'modified',
+    additions: 1,
+    deletions: 0,
+    isBinary: false,
+    hunks: []
+  }
+}
+
+test('selectFile() asks the panel to scroll by index in the unfiltered list', () => {
+  const explorer = useFileExplorerStore()
+  useDiffStore().stagedFiles = ['a.ts', 'b.ts', 'c.ts'].map(fileAt)
+  explorer.filter = 'c.ts'
+
+  explorer.selectFile('c.ts')
+
+  assert.deepEqual(explorer.scrollRequest, { path: 'c.ts', index: 2, seq: 1 })
+})
+
+test('selectFile() on the same file again makes a new scroll request', () => {
+  const explorer = useFileExplorerStore()
+  useDiffStore().stagedFiles = ['a.ts', 'b.ts'].map(fileAt)
+
+  explorer.selectFile('a.ts')
+  explorer.selectFile('a.ts')
+
+  assert.equal(explorer.scrollRequest?.seq, 2)
+})
+
+test('toggling a card does not ask the panel to scroll', () => {
+  const explorer = useFileExplorerStore()
+  useDiffStore().stagedFiles = ['a.ts'].map(fileAt)
+
+  explorer.handleCardToggle('a.ts')
+
+  assert.equal(explorer.scrollRequest, null)
+})
+
+test('selectFile() for a path outside the diff makes no scroll request', () => {
+  const explorer = useFileExplorerStore()
+  useDiffStore().stagedFiles = ['a.ts'].map(fileAt)
+
+  explorer.selectFile('gone.ts')
+
+  assert.equal(explorer.scrollRequest, null)
+})
+
+test('expand all, collapse all and a source change bump the layout version', () => {
+  const explorer = useFileExplorerStore()
+  const before = explorer.layoutVersion
+
+  explorer.expandAllFiles()
+  explorer.collapseAllFiles()
+
+  assert.equal(explorer.layoutVersion, before + 2)
 })

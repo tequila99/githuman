@@ -30,3 +30,18 @@ export interface DiffFile {
   isBinary: boolean
   hunks: DiffHunk[]
 }
+
+/** Diff source behind `/api/diff/:source/files` and `/api/diff/:source/file`. */
+export type DiffSourceName = 'staged' | 'unstaged'
+
+/** A diff file without hunks (ADR 0033). */
+export interface DiffFileSummary {
+  oldPath: string
+  newPath: string
+  status: DiffFileStatus
+  additions: number
+  deletions: number
+  isBinary: boolean
+  /** Changes whenever the file content or its diff changes. Equal signatures mean equal hunks. */
+  signature: string
+}
