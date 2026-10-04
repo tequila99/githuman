@@ -278,8 +278,8 @@ export class AgentSession {
    * Changes a session setting (model, mode, …) and returns the agent's new
    * full set of options. Validated against what the agent itself offered, so
    * an unknown id or value is rejected here rather than sent on.
+   * `value` is `unknown`: the route schema gives it no type (see ConfigBody).
    */
-  /** `value` is `unknown`: the route schema gives it no type (see ConfigBody). */
   async setConfig(configId: string, value: unknown): Promise<void> {
     const connection = this.#connection
     const sessionId = this.#acpSessionId
