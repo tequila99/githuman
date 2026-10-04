@@ -170,6 +170,8 @@ test('PATCH /api/reviews/:id updates the status and persists it', async t => {
   })
   assert.equal(patched.statusCode, 200)
   assert.equal(patched.json().status, 'approved')
+  // The status change sends no snapshot back (#57).
+  assert.equal('snapshotData' in patched.json(), false)
 
   const refetched = await app.inject({
     method: 'GET',

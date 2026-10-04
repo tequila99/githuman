@@ -62,7 +62,9 @@ export const useActiveReviewStore = defineStore('active-review', () => {
 
   async function setStatus(status: ReviewStatus) {
     if (!activeReview.value) return
-    await apiPatch<Review>(`/api/reviews/${activeReview.value.id}`, { status })
+    await apiPatch<ReviewSummary>(`/api/reviews/${activeReview.value.id}`, {
+      status
+    })
     // Only in_progress reviews qualify as "active" — after e.g. approving,
     // the patched review must disappear from the Changes page, so recompute
     // the active review from scratch instead of keeping the patched one.

@@ -83,6 +83,8 @@ test('updateStatus updates status and updatedAt, and returns the updated review'
 
   assert.equal(updated?.status, 'approved')
   assert.ok(updated !== null && updated.updatedAt >= review.updatedAt)
+  // A status change sends no snapshot back (#57).
+  assert.equal(updated !== null && 'snapshotData' in updated, false)
 
   const refetched = findReviewById(db, review.id)
   assert.equal(refetched?.status, 'approved')
