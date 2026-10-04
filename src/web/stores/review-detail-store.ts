@@ -22,8 +22,9 @@ function decodeDiffFile(file: DiffFile): DiffFile {
 
 export const useReviewDetailStore = defineStore('review-detail', () => {
   const review = ref<ReviewSummary | null>(null)
-  // Parsed once per load and kept apart from `review`: a status change must not
-  // replace the file objects, or every card loses its mode and highlight cache (#57).
+  // The store parses the snapshot once for each load and keeps it apart from
+  // `review`. A status change then keeps the file objects, so the cards keep
+  // their highlight cache and loaded hunks (#57).
   const files = shallowRef<DiffFile[]>([])
   const comments = ref<Comment[]>([])
   const loading = ref(false)
@@ -75,10 +76,13 @@ export const useReviewDetailStore = defineStore('review-detail', () => {
 
   async function setStatus(status: ReviewStatus) {
     if (!review.value) return
-    review.value = await apiPatch<ReviewSummary>(
-      `/api/reviews/${review.value.id}`,
-      { status }
-    )
+    const id = review.value.id
+    const updated = await apiPatch<ReviewSummary>(`/api/reviews/${id}`, {
+      status
+    })
+    // The page can show another review when the answer comes. Then the answer
+    // must not replace that review, because `files` belong to it.
+    if (review.value?.id === id) review.value = updated
   }
 
   async function editComment(id: string, content: string) {
