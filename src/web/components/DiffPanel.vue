@@ -7,6 +7,7 @@ import { useFileExplorerStore } from '@/stores/file-explorer-store'
 import { useActiveReviewStore } from '@/stores/active-review-store'
 import { useDiffStore } from '@/stores/diff-store'
 import { pathOf } from '@/utils/diff-file'
+import { equalArrays } from '@/utils/equal-arrays'
 import { SCROLL_ROOT_KEY } from '@/composables/use-scroll-root'
 import { provideCommentActions } from '@/composables/use-comment-actions'
 import DiffStatusBar from './DiffStatusBar.vue'
@@ -84,12 +85,7 @@ watch(
 // content only does not reset: a reset drops every measured height, and an agent edits
 // often. Quasar measures a mounted card again when the list scrolls.
 watch(diffFiles, async (files, previous) => {
-  if (
-    files.length === previous.length &&
-    files.every((file, i) => pathOf(file) === pathOf(previous[i]!))
-  ) {
-    return
-  }
+  if (equalArrays(files, previous, (x, y) => pathOf(x) === pathOf(y))) return
   await nextTick()
   virtualScroll.value?.reset()
 })

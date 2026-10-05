@@ -6,7 +6,7 @@ import RowSegment from '@/components/RowSegment.vue'
 import { groupRows, ROW_HEIGHT } from '@/utils/row-segments'
 import CommentThread from './CommentThread.vue'
 import { useLineDragSelect } from '@/composables/use-line-drag-select'
-import type { HighlightedToken } from '@/composables/use-syntax-highlighting'
+import type { TokensByLine } from '@/composables/use-syntax-highlighting'
 import { useCardState } from '@/composables/use-card-state'
 import { useCommentActions } from '@/composables/use-comment-actions'
 import {
@@ -20,7 +20,7 @@ const props = defineProps<{
   /** File the hunk belongs to: a new comment is created for it. */
   path: string
   hunk: DiffHunk
-  lineTokens?: (HighlightedToken[] | null)[] | null
+  lineTokens?: TokensByLine | null
   /** Active review for the current branch — enables gutter drag-select and comment threads (see ADR 0018). */
   commentable?: boolean
   comments?: Comment[]

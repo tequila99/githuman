@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Comment, DiffFile } from '@/api/types'
-import type { HighlightedToken } from '@/composables/use-syntax-highlighting'
+import type { TokensByLine } from '@/composables/use-syntax-highlighting'
 import DiffHunkView from '@/components/DiffHunkView.vue'
 import DiffFileFullView from '@/components/DiffFileFullView.vue'
 import HorizontalScrollBody from '@/components/HorizontalScrollBody.vue'
@@ -16,13 +16,15 @@ const props = withDefaults(
     viewMode: 'diff' | 'full'
     wrap: boolean
     /** One token slice per hunk, or null until the tokens arrive. */
-    hunkTokens: (HighlightedToken[] | null)[][] | null
+    hunkTokens: TokensByLine[] | null
     /**
      * `loading`: no hunks yet. `error`: the last request failed; `file` may still hold
      * older hunks. `ready`: `file.hunks` is the diff, and empty means no text changes.
      */
     hunksState?: 'loading' | 'error' | 'ready'
     hunksError?: string | undefined
+    /** The first tokens are on the way: show the spinner, not code that turns colored later. */
+    holdForTokens?: boolean
     /** Height of the loading block in px, so the card does not jump when the hunks arrive. */
     loadingHeight?: number
     commentable?: boolean
@@ -36,6 +38,7 @@ const props = withDefaults(
     comments: () => [],
     hunksState: 'ready',
     hunksError: undefined,
+    holdForTokens: false,
     loadingHeight: 0
   }
 )
@@ -77,7 +80,7 @@ const fullFileComments = computed(() =>
         {{ t('changes.binaryFile') }}
       </p>
       <div
-        v-else-if="hunksState === 'loading'"
+        v-else-if="hunksState === 'loading' || holdForTokens"
         class="diff-file-card__loading row flex-center"
         :style="{ minHeight: `${loadingHeight}px` }"
       >
@@ -103,7 +106,7 @@ const fullFileComments = computed(() =>
         </p>
       </template>
       <DiffHunkView
-        v-for="(hunk, index) in file.hunks"
+        v-for="(hunk, index) in holdForTokens ? [] : file.hunks"
         :key="`${hunk.oldStart}:${hunk.newStart}`"
         :path="path"
         :hunk="hunk"

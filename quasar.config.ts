@@ -97,6 +97,9 @@ export default defineConfig(ctx => {
       extendViteConf(viteConf) {
         // CSP defaults font-src to 'self': keep small font subsets as files,
         // rather than Vite's default data: URLs, without widening the policy.
+        // The highlight worker loads Shiki grammars with dynamic imports,
+        // and the default `iife` worker format cannot split such code.
+        viteConf.worker = { ...viteConf.worker, format: 'es' }
         viteConf.build ??= {}
         viteConf.build.assetsInlineLimit = filePath =>
           /\.(woff2?|ttf|otf)$/i.test(filePath) ? false : undefined

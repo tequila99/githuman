@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import type { HighlightedToken } from '@/composables/use-syntax-highlighting'
+import type {
+  HighlightedToken,
+  LineTokens
+} from '@/composables/use-syntax-highlighting'
 
 defineProps<{
   lineNumber: number
   content: string
-  tokens?: HighlightedToken[] | null | undefined
+  tokens?: LineTokens | null | undefined
   selected?: boolean
   selectable?: boolean
   wrap?: boolean

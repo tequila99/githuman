@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, watchEffect } from 'vue'
+import { computed, watchEffect } from 'vue'
 import type { Comment } from '@/api/types'
 import FileContentLine from './FileContentLine.vue'
 import RowSegment from './RowSegment.vue'
@@ -14,10 +14,7 @@ import {
   type AnchorLine,
   type CommentAnchor
 } from '@/utils/comment-anchor'
-import {
-  highlightLines,
-  type HighlightedToken
-} from '@/composables/use-syntax-highlighting'
+import { useLineTokens } from '@/composables/use-line-tokens'
 
 const props = defineProps<{
   path: string
@@ -32,26 +29,13 @@ const props = defineProps<{
 
 const actions = useCommentActions()
 
-const highlightedLines = ref<(HighlightedToken[] | null)[] | null>(null)
-
-// Guards against out-of-order highlight results if path/lines change again
-// before the previous highlightLines() call has resolved.
-let latestHighlightRequestId = 0
-
-watch(
-  () => [props.path, props.lines] as const,
-  async ([path, lines]) => {
-    const requestId = ++latestHighlightRequestId
-    highlightedLines.value = null
-    if (lines.length > 0) {
-      const result = await highlightLines(path, lines)
-      if (requestId === latestHighlightRequestId) {
-        highlightedLines.value = result
-      }
-    }
-  },
-  { immediate: true }
-)
+// Mounted only while shown: an unmount stops the tokenizing. `useFileContent` keeps the
+// same array for the same text, so the array is the cache key of the tokens.
+const { tokens: highlightedLines, holdForTokens } = useLineTokens(() => {
+  const lines = props.lines
+  if (lines.length === 0) return null
+  return { key: lines, path: props.path, lines: () => lines }
+}, true)
 
 // Full-file mode has a single gutter column, unlike the two-column diff
 // gutter — the drag-select composable's "column" concept is unused here
@@ -154,7 +138,15 @@ function cancelNewComment() {
 </script>
 
 <template>
-  <div class="file-content-view">
+  <!-- The height of all rows, so the view does not jump when the rows come. -->
+  <div
+    v-if="holdForTokens"
+    class="row justify-center items-start q-pa-lg"
+    :style="{ minHeight: `${lines.length * ROW_HEIGHT}px` }"
+  >
+    <q-spinner color="primary" size="2em" />
+  </div>
+  <div v-else class="file-content-view">
     <component
       :is="grouping.segmented ? RowSegment : 'div'"
       v-for="group in grouping.groups"

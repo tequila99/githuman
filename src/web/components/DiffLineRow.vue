@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { DiffLine } from '@/api/types'
-import type { HighlightedToken } from '@/composables/use-syntax-highlighting'
+import type {
+  HighlightedToken,
+  LineTokens
+} from '@/composables/use-syntax-highlighting'
 
 const props = defineProps<{
   line: DiffLine
-  tokens?: HighlightedToken[] | null | undefined
+  tokens?: LineTokens | null | undefined
   /** Review-mode gutter selection highlight — omitted (default false) outside a review's diff view. */
   oldSelected?: boolean
   newSelected?: boolean

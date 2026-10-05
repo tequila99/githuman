@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { effectScope, nextTick, ref } from 'vue'
+import { effectScope, nextTick, ref, watch } from 'vue'
 import { useFileHighlight } from '@/composables/use-file-highlight'
 import {
   cachedHighlight,
@@ -48,7 +48,7 @@ async function waitFor(condition: () => boolean) {
 }
 
 describe('useFileHighlight', () => {
-  it('cuts the tokens into one slice per hunk', async () => {
+  it('cuts the tokens into one entry per hunk', async () => {
     const file = ref(makeFile('a.ts', [2, 3]))
     const scope = effectScope()
     const { hunkTokens } = scope.run(() => useFileHighlight(file, true))!
@@ -57,7 +57,7 @@ describe('useFileHighlight', () => {
     await waitFor(() => hunkTokens.value !== null)
 
     assert.deepEqual(
-      hunkTokens.value!.map(slice => slice.length),
+      hunkTokens.value!.map(hunk => hunk.length),
       [2, 3]
     )
     scope.stop()
@@ -110,7 +110,7 @@ describe('useFileHighlight', () => {
     await waitFor(() => hunkTokens.value !== null)
 
     assert.deepEqual(
-      hunkTokens.value!.map(slice => slice.length),
+      hunkTokens.value!.map(hunk => hunk.length),
       [2, 2]
     )
     scope.stop()
@@ -159,5 +159,96 @@ describe('useFileHighlight', () => {
 
     await drainQueue()
     assert.equal(cachedHighlight(file), undefined)
+  })
+
+  it('holds the card until the first tokens arrive, then lets go', async () => {
+    const file = makeFile('hold.ts', [2])
+    const scope = effectScope()
+    const { hunkTokens, holdForTokens } = scope.run(() =>
+      useFileHighlight(() => file, true)
+    )!
+
+    assert.equal(holdForTokens.value, true)
+    await waitFor(() => hunkTokens.value !== null)
+    assert.equal(holdForTokens.value, false)
+    scope.stop()
+  })
+
+  it('does not hold a closed card, a plain file or an empty diff', () => {
+    const scope = effectScope()
+    const closed = scope.run(() =>
+      useFileHighlight(() => makeFile('closed.ts', [1]), false)
+    )!
+    const plain = scope.run(() =>
+      useFileHighlight(() => makeFile('notes.unknown', [1]), true)
+    )!
+    const empty = scope.run(() =>
+      useFileHighlight(() => makeFile('empty.ts', []), true)
+    )!
+
+    assert.equal(closed.holdForTokens.value, false)
+    assert.equal(plain.holdForTokens.value, false)
+    assert.equal(empty.holdForTokens.value, false)
+    scope.stop()
+  })
+
+  it('shows the first slice at once and the rest later', async () => {
+    // 250 lines make three slices of 100, 100 and 50 lines.
+    const file = makeFile('slices.ts', [250])
+    const scope = effectScope()
+    const lengths: number[] = []
+    const { hunkTokens, holdForTokens } = scope.run(() => {
+      const result = useFileHighlight(() => file, true)
+      watch(
+        result.hunkTokens,
+        value => {
+          if (value) lengths.push(value[0]!.length)
+        },
+        { flush: 'sync' }
+      )
+      return result
+    })!
+
+    await waitFor(() => hunkTokens.value !== null)
+    // The hold ends with the first slice, before the whole file is done.
+    assert.equal(holdForTokens.value, false)
+    await waitFor(() => lengths.at(-1) === 250)
+    assert.equal(lengths[0], 100)
+    assert.equal(
+      hunkTokens.value![0]!.every(tokens => tokens !== undefined),
+      true
+    )
+    scope.stop()
+  })
+
+  it('does not hold again when a new version of the file arrives', async () => {
+    const file = ref(makeFile('again.ts', [1]))
+    const scope = effectScope()
+    const { hunkTokens, holdForTokens } = scope.run(() =>
+      useFileHighlight(file, true)
+    )!
+    await waitFor(() => hunkTokens.value !== null)
+
+    file.value = makeFile('again.ts', [2])
+    await nextTick()
+    assert.equal(holdForTokens.value, false)
+    scope.stop()
+  })
+
+  it('gives tokens for the hunk lines only, not for the preamble', async () => {
+    const file = makeFile('pre.ts', [2, 3])
+    file.hunks[1]!.preamble = ['/* open comment', 'still the comment']
+    const scope = effectScope()
+    const { hunkTokens } = scope.run(() => useFileHighlight(() => file, true))!
+
+    await waitFor(() => hunkTokens.value?.[1]?.length === 3)
+    assert.deepEqual(
+      hunkTokens.value!.map(slice => slice.length),
+      [2, 3]
+    )
+    // The preamble opens a comment, so `const` in the second hunk is part of it.
+    const second = hunkTokens.value![1]![0]!
+    assert.ok(second.every(token => token.colorLight === second[0]!.colorLight))
+    scope.stop()
   })
 })
