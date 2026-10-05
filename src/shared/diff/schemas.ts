@@ -49,7 +49,13 @@ export const DiffHunkSchema = Type.Object(
     newLines: Type.Integer({ description: 'Line count in the new file.' }),
     lines: Type.Array(DiffLineSchema, {
       description: 'Lines of the hunk in file order.'
-    })
+    }),
+    preamble: Type.Optional(
+      Type.Array(Type.String(), {
+        description:
+          'Unchanged lines above the hunk, for syntax highlighting only. Bounded in count and size. In a Vue file the opening tag of the enclosing block comes first. Absent when there are none.'
+      })
+    )
   },
   { description: 'One hunk of a file diff.' }
 )

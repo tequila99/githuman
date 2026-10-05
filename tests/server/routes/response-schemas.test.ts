@@ -52,6 +52,9 @@ async function setup(t: TestContext) {
   writeFileSync(join(dir, 'gone.txt'), 'bye\n')
   writeFileSync(join(dir, 'old-name.txt'), 'same\ncontent\nhere\n')
   writeFileSync(join(dir, 'bin.dat'), Buffer.from([0, 1, 2, 3]))
+  // A change far from the top gives a hunk a preamble.
+  const longLines = Array.from({ length: 12 }, (_, i) => `l${i + 1}`)
+  writeFileSync(join(dir, 'long.txt'), `${longLines.join('\n')}\n`)
   await git.add('.')
   await git.commit('base')
   const base = (await git.revparse(['HEAD'])).trim()
@@ -60,6 +63,8 @@ async function setup(t: TestContext) {
   rmSync(join(dir, 'gone.txt'))
   await git.mv('old-name.txt', 'new-name.txt')
   writeFileSync(join(dir, 'bin.dat'), Buffer.from([0, 9, 9, 9, 9]))
+  longLines[9] = 'L10'
+  writeFileSync(join(dir, 'long.txt'), `${longLines.join('\n')}\n`)
   await git.add('.')
   await git.commit('feature')
   const head = (await git.revparse(['HEAD'])).trim()
@@ -117,6 +122,10 @@ test('diff routes return whole files and summaries', async t => {
   const lines = commits.flatMap(f => f.hunks.flatMap(h => h.lines))
   assert.ok(lines.some(line => line.oldLineNumber === null))
   assert.ok(lines.some(line => line.newLineNumber === null))
+  assert.ok(
+    commits.some(file => file.hunks.some(hunk => hunk.preamble !== undefined)),
+    'the fixture has a hunk with a preamble, so the response must keep that field'
+  )
   const commitsResponse = await app.inject(
     `/api/diff/commits?from=${base}&to=${head}`
   )

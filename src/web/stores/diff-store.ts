@@ -7,6 +7,7 @@ import type { DiffFile, DiffFileSummary } from '@/api/types'
 import { pathOf } from '@/utils/diff-file'
 import { cardStateKey, type DiffSource } from '@/utils/card-state-key'
 import { errorMessage } from '@/utils/error-message'
+import { warmUpHighlighter } from '@/composables/use-syntax-highlighting'
 
 function decodeDiffFile<T extends { oldPath: string; newPath: string }>(
   file: T
@@ -199,6 +200,11 @@ export const useDiffStore = defineStore('diff', () => {
       unstagedFiles.value = nextUnstaged.files
       unstagedSignatures = nextUnstaged.signatures
       pruneHunks()
+      // Warm up while the user still looks at the closed cards, so the first
+      // opened card gets its colors with the first paint.
+      warmUpHighlighter(
+        [...nextStaged.files, ...nextUnstaged.files].map(pathOf)
+      )
       // Cleared only on success: resetting at the start would blink the
       // error banner away during every retry and SSE refetch (#35).
       error.value = null

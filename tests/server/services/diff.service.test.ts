@@ -589,3 +589,65 @@ test('getDiffSummaries: an untracked file gets new counts and a new signature af
   assert.equal(second.find(s => s.newPath === 'u.txt')?.additions, 3)
   assert.notEqual(signatureOf(second, 'u.txt'), signatureOf(first, 'u.txt'))
 })
+
+test('computeFileDiff: a hunk gets the unchanged lines above it as a preamble', () => {
+  const oldContent = repeatLines('line', 100)
+  const lines = oldContent.split('\n')
+  lines[79] = 'CHANGED'
+  const result = computeFileDiff(oldContent, lines.join('\n'), {
+    oldPath: 'big.txt',
+    newPath: 'big.txt',
+    status: 'modified',
+    isBinary: false
+  })
+
+  const preamble = result.hunks[0].preamble
+  // The hunk starts at line 77: three lines of context above the change at line 80.
+  assert.equal(result.hunks[0].newStart, 77)
+  assert.equal(preamble?.length, 60)
+  assert.equal(preamble?.[0], 'line17')
+  assert.equal(preamble?.at(-1), 'line76')
+})
+
+test('computeFileDiff: a hunk at the start of the file has no preamble field', () => {
+  const result = computeFileDiff('a\nb\n', 'X\nb\n', {
+    oldPath: 'a.txt',
+    newPath: 'a.txt',
+    status: 'modified',
+    isBinary: false
+  })
+  assert.equal('preamble' in result.hunks[0], false)
+})
+
+test('computeFileDiff: a Vue hunk in the script block has the block tag in its preamble', () => {
+  const body = Array.from({ length: 60 }, (_, i) => `const v${i} = ${i}`)
+  const oldContent = ['<script setup lang="ts">', ...body, '</script>'].join(
+    '\n'
+  )
+  const changed = [...body]
+  changed[50] = 'const v50 = 0'
+  const newContent = ['<script setup lang="ts">', ...changed, '</script>'].join(
+    '\n'
+  )
+
+  const result = computeFileDiff(oldContent, newContent, {
+    oldPath: 'A.vue',
+    newPath: 'A.vue',
+    status: 'modified',
+    isBinary: false
+  })
+
+  assert.equal(result.hunks[0].preamble?.[0], '<script setup lang="ts">')
+})
+
+test('computeFileDiff: a deleted file takes the preamble from the old side', () => {
+  const content = repeatLines('line', 5)
+  const result = computeFileDiff(content, '', {
+    oldPath: 'gone.txt',
+    newPath: 'gone.txt',
+    status: 'deleted',
+    isBinary: false
+  })
+  // The whole file is one hunk that starts at line 1: nothing above it.
+  assert.equal('preamble' in result.hunks[0], false)
+})

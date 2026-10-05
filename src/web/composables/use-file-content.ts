@@ -1,8 +1,9 @@
-import { ref } from 'vue'
+import { ref, shallowRef } from 'vue'
 import { apiGet } from '@/api/client'
 import type { FileContentResponse } from '@/api/types'
 import { errorMessage } from '@/utils/error-message'
 import { createWeightedLru } from '@/utils/weighted-lru'
+import { equalArrays } from '@/utils/equal-arrays'
 
 // Lines kept by the content cache. The cache is per module, so it outlives a component:
 // the virtual list unmounts a card that leaves the window, and the card must come back
@@ -21,7 +22,9 @@ const contentCache = createWeightedLru<string, CachedContent>(
  * Without it, a new file starts empty, as before.
  */
 export function useFileContent(options: { cache?: boolean } = {}) {
-  const lines = ref<string[]>([])
+  // Shallow: the array is replaced, never changed in place. A deep proxy cannot go to the
+  // highlight worker, and it costs time on large files.
+  const lines = shallowRef<string[]>([])
   const isBinary = ref(false)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -55,11 +58,14 @@ export function useFileContent(options: { cache?: boolean } = {}) {
         `/api/git/file/${encodedPath}?ref=${encodeURIComponent(targetRef)}`
       )
       if (requestId !== latestRequestId) return
-      lines.value = data.lines
+      // The same text keeps the same array. The array is the key of the token cache,
+      // so a refetch after an edit of another file does not color the lines again.
+      if (!equalArrays(lines.value, data.lines)) lines.value = data.lines
       isBinary.value = data.isBinary
       error.value = null
       if (options.cache) {
-        contentCache.set(key, { lines: data.lines, isBinary: data.isBinary })
+        // Also for the same text: the entry may have left the cache.
+        contentCache.set(key, { lines: lines.value, isBinary: data.isBinary })
       }
     } catch (e) {
       if (requestId !== latestRequestId) return

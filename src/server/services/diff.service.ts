@@ -18,6 +18,10 @@ import {
   listUntrackedPaths
 } from './git.service.ts'
 import type { ChangedSummary, FileAtRef } from './git.service.ts'
+import {
+  createPreambleReader,
+  type PreambleReader
+} from '../../shared/diff/preamble.ts'
 
 /** Unchanged lines kept around each change in a hunk, as in `git diff`. */
 const CONTEXT_LINES = 3
@@ -98,6 +102,32 @@ function windowHunks(
   return hunks
 }
 
+/**
+ * Gives each hunk the unchanged lines above it, for the highlighter. A hunk with no new
+ * line (a deleted file) takes them from the old side. A side is split into lines only when
+ * a hunk needs it: a hunk at the top of a file has no preamble.
+ */
+function withPreambles(
+  hunks: DiffHunk[],
+  meta: DiffFileMeta,
+  oldContent: string,
+  newContent: string
+): DiffHunk[] {
+  let oldReader: PreambleReader | undefined
+  let newReader: PreambleReader | undefined
+  return hunks.map(hunk => {
+    let preamble: string[] = []
+    if (hunk.newStart > 1) {
+      newReader ??= createPreambleReader(meta.newPath, splitLines(newContent))
+      preamble = newReader(hunk.newStart)
+    } else if (hunk.newStart === 0 && hunk.oldStart > 1) {
+      oldReader ??= createPreambleReader(meta.oldPath, splitLines(oldContent))
+      preamble = oldReader(hunk.oldStart)
+    }
+    return preamble.length > 0 ? { ...hunk, preamble } : hunk
+  })
+}
+
 export function computeFileDiff(
   oldContent: string,
   newContent: string,
@@ -154,7 +184,7 @@ export function computeFileDiff(
     }
   }
 
-  const hunks = windowHunks(lines)
+  const hunks = withPreambles(windowHunks(lines), meta, oldContent, newContent)
 
   return { ...base, additions, deletions, hunks }
 }
