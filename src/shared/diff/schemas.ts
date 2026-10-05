@@ -53,7 +53,7 @@ export const DiffHunkSchema = Type.Object(
     preamble: Type.Optional(
       Type.Array(Type.String(), {
         description:
-          'Unchanged lines before the hunk, for syntax highlighting only. Up to 60 lines, and in a Vue file the opening tag of the enclosing block first. Absent when there are none.'
+          'Unchanged lines above the hunk, for syntax highlighting only. Bounded in count and size. In a Vue file the opening tag of the enclosing block comes first. Absent when there are none.'
       })
     )
   },

@@ -49,6 +49,11 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+// An error banner has priority: it must not wait for tokens of the hunks that stayed on screen.
+const holding = computed(
+  () => props.hunksState === 'ready' && props.holdForTokens
+)
+
 // A file's comments span both diff-mode and full-file-mode ranges — split
 // by lineType (null = full-file, see ADR 0017) so each view only sees its
 // own comments; otherwise a diff comment whose lineNumberEnd happens to
@@ -80,7 +85,7 @@ const fullFileComments = computed(() =>
         {{ t('changes.binaryFile') }}
       </p>
       <div
-        v-else-if="hunksState === 'loading' || holdForTokens"
+        v-else-if="hunksState === 'loading' || holding"
         class="diff-file-card__loading row flex-center"
         :style="{ minHeight: `${loadingHeight}px` }"
       >
@@ -106,7 +111,7 @@ const fullFileComments = computed(() =>
         </p>
       </template>
       <DiffHunkView
-        v-for="(hunk, index) in holdForTokens ? [] : file.hunks"
+        v-for="(hunk, index) in holding ? [] : file.hunks"
         :key="`${hunk.oldStart}:${hunk.newStart}`"
         :path="path"
         :hunk="hunk"

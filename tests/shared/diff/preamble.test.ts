@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  createPreambleReader,
   hunkPreamble,
   PREAMBLE_REACH
 } from '../../../src/shared/diff/preamble.ts'
@@ -123,5 +124,48 @@ describe('hunkPreamble', () => {
       const preamble = hunkPreamble('a.ts', vue, 70)
       assert.notEqual(preamble[0], '<script setup lang="ts">')
     })
+  })
+})
+
+describe('createPreambleReader', () => {
+  it('gives the same preambles as hunkPreamble for many hunks of one file', () => {
+    const lines = [
+      '<template>',
+      '  <div />',
+      '</template>',
+      '<script setup lang="ts">',
+      ...numbered(120),
+      '</script>',
+      '<style scoped>',
+      ...Array.from({ length: 80 }, (_, i) => `.c${i} {}`),
+      '</style>'
+    ]
+    const read = createPreambleReader('A.vue', lines)
+    for (const firstLine of [1, 3, 5, 40, 100, 130, 140, 200, 210]) {
+      assert.deepEqual(
+        read(firstLine),
+        hunkPreamble('A.vue', lines, firstLine),
+        `line ${firstLine}`
+      )
+    }
+  })
+
+  it('gives the tag of the block that is open before the hunk', () => {
+    const lines = [
+      '<script setup>',
+      ...numbered(5),
+      '</script>',
+      '<template>',
+      ...Array.from({ length: 100 }, () => '  <p>x</p>')
+    ]
+    const read = createPreambleReader('A.vue', lines)
+    // The preamble lies inside the template block, far from its tag.
+    assert.equal(read(lines.length + 1)[0], '<template>')
+    // The preamble of a hunk in the script block gets the script tag.
+    const script = ['<script setup>', ...numbered(150), '</script>']
+    assert.equal(
+      createPreambleReader('A.vue', script)(120)[0],
+      '<script setup>'
+    )
   })
 })

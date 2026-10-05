@@ -1,4 +1,3 @@
-import type { DiffFile } from '@/api/types'
 import { createWeightedLru } from '@/utils/weighted-lru'
 import {
   hasGrammar,
@@ -15,7 +14,6 @@ import {
 } from '@/utils/highlight-worker-client'
 import { yieldToEventLoop } from '@/utils/yield-to-event-loop'
 import { warmupLines } from '@/utils/warmup-samples'
-import { hunkText } from '@/utils/hunk-text'
 
 export type { HighlightedToken, LineTokens, TokensByLine }
 
@@ -144,8 +142,11 @@ async function warmUp(lang: string) {
  * tokens. Else the first open card shows plain text while the engine and grammar load.
  * A tiny tokenizing also compiles the grammar, so the first real file is fast.
  * Each language warms up once. After a failure, the next call tries again.
+ * Without a worker, it does nothing.
  */
 export function warmUpHighlighter(paths: string[]): void {
+  // Without a worker, the warm-up would block the main thread for each language.
+  if (!workerAvailable()) return
   const langs = new Set(paths.map(languageForPath).filter(hasGrammar))
   for (const lang of langs) {
     if (warmedLangs.has(lang)) continue
@@ -172,11 +173,13 @@ function enqueueHighlight<T>(job: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Tokenizes `lines` of the file at `path` and remembers the answer per `key`. One key means
- * one path and one text: a new text needs a new key object. Pass raw objects, not reactive
- * proxies. `lines` is called only when the cache has no answer. `documents` splits the lines into
- * parts with their own grammar state, and the tokens of a part's skipped lines are not returned. A job stopped by `signal`
- * gives `undefined` and is not cached, so a closed card leaves no half answer.
+ * Tokenizes `lines` of the file at `path` and remembers the answer per `key`.
+ * One key means one path and one text. A new text needs a new key object.
+ * Pass raw objects, not reactive proxies.
+ * `lines` is called only when the cache has no answer.
+ * `documents` splits the lines into parts, and each part has its own grammar state.
+ * The tokens of the lines that a part skips are not returned.
+ * A job stopped by `signal` gives `undefined` and is not cached, so a closed card leaves no half answer.
  */
 export function highlightCached(
   key: object,
@@ -204,27 +207,6 @@ export function highlightCached(
     tokenCache.set(key, tokens)
     return tokens
   })
-}
-
-/**
- * Same as {@link highlightCached} for a diff file: one entry per line in hunk order.
- * A new file object means new content, so it is a new key.
- */
-export function highlightFileCached(
-  file: DiffFile,
-  signal?: AbortSignal,
-  onProgress?: (tokens: TokensByLine) => void
-): Promise<TokensByLine | null | undefined> {
-  let text: ReturnType<typeof hunkText> | undefined
-  const textOf = () => (text ??= hunkText(file.hunks))
-  return highlightCached(
-    file,
-    file.newPath || file.oldPath,
-    () => textOf().lines,
-    signal,
-    onProgress,
-    () => textOf().documents
-  )
 }
 
 /** The tokens `highlightCached` already holds for this key, without starting work. */

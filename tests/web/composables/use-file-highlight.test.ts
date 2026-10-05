@@ -4,7 +4,7 @@ import { effectScope, nextTick, ref, watch } from 'vue'
 import { useFileHighlight } from '@/composables/use-file-highlight'
 import {
   cachedHighlight,
-  highlightFileCached
+  highlightCached
 } from '@/composables/use-syntax-highlighting'
 import type { DiffFile } from '@/api/types'
 
@@ -36,7 +36,7 @@ function makeFile(path: string, hunkSizes: number[]): DiffFile {
 
 /** Waits until the highlight queue has run every job that is in it now. */
 async function drainQueue() {
-  await highlightFileCached(makeFile('queue-end.ts', [1]))
+  await highlightCached({}, 'queue-end.ts', () => ['x'])
 }
 
 async function waitFor(condition: () => boolean) {
