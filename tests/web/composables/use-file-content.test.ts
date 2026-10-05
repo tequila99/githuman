@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { isProxy } from 'vue'
 import { useFileContent } from '@/composables/use-file-content'
 
 let originalFetch: typeof fetch
@@ -68,5 +69,68 @@ describe('useFileContent cache', () => {
     const other = useFileContent({ cache: true })
     void other.fetchContent('cached-c.ts', 'HEAD')
     assert.deepEqual(other.lines.value, [])
+  })
+})
+
+describe('useFileContent lines', () => {
+  it('holds a plain array, not a reactive proxy', async () => {
+    const content = useFileContent()
+    const request = content.fetchContent('plain.ts', 'WORKTREE')
+    answers[0]!(['a'])
+    await request
+    assert.equal(isProxy(content.lines.value), false)
+  })
+
+  it('keeps the same array when a refetch gives the same text', async () => {
+    const content = useFileContent({ cache: true })
+    const first = content.fetchContent('same.ts', 'WORKTREE')
+    answers[0]!(['one', 'two'])
+    await first
+    const before = content.lines.value
+
+    const second = content.fetchContent('same.ts', 'WORKTREE')
+    answers[1]!(['one', 'two'])
+    await second
+    assert.equal(content.lines.value, before)
+
+    // A new instance gets the same array from the cache.
+    const other = useFileContent({ cache: true })
+    void other.fetchContent('same.ts', 'WORKTREE')
+    assert.equal(other.lines.value, before)
+  })
+
+  it('takes a new array when the text changes', async () => {
+    const content = useFileContent()
+    const first = content.fetchContent('changed.ts', 'WORKTREE')
+    answers[0]!(['one'])
+    await first
+    const before = content.lines.value
+
+    const second = content.fetchContent('changed.ts', 'WORKTREE')
+    answers[1]!(['one', 'two'])
+    await second
+    assert.notEqual(content.lines.value, before)
+    assert.deepEqual(content.lines.value, ['one', 'two'])
+  })
+
+  it('clears an old error when a refetch gives the same text', async () => {
+    const content = useFileContent()
+    const first = content.fetchContent('error.ts', 'WORKTREE')
+    answers[0]!(['one'])
+    await first
+
+    globalThis.fetch = async () => {
+      throw new Error('offline')
+    }
+    await content.fetchContent('error.ts', 'WORKTREE')
+    assert.equal(content.error.value, 'offline')
+
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ lines: ['one'], isBinary: false }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    await content.fetchContent('error.ts', 'WORKTREE')
+    assert.equal(content.error.value, null)
   })
 })

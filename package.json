@@ -1,6 +1,6 @@
 {
   "name": "@tequila99/githuman",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Review AI agent code changes before commit — Vue edition",
   "homepage": "https://github.com/tequila99/githuman#readme",
   "bugs": {

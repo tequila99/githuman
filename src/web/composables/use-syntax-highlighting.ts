@@ -1,6 +1,21 @@
-import type { HighlighterCore, LanguageInput } from 'shiki/core'
-import type { DiffFile } from '@/api/types'
 import { createWeightedLru } from '@/utils/weighted-lru'
+import {
+  hasGrammar,
+  tokenizeLines,
+  type HighlightedToken,
+  type LineDocument,
+  type LineTokens,
+  type TokenizeOutcome,
+  type TokensByLine
+} from '@/utils/shiki-engine'
+import {
+  tokenizeInWorker,
+  workerAvailable
+} from '@/utils/highlight-worker-client'
+import { yieldToEventLoop } from '@/utils/yield-to-event-loop'
+import { warmupLines } from '@/utils/warmup-samples'
+
+export type { HighlightedToken, LineTokens, TokensByLine }
 
 // Counts lines. Only the cards that are open ask for tokens, and the cache
 // saves a second tokenizing when the virtual list mounts such a card again.
@@ -10,11 +25,9 @@ import { createWeightedLru } from '@/utils/weighted-lru'
 // mounted card keeps its own tokens, so this costs time only after a remount.
 const TOKEN_CACHE_MAX_LINES = 20_000
 
-export interface HighlightedToken {
-  content: string
-  colorLight?: string | undefined
-  colorDark?: string | undefined
-}
+// Lines per slice. A slice tokenizes in about 35 ms, and the first slice
+// is the first paint of colors.
+const SLICE_LINES = 100
 
 const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   ts: 'typescript',
@@ -40,34 +53,6 @@ const LANGUAGE_BY_EXTENSION: Record<string, string> = {
   kts: 'kotlin'
 }
 
-// Explicit per-language dynamic imports (not a template literal) so the
-// bundler only ever code-splits the handful of grammars this app actually
-// supports, instead of every language Shiki ships.
-const LANG_LOADERS: Record<string, () => LanguageInput> = {
-  typescript: () => import('shiki/langs/typescript.mjs'),
-  tsx: () => import('shiki/langs/tsx.mjs'),
-  javascript: () => import('shiki/langs/javascript.mjs'),
-  jsx: () => import('shiki/langs/jsx.mjs'),
-  vue: () => import('shiki/langs/vue.mjs'),
-  json: () => import('shiki/langs/json.mjs'),
-  markdown: () => import('shiki/langs/markdown.mjs'),
-  css: () => import('shiki/langs/css.mjs'),
-  scss: () => import('shiki/langs/scss.mjs'),
-  html: () => import('shiki/langs/html.mjs'),
-  yaml: () => import('shiki/langs/yaml.mjs'),
-  bash: () => import('shiki/langs/bash.mjs'),
-  python: () => import('shiki/langs/python.mjs'),
-  go: () => import('shiki/langs/go.mjs'),
-  rust: () => import('shiki/langs/rust.mjs'),
-  java: () => import('shiki/langs/java.mjs'),
-  kotlin: () => import('shiki/langs/kotlin.mjs')
-}
-
-const THEME_LOADERS = {
-  light: () => import('shiki/themes/github-light.mjs'),
-  dark: () => import('shiki/themes/github-dark.mjs')
-}
-
 export function languageForPath(path: string): string {
   const segments = path.split('.')
   if (segments.length < 2) return 'text'
@@ -75,89 +60,105 @@ export function languageForPath(path: string): string {
   return LANGUAGE_BY_EXTENSION[ext] ?? 'text'
 }
 
-let highlighterPromise: Promise<HighlighterCore> | null = null
-const loadedLangs = new Set<string>()
-
-async function getHighlighter(lang: string): Promise<HighlighterCore> {
-  if (!highlighterPromise) {
-    highlighterPromise = (async () => {
-      const [{ createHighlighterCore }, { createOnigurumaEngine }] =
-        await Promise.all([
-          import('shiki/core'),
-          import('shiki/engine/oniguruma')
-        ])
-
-      return createHighlighterCore({
-        themes: [THEME_LOADERS.light(), THEME_LOADERS.dark()],
-        langs: [],
-        engine: createOnigurumaEngine(() => import('shiki/wasm'))
-      })
-    })()
-  }
-
-  const highlighter = await highlighterPromise
-  if (!loadedLangs.has(lang)) {
-    await highlighter.loadLanguage(LANG_LOADERS[lang]!())
-    loadedLangs.add(lang)
-  }
-
-  return highlighter
+/** True when a grammar for this path is known. Other paths have no tokens to wait for. */
+export function canHighlight(path: string): boolean {
+  return hasGrammar(languageForPath(path))
 }
 
-async function tokenizeLines(
+/** Tokenizes on the main thread in slices, with a yield between them. */
+function tokenizeHere(
   lang: string,
-  lines: string[]
-): Promise<(HighlightedToken[] | null)[] | null> {
-  if (lang === 'text' || !LANG_LOADERS[lang] || lines.length === 0) return null
+  lines: string[],
+  documents: LineDocument[] | undefined,
+  signal: AbortSignal | undefined,
+  onSlice: (tokens: LineTokens[], start: number) => void
+): Promise<TokenizeOutcome> {
+  return tokenizeLines(lang, lines, {
+    documents,
+    sliceSize: SLICE_LINES,
+    yieldBetween: yieldToEventLoop,
+    signal,
+    onSlice
+  })
+}
 
-  try {
-    const highlighter = await getHighlighter(lang)
-    const tokenLines = highlighter.codeToTokensWithThemes(lines.join('\n'), {
-      lang,
-      themes: { light: 'github-light', dark: 'github-dark' }
-    })
+/**
+ * Tokenizes in the worker, or on the main thread when there is no worker. Each slice goes to
+ * `onProgress` as a copy of all tokens so far, so a reader never sees a later change.
+ * Gives `null` on a failure and `undefined` when `signal` stopped the work.
+ */
+async function tokenize(
+  lang: string,
+  lines: string[],
+  signal?: AbortSignal,
+  onProgress?: (tokens: TokensByLine) => void,
+  documents?: LineDocument[]
+): Promise<TokensByLine | null | undefined> {
+  const sofar: TokensByLine = []
+  const onSlice = (tokens: LineTokens[], start: number) => {
+    sofar.splice(start, tokens.length, ...tokens)
+    onProgress?.(sofar.slice())
+  }
 
-    return tokenLines.map(tokens =>
-      tokens.map(token => ({
-        content: token.content,
-        colorLight: token.variants.light?.color,
-        colorDark: token.variants.dark?.color
-      }))
+  if (!workerAvailable()) {
+    return answer(
+      await tokenizeHere(lang, lines, documents, signal, onSlice),
+      sofar
     )
-  } catch {
-    return null
+  }
+  let outcome: TokenizeOutcome | 'unsent' = await tokenizeInWorker(
+    lang,
+    lines,
+    { sliceSize: SLICE_LINES, documents, signal, onSlice }
+  )
+  // The worker did not get the request, or it died during the request. A repeat writes
+  // the same tokens at the same lines, so the reports do not get shorter.
+  if (outcome === 'unsent' || (outcome === 'failed' && !workerAvailable())) {
+    outcome = await tokenizeHere(lang, lines, documents, signal, onSlice)
+  }
+  return answer(outcome, sofar)
+}
+
+/** Turns an outcome into the answer of {@link tokenize}. */
+function answer(
+  outcome: TokenizeOutcome,
+  tokens: TokensByLine
+): TokensByLine | null | undefined {
+  if (outcome === 'done') return tokens
+  return outcome === 'aborted' ? undefined : null
+}
+
+// Languages that are warm or warming up. A refetch of the diff must not warm them up again.
+const warmedLangs = new Set<string>()
+
+async function warmUp(lang: string) {
+  const tokens = await tokenize(lang, warmupLines(lang)).catch(() => null)
+  // A failed warm-up lets the next call try again.
+  if (tokens === null) warmedLangs.delete(lang)
+}
+
+/**
+ * Loads the highlighter and the grammars for these paths before any card asks for
+ * tokens. Else the first open card shows plain text while the engine and grammar load.
+ * A tiny tokenizing also compiles the grammar, so the first real file is fast.
+ * Each language warms up once. After a failure, the next call tries again.
+ * Without a worker, it does nothing.
+ */
+export function warmUpHighlighter(paths: string[]): void {
+  // Without a worker, the warm-up would block the main thread for each language.
+  if (!workerAvailable()) return
+  const langs = new Set(paths.map(languageForPath).filter(hasGrammar))
+  for (const lang of langs) {
+    if (warmedLangs.has(lang)) continue
+    warmedLangs.add(lang)
+    void warmUp(lang)
   }
 }
 
-/**
- * Tokenizes every line across all hunks of a diff file for syntax
- * highlighting. Returns one entry per line in hunk order, or null if the
- * language is unrecognized or highlighting fails (callers fall back to
- * plain text).
- */
-export async function highlightFile(
-  file: DiffFile
-): Promise<(HighlightedToken[] | null)[] | null> {
-  const lines = file.hunks.flatMap(hunk => hunk.lines.map(line => line.content))
-  return tokenizeLines(languageForPath(file.newPath || file.oldPath), lines)
-}
-
-/**
- * Tokenizes a plain list of lines (e.g. a whole file's content read outside
- * a diff) for syntax highlighting. Same fallback behavior as
- * {@link highlightFile}.
- */
-export async function highlightLines(
-  path: string,
-  lines: string[]
-): Promise<(HighlightedToken[] | null)[] | null> {
-  return tokenizeLines(languageForPath(path), lines)
-}
-
-const tokenCache = createWeightedLru<
-  DiffFile,
-  (HighlightedToken[] | null)[] | null
->(TOKEN_CACHE_MAX_LINES, tokens => tokens?.length ?? 1)
+const tokenCache = createWeightedLru<object, TokensByLine | null>(
+  TOKEN_CACHE_MAX_LINES,
+  tokens => tokens?.length ?? 1
+)
 
 // Tokenizing one file blocks the main thread. Expand all can ask for dozens of files
 // at once. The queue runs them one by one and yields between jobs, so input stays live.
@@ -172,29 +173,43 @@ function enqueueHighlight<T>(job: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Same as {@link highlightFile}, but remembers the answer per diff file
- * object. A new object means new content, so it is a new key. Pass the raw
- * object, not a reactive proxy. A job aborted before its turn does no work
- * and gives `undefined`: a card that closed or left the window needs no tokens.
+ * Tokenizes `lines` of the file at `path` and remembers the answer per `key`.
+ * One key means one path and one text. A new text needs a new key object.
+ * Pass raw objects, not reactive proxies.
+ * `lines` is called only when the cache has no answer.
+ * `documents` splits the lines into parts, and each part has its own grammar state.
+ * The tokens of the lines that a part skips are not returned.
+ * A job stopped by `signal` gives `undefined` and is not cached, so a closed card leaves no half answer.
  */
-export function highlightFileCached(
-  file: DiffFile,
-  signal?: AbortSignal
-): Promise<(HighlightedToken[] | null)[] | null | undefined> {
+export function highlightCached(
+  key: object,
+  path: string,
+  lines: () => string[],
+  signal?: AbortSignal,
+  onProgress?: (tokens: TokensByLine) => void,
+  documents?: () => LineDocument[] | undefined
+): Promise<TokensByLine | null | undefined> {
   return enqueueHighlight(async () => {
-    // An earlier job in the queue may have tokenized this file already.
-    const cached = tokenCache.get(file)
+    // An earlier job in the queue may have tokenized this text already.
+    const cached = tokenCache.get(key)
     if (cached !== undefined) return cached
     if (signal?.aborted) return undefined
-    const tokens = await highlightFile(file)
-    tokenCache.set(file, tokens)
+    // `lines` first: the getters may share one computation.
+    const text = lines()
+    const tokens = await tokenize(
+      languageForPath(path),
+      text,
+      signal,
+      onProgress,
+      documents?.()
+    )
+    if (tokens === undefined) return undefined
+    tokenCache.set(key, tokens)
     return tokens
   })
 }
 
-/** The tokens `highlightFileCached` already holds, without starting work. */
-export function cachedHighlight(
-  file: DiffFile
-): (HighlightedToken[] | null)[] | null | undefined {
-  return tokenCache.get(file)
+/** The tokens `highlightCached` already holds for this key, without starting work. */
+export function cachedHighlight(key: object): TokensByLine | null | undefined {
+  return tokenCache.get(key)
 }
