@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { useI18n } from 'vue-i18n'
 
 defineProps<{
@@ -24,16 +25,17 @@ const { t } = useI18n()
       class="preview-dialog column no-wrap"
       :class="`preview-dialog--${size ?? 'fit'}`"
     >
-      <div class="preview-dialog__head row no-wrap items-center">
-        <span class="preview-dialog__title ellipsis" :title="title">{{
-          title
-        }}</span>
-        <q-space />
+      <div class="window-header row no-wrap items-center">
+        <span class="window-header__title col ellipsis"
+          >{{ title }}
+          <q-tooltip :delay="TOOLTIP_DELAY_MS">{{ title }}</q-tooltip>
+        </span>
         <q-btn
           v-close-popup
           flat
-          round
           dense
+          size="sm"
+          class="window-header__control"
           icon="close"
           :aria-label="t('changes.closePreview')"
         />
@@ -49,24 +51,12 @@ const { t } = useI18n()
 .preview-dialog {
   max-width: 94vw;
   max-height: 92vh;
-  border: 1px solid rgba(128, 128, 128, 0.55);
+  border: 1px solid var(--window-divider);
   overflow: hidden;
 }
 .preview-dialog--wide {
   width: 900px;
   height: 90vh;
-}
-/* A bar of its own, tinted like the diff headers, so the title can't be missed. */
-.preview-dialog__head {
-  flex: 0 0 auto;
-  padding: 8px 8px 8px 16px;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.55);
-  background: var(--diff-header-bg);
-}
-.preview-dialog__title {
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 600;
 }
 .preview-dialog__body {
   min-height: 0;

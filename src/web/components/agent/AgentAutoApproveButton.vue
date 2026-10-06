@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 const props = defineProps<{ enabled: boolean; disabled: boolean }>()
@@ -26,6 +27,6 @@ const label = computed(() =>
     :aria-label="label"
     @click="emit('toggle')"
   >
-    <q-tooltip>{{ label }}</q-tooltip>
+    <q-tooltip :delay="TOOLTIP_DELAY_MS">{{ label }}</q-tooltip>
   </q-btn>
 </template>

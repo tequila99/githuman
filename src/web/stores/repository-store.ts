@@ -3,13 +3,14 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import { apiGet } from '@/api/client'
 import type { RepositoryInfo } from '@/api/types'
 import { errorMessage } from '@/utils/error-message'
+import { singleFlight } from '@/utils/single-flight'
 
 export const useRepositoryStore = defineStore('repository', () => {
   const info = ref<RepositoryInfo | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  async function fetchInfo() {
+  const fetchInfo = singleFlight(async () => {
     loading.value = true
     error.value = null
 
@@ -21,7 +22,7 @@ export const useRepositoryStore = defineStore('repository', () => {
     } finally {
       loading.value = false
     }
-  }
+  })
 
   return { info, loading, error, fetchInfo }
 })

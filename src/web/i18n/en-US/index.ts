@@ -2,6 +2,30 @@
 // so you can safely delete all default props below
 
 export default {
+  terminal: {
+    maximize: 'Maximize',
+    restore: 'Restore window',
+    menu: 'Terminal menu',
+    closeAll: 'Close all terminals',
+    closeAllTitle: 'Close all terminals?',
+    closeAllMessage:
+      'All terminal sessions and their running processes will be stopped.',
+    title: 'Terminal',
+    command: 'Command (limited mode)',
+    send: 'Send command',
+    closeTab: 'Close terminal',
+    add: 'New terminal',
+    closeTitle: 'Close this terminal?',
+    closeMessage: 'The shell and its running commands will be stopped.',
+    cancel: 'Cancel',
+    minimize: 'Minimize terminal',
+    originalColors: 'Use original colors (disable minimum contrast)',
+    unavailable: 'Terminal connection is unavailable.',
+    reconnecting:
+      'Reconnecting… Input is disabled until the connection returns.',
+    limited:
+      'Limited mode: interactive programs are unavailable. Enter commands in the field below; Ctrl+C interrupts, Ctrl+D closes the shell.'
+  },
   failed: 'Action failed',
   success: 'Action was successful',
 

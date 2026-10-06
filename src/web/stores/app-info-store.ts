@@ -2,6 +2,7 @@ import { ref } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { apiGet } from '@/api/client'
 import type { AppInfo } from '@/api/types'
+import { useTerminalStore } from '@/stores/terminal-store'
 import { errorMessage } from '@/utils/error-message'
 
 export const useAppInfoStore = defineStore('appInfo', () => {
@@ -16,6 +17,7 @@ export const useAppInfoStore = defineStore('appInfo', () => {
     try {
       const info = await apiGet<AppInfo>('/api/app-info')
       version.value = info.version
+      useTerminalStore().init(info.terminal?.available)
     } catch (err) {
       version.value = null
       error.value = errorMessage(err)

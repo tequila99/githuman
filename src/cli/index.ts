@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { errorMessage } from '../shared/utils/error-message.ts'
 import { writeFileSync } from 'node:fs'
 import { parseServeArgs } from './config.ts'
 import {
@@ -12,6 +13,9 @@ import { parseExportArgs, runExport } from './commands/export.ts'
 import { createFileDatabase } from '../server/db/index.ts'
 import { getAppVersion } from '../server/app-version.ts'
 import type { DatabaseSync } from 'node:sqlite'
+
+// Force exit when a graceful close hangs. It must exceed the terminal kill time: ps timeout plus grace.
+const SHUTDOWN_TIMEOUT_MS = 5000
 
 /** Opens the reviews DB for the repo at cwd, shared by `list` and `export`. */
 async function openReviewsDb(
@@ -32,7 +36,28 @@ async function main(argv: string[]): Promise<void> {
   switch (command) {
     case 'serve': {
       const options = parseServeArgs(rest)
-      const { url } = await startServer(options)
+      const { app, url } = await startServer(options)
+      let stopping = false
+      const shutdown = () => {
+        if (stopping) return
+        stopping = true
+        // Do not wait for a stuck connection forever. Unref lets a clean close end the process by itself.
+        const deadline = setTimeout(() => process.exit(1), SHUTDOWN_TIMEOUT_MS)
+        deadline.unref()
+        void app
+          .close()
+          .then(() => {
+            clearTimeout(deadline)
+            process.exitCode = 0
+            return undefined
+          })
+          .catch(error => {
+            console.error(errorMessage(error))
+            process.exitCode = 1
+          })
+      }
+      process.once('SIGINT', shutdown)
+      process.once('SIGTERM', shutdown)
       console.log(formatStartupMessage(url, options.host))
       return
     }
@@ -66,6 +91,6 @@ async function main(argv: string[]): Promise<void> {
 }
 
 main(process.argv.slice(2)).catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error)
+  console.error(errorMessage(error))
   process.exitCode = 1
 })
