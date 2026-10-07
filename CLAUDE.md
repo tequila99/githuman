@@ -79,6 +79,7 @@ pnpm run build        # tsc (server) + quasar build (web) → dist/
 
 ## Важные технические решения (не переоткрывать без ADR)
 
+- **Терминал** (ADR 0037): отдельный мультиплексированный WebSocket только на loopback; token и upgrade требуют обязательный совпадающий Origin. Shell выбирает сервер, PTY загружается лениво; без бинарника — ограниченный pipe-режим. Снимок формирует headless xterm, terminal queries отвечает только сервер. История в памяти; очереди ограничены; ввод/вывод и токены не логируются.
 - **Аутентификации нет** — инструмент локальный, `--host 0.0.0.0`
   сознательно доступен без пароля в LAN (ADR 0008). Не добавлять auth без
   отдельного ADR.
@@ -209,7 +210,9 @@ userPath)` напрямую.
 - **Hover/focus в областях Changes рисует `app.scss`, а не `.q-focus-helper`**
   (`.diff-file-card`, `.file-list-item`): тысячи хелперов Quasar убивали
   прокрутку (`Layerize`, ADR 0032). В строки длинных списков не добавлять
-  `q-tooltip` — использовать `title`.
+  `q-tooltip` — использовать `data-tooltip` с единственным `SharedTooltip`
+  (ADR 0039). Обычные компоненты используют `QTooltip`; задержка всех
+  подсказок задаётся `TOOLTIP_DELAY_MS` в `src/web/utils/tooltip.ts`.
 - **Списки Changes виртуализированы** (`q-virtual-scroll` в `DiffPanel` и плоском
   `FileListPanel`, ADR 0032). Отступ карточки — `padding-bottom` обёртки
   `.diff-virtual-slot`, не `margin`: виртуальный список меряет высоту без

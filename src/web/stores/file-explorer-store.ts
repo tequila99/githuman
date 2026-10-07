@@ -38,7 +38,7 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     reset: resetBrowseFileContent
   } = useFileContent()
 
-  const source = ref<DiffSource>('staged')
+  const source = ref<DiffSource>('unstaged')
   const browseMode = ref(false)
   const filter = ref<string | null>('')
   const selectedPath = ref<string | null>(null)

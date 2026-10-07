@@ -24,6 +24,8 @@
   // Comment UI text is intentionally smaller than the surrounding code —
   // derived from --code-font-size so it stays proportional if that changes.
   --comment-font-size: calc(var(--code-font-size) - 1px);
+  // The terminal window and its dock float above the page and its drawers.
+  --terminal-window-z: 2500;
 }
 
 // Switchable code/monospace font (default: JetBrains Mono). A future
@@ -42,6 +44,8 @@ html[data-code-font='fira'] {
   --diff-removed-bg: #ffeef0;
   --diff-gutter-color: #94a3b8;
   --diff-header-bg: #f8fafc;
+  // The border and the dividers of a floating window: the terminal and the preview dialogs.
+  --window-divider: rgba(128, 128, 128, 0.3);
   color-scheme: light;
 }
 
@@ -51,6 +55,45 @@ body.body--dark {
   --diff-gutter-color: #64748b;
   --diff-header-bg: #1a2234;
   color-scheme: dark;
+}
+
+// A floating window header gets a light primary tint, so it differs from the diff file headers.
+// The rule is on body: the dark theme sets --diff-header-bg on body, and the mix must use that value.
+body {
+  --window-header-bg: color-mix(
+    in srgb,
+    var(--q-primary) 15%,
+    var(--diff-header-bg)
+  );
+  // The first layer is a glow that outlines the window. The second layer shows that the window lies above the page.
+  // A dark page needs a darker second layer.
+  --window-shadow:
+    0 0 8px 1px rgba(128, 128, 128, 0.2), 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+body.body--dark {
+  --window-shadow:
+    0 0 8px 1px rgba(128, 128, 128, 0.2), 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+// The header bar of a floating window: the terminal and the preview dialogs.
+.window-header {
+  flex: 0 0 auto;
+  min-height: 36px;
+  background: var(--window-header-bg);
+  border-bottom: 1px solid var(--window-divider);
+}
+.window-header__title {
+  min-width: 0;
+  line-height: 36px;
+  padding: 0 8px;
+}
+.window-header__control {
+  width: 28px;
+  min-height: 28px;
+
+  .q-icon {
+    font-size: 16px;
+  }
 }
 
 // Dropdown menus of the agent UI (settings, add, file actions) share one

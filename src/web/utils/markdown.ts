@@ -13,6 +13,11 @@ const renderLinkOpen =
 
 md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const token = tokens[idx]
+  const title = token?.attrGet('title')
+  if (title && token?.attrs) {
+    token.attrs = token.attrs.filter(([name]) => name !== 'title')
+    token.attrSet('data-tooltip', title)
+  }
   token?.attrSet('target', '_blank')
   token?.attrSet('rel', 'noopener noreferrer')
   return renderLinkOpen(tokens, idx, options, env, self)
@@ -35,7 +40,7 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   )
   return (
     '<div class="agent-code">' +
-    `<button type="button" class="agent-code__copy" data-copy title="${label}" aria-label="${label}">` +
+    `<button type="button" class="agent-code__copy" data-copy data-tooltip="${label}" aria-label="${label}">` +
     '<svg class="agent-code__copy-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>' +
     '<svg class="agent-code__done-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>' +
     '</button>' +

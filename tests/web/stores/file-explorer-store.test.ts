@@ -316,7 +316,7 @@ function fileAt(path: string): DiffFile {
 
 test('selectFile() asks the panel to scroll by index in the unfiltered list', () => {
   const explorer = useFileExplorerStore()
-  useDiffStore().stagedFiles = ['a.ts', 'b.ts', 'c.ts'].map(fileAt)
+  useDiffStore().unstagedFiles = ['a.ts', 'b.ts', 'c.ts'].map(fileAt)
   explorer.filter = 'c.ts'
 
   explorer.selectFile('c.ts')
@@ -326,7 +326,7 @@ test('selectFile() asks the panel to scroll by index in the unfiltered list', ()
 
 test('selectFile() on the same file again makes a new scroll request', () => {
   const explorer = useFileExplorerStore()
-  useDiffStore().stagedFiles = ['a.ts', 'b.ts'].map(fileAt)
+  useDiffStore().unstagedFiles = ['a.ts', 'b.ts'].map(fileAt)
 
   explorer.selectFile('a.ts')
   explorer.selectFile('a.ts')
@@ -336,7 +336,7 @@ test('selectFile() on the same file again makes a new scroll request', () => {
 
 test('toggling a card does not ask the panel to scroll', () => {
   const explorer = useFileExplorerStore()
-  useDiffStore().stagedFiles = ['a.ts'].map(fileAt)
+  useDiffStore().unstagedFiles = ['a.ts'].map(fileAt)
 
   explorer.handleCardToggle('a.ts')
 
@@ -345,7 +345,7 @@ test('toggling a card does not ask the panel to scroll', () => {
 
 test('selectFile() for a path outside the diff makes no scroll request', () => {
   const explorer = useFileExplorerStore()
-  useDiffStore().stagedFiles = ['a.ts'].map(fileAt)
+  useDiffStore().unstagedFiles = ['a.ts'].map(fileAt)
 
   explorer.selectFile('gone.ts')
 

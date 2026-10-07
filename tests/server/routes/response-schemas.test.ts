@@ -282,7 +282,8 @@ test('app routes return whole bodies', async t => {
   const { app } = await setup(t)
   assert.deepEqual((await app.inject('/health')).json(), { status: 'ok' })
   assert.deepEqual((await app.inject('/api/app-info')).json(), {
-    version: getAppVersion()
+    version: getAppVersion(),
+    terminal: { available: false, mode: null }
   })
 })
 

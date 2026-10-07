@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { useI18n } from 'vue-i18n'
 import type { PendingPermission } from '@/utils/agent-chat'
 import AgentDiffView from './AgentDiffView.vue'
@@ -26,8 +27,9 @@ const { t } = useI18n()
       <q-icon name="gpp_maybe" color="warning" size="14px" class="q-mr-xs" />
       <span>{{ t('agent.permission.title') }}</span>
     </div>
-    <div class="agent-permission__title" :title="permission.title">
+    <div class="agent-permission__title">
       {{ permission.title }}
+      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{ permission.title }}</q-tooltip>
     </div>
     <q-expansion-item
       v-if="permission.diffs.length > 0"

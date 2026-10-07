@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { onBeforeUnmount, onDeactivated, ref } from 'vue'
 import { copyToClipboard, useTimeout } from 'quasar'
 import { COPIED_FEEDBACK_MS } from '@/utils/copy-code'
@@ -45,6 +46,6 @@ async function copy() {
     :aria-label="tooltip"
     @click.stop="copy"
   >
-    <q-tooltip>{{ tooltip }}</q-tooltip>
+    <q-tooltip :delay="TOOLTIP_DELAY_MS">{{ tooltip }}</q-tooltip>
   </q-btn>
 </template>
