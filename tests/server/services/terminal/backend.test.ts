@@ -1,9 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   loadPty,
   NodePtyBackend,
-  PipeBackend
+  PipeBackend,
+  terminalSupported
 } from '../../../../src/server/services/terminal/backend.ts'
 import type { PtyBackend } from '../../../../src/server/services/terminal/backend.ts'
 
@@ -75,6 +79,43 @@ test('pipe keeps cwd and shell alive after interrupt', async t => {
   )
   await backend.kill()
   assert.throws(() => process.kill(backend.pid, 0))
+})
+
+test('the terminal stays off on Windows', () => {
+  assert.equal(terminalSupported('win32'), false)
+  assert.equal(terminalSupported('linux'), true)
+  assert.equal(terminalSupported('darwin'), true)
+})
+
+test('bash prompt setup does not stay in shell history', async t => {
+  const module = await loadPty()
+  assert.ok(module)
+  const hist = join(tmpdir(), `ght-bash-hist-${process.pid}`)
+  rmSync(hist, { force: true })
+  const backend = new NodePtyBackend(
+    module.spawn('/bin/bash', ['--noprofile', '--norc', '-i'], {
+      cwd: '/tmp',
+      cols: 80,
+      rows: 24,
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color',
+        HISTFILE: hist,
+        HISTSIZE: '200',
+        HISTFILESIZE: '200',
+        PS1: '$ '
+      }
+    }),
+    'bash'
+  )
+  t.after(async () => {
+    await backend.kill()
+    rmSync(hist, { force: true })
+  })
+  await waitFor(backend, 'echo KEEP_HISTORY\r', /KEEP_HISTORY/)
+  const history = await waitFor(backend, 'history\r', /KEEP_HISTORY/)
+  assert.doesNotMatch(history, /history -d/)
+  assert.doesNotMatch(history, /PS1=/)
 })
 
 test('prompt integration confirms idle but does not mistake a shell builtin loop for idle', async t => {

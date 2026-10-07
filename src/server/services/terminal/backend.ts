@@ -6,10 +6,13 @@ import type {
   TerminalMode,
   TerminalRunning
 } from '../../../shared/terminal/types.ts'
+import { TerminalError } from '../../errors/terminal.ts'
 import {
+  classifyProcessActivity,
   processActivity,
   signalProcess,
-  terminateProcesses
+  terminateProcesses,
+  type ProcessRow
 } from './processes.ts'
 
 // Stop waiting for the first prompt marker after this time.
@@ -20,6 +23,41 @@ const STARTUP_BUFFER_CHARS = 65536
 // Shells that accept `-l -i` and set the prompt through `PS1`. Other shells get no prompt marker.
 const POSIX_SHELLS = ['bash', 'zsh', 'sh', 'dash', 'ksh']
 
+// Windows includes a PTY binary, but the shell and process list are Unix-only.
+export function terminalSupported(
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  return platform !== 'win32'
+}
+
+function promptPrefix(shellName: string): string {
+  if (shellName === 'bash') return "'\\[\\e]133;A\\a\\]'"
+  if (shellName === 'zsh') return '"%{$(printf \'\\033]133;A\\007\')%}"'
+  return '"$(printf \'\\033]133;A\\007\')"'
+}
+
+// Bash stores this typed line, so delete that entry before the marker.
+function promptSetup(shellName: string): string {
+  const assign = `PS1=${promptPrefix(shellName)}"$PS1"`
+  const marker = "printf '\\033]133;A\\007'"
+  if (shellName === 'bash')
+    return `${assign}; history -d $HISTCMD || true; ${marker}`
+  return `${assign}; ${marker}`
+}
+
+async function shellActivity(
+  pid: number,
+  prompt: PromptTracker,
+  rows?: ProcessRow[]
+): Promise<TerminalRunning> {
+  const activity =
+    rows === undefined
+      ? await processActivity(pid)
+      : classifyProcessActivity(rows, pid)
+  if (activity !== 'idle') return activity
+  return prompt.idle ? 'idle' : 'unknown'
+}
+
 export interface PtyBackend {
   readonly pid: number
   readonly mode: TerminalMode
@@ -29,7 +67,7 @@ export interface PtyBackend {
   resume(): void
   interrupt(): void
   kill(): Promise<void>
-  activity(): Promise<TerminalRunning>
+  activity(rows?: ProcessRow[]): Promise<TerminalRunning>
   onData(listener: (data: string) => void): () => void
   onExit(listener: () => void): () => void
 }
@@ -84,13 +122,7 @@ export class NodePtyBackend implements PtyBackend {
       }, STARTUP_TIMEOUT_MS)
       this.startupTimer.unref()
       // Preserve the user's prompt and add an invisible activity marker.
-      const prefix =
-        shellName === 'bash'
-          ? "'\\[\\e]133;A\\a\\]'"
-          : shellName === 'zsh'
-            ? '"%{$(printf \'\\033]133;A\\007\')%}"'
-            : '"$(printf \'\\033]133;A\\007\')"'
-      pty.write(`PS1=${prefix}"$PS1"; printf '\\033]133;A\\007'\r`)
+      if (shellName !== undefined) pty.write(`${promptSetup(shellName)}\r`)
     }
   }
   get pid(): number {
@@ -112,13 +144,8 @@ export class NodePtyBackend implements PtyBackend {
   interrupt(): void {
     this.write('\x03')
   }
-  async activity(): Promise<TerminalRunning> {
-    const activity = await processActivity(this.pid)
-    return activity === 'idle'
-      ? this.prompt.idle
-        ? 'idle'
-        : 'unknown'
-      : activity
+  activity(rows?: ProcessRow[]): Promise<TerminalRunning> {
+    return shellActivity(this.pid, this.prompt, rows)
   }
   async kill(): Promise<void> {
     clearTimeout(this.startupTimer)
@@ -187,13 +214,8 @@ export class PipeBackend implements PtyBackend {
   interrupt(): void {
     if (this.pid > 1) signalProcess(-this.pid, 'SIGINT')
   }
-  async activity(): Promise<TerminalRunning> {
-    const activity = await processActivity(this.pid)
-    return activity === 'idle'
-      ? this.prompt.idle
-        ? 'idle'
-        : 'unknown'
-      : activity
+  activity(rows?: ProcessRow[]): Promise<TerminalRunning> {
+    return shellActivity(this.pid, this.prompt, rows)
   }
   async kill(): Promise<void> {
     if (this.pid > 1) await terminateProcesses(this.pid)
@@ -213,6 +235,8 @@ export async function createBackend(
   cols: number,
   rows: number
 ): Promise<PtyBackend> {
+  if (!terminalSupported())
+    throw new TerminalError('The terminal is not available on Windows.')
   const module = await loadPty()
   if (!module) return new PipeBackend(cwd)
   const shell = process.env.SHELL || '/bin/sh'

@@ -13,6 +13,7 @@ import {
   TerminalNotFoundError
 } from '../../errors/terminal.ts'
 import { createBackend, type PtyBackend } from './backend.ts'
+import { processes, type ProcessRow } from './processes.ts'
 import { TerminalSession } from './session.ts'
 
 // Check the activity of every session this often.
@@ -29,6 +30,7 @@ export interface TerminalRegistryOptions {
   backend?: (cwd: string, cols: number, rows: number) => Promise<PtyBackend>
   now?: () => number
   pollMs?: number
+  listProcesses?: () => Promise<ProcessRow[]>
   onLifecycle?: (event: {
     type: 'created' | 'closed' | 'timeout'
     id: string
@@ -138,9 +140,21 @@ export class TerminalRegistry {
     if (this.checking || this.stopped) return
     this.checking = true
     try {
+      // One process list serves every session. A failed read leaves them unknown.
+      let rows: ProcessRow[] | undefined
+      if (this.entries.size > 0) {
+        try {
+          rows = await (this.options.listProcesses ?? processes)()
+        } catch {
+          rows = undefined
+        }
+      }
       for (const [id, entry] of this.entries) {
         const previous = entry.session.running
-        entry.session.running = await entry.session.backend.activity()
+        entry.session.running =
+          rows === undefined
+            ? 'unknown'
+            : await entry.session.backend.activity(rows)
         if (previous !== entry.session.running) this.publishList()
         if (entry.orphanedSince === null) continue
         const now = this.now()

@@ -1,6 +1,4 @@
-import { TerminalError } from '../../errors/terminal.ts'
-
-// Bound an unfinished control string before a snapshot retains it.
+// Drop an unfinished control string that is too long to keep for a snapshot.
 const MAX_ESCAPE_TAIL = 8192
 
 export class EscapeTail {
@@ -36,11 +34,11 @@ export class EscapeTail {
         continue
       }
       this.value += char
-      // An unfinished sequence must not grow without limit.
-      if (this.value.length > MAX_ESCAPE_TAIL)
-        throw new TerminalError(
-          'Terminal control sequence exceeds the snapshot limit.'
-        )
+      // A long OSC, DCS or APC string must not close the shell.
+      if (this.value.length > MAX_ESCAPE_TAIL) {
+        this.reset()
+        continue
+      }
       // CAN and SUB cancel the open sequence.
       if (char === '\x18' || char === '\x1a') {
         this.reset()

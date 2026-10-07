@@ -27,3 +27,11 @@ test('7-bit SOS opens a string that ESC \\ ends', () => {
   assert.equal(tailOf('\x1bXdata'), '\x1bXdata')
   assert.equal(tailOf('\x1bXdata\x1b\\'), '')
 })
+
+test('a control string longer than the snapshot limit drops the tail', () => {
+  const tail = new EscapeTail()
+  tail.push(`\x1b]${'a'.repeat(9000)}`)
+  assert.equal(tail.tail, '')
+  tail.push('\x1b[31')
+  assert.equal(tail.tail, '\x1b[31')
+})

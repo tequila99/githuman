@@ -11,7 +11,7 @@ import {
   TERMINAL_WEBSOCKET_OPTIONS
 } from './routes/terminal.ts'
 import { TerminalRegistry } from './services/terminal/registry.ts'
-import { loadPty } from './services/terminal/backend.ts'
+import { loadPty, terminalSupported } from './services/terminal/backend.ts'
 import fastifySwagger from '@fastify/swagger'
 import fastifySwaggerUi from '@fastify/swagger-ui'
 // @fastify/sse's published types declare an ESM default export that doesn't match
@@ -71,7 +71,11 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const db = options.db ?? createTestDatabase()
   const eventBus = options.eventBus ?? createEventBus()
 
-  if (options.terminalEnabled)
+  // Windows includes a PTY binary, but the shell and process list are Unix-only.
+  const terminalEnabled =
+    options.terminalEnabled === true && terminalSupported()
+
+  if (terminalEnabled)
     app.register(fastifyWebsocket, TERMINAL_WEBSOCKET_OPTIONS)
   app.register(fastifySse)
   // The spec collects routes as they are added, so it comes before them.
@@ -83,12 +87,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(healthRoutes)
   app.register(appInfoRoutes, {
     terminalCapability: async () => ({
-      available: options.terminalEnabled === true,
-      mode: options.terminalEnabled
-        ? (await loadPty())
-          ? 'pty'
-          : 'pipe'
-        : null
+      available: terminalEnabled,
+      mode: terminalEnabled ? ((await loadPty()) ? 'pty' : 'pipe') : null
     })
   })
   app.register(diffRoutes, { repositoryPath })
@@ -101,7 +101,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     instanceId: options.instanceId ?? randomUUID()
   })
 
-  if (options.terminalEnabled)
+  if (terminalEnabled)
     app.register(terminalRoutes, {
       registry:
         options.terminalRegistry ??

@@ -7,7 +7,7 @@ import {
   watch,
   nextTick
 } from 'vue'
-import { format, useElementSize } from 'quasar'
+import { format, useElementSize, useEventListener } from 'quasar'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 // oxlint-disable-next-line import/no-unassigned-import -- xterm styles are part of this lazy component
@@ -56,43 +56,8 @@ function contrast(): number {
   return props.originalColors ? ORIGINAL_CONTRAST : MINIMUM_CONTRAST
 }
 
-function resize(): void {
-  if (!terminal || !fit || !props.active) return
-  if (!host.value?.clientWidth || !host.value.clientHeight) return
-  const dimensions = fit.proposeDimensions()
-  if (!dimensions) return
-  const cols = between(dimensions.cols, TERMINAL_MIN_COLS, TERMINAL_MAX_COLS)
-  const rows = between(dimensions.rows, TERMINAL_MIN_ROWS, TERMINAL_MAX_ROWS)
-  const key = `${cols}:${rows}`
-  if (lastSize === key) return
-  if (store.send({ type: 'resize', terminalId: props.session.id, cols, rows }))
-    lastSize = key
-}
-
-// A tab that becomes visible changes its size from zero, so this also fits a newly active tab.
-useElementSize({ target: host, onResize: resize })
-
-onMounted(async () => {
-  if (!host.value) return
-  terminal = new Terminal({
-    cols: props.session.cols,
-    rows: props.session.rows,
-    scrollback: TERMINAL_SCROLLBACK,
-    fontSize: FONT_SIZE,
-    fontFamily: FONT_FAMILY,
-    theme: terminalTheme(props.dark),
-    minimumContrastRatio: contrast(),
-    disableStdin: props.session.mode === 'pipe',
-    allowProposedApi: true
-  })
-  fit = new FitAddon()
-  terminal.loadAddon(fit)
-  ignoreTerminalQueries(terminal)
-  terminal.open(host.value)
-  terminal.onData(data => {
-    if (store.state === 'connected')
-      store.send({ type: 'input', terminalId: props.session.id, data })
-  })
+function attachOutput(): void {
+  detach?.()
   detach = store.attachView(props.session.id, message => {
     if (message.type !== 'snapshot' && message.type !== 'output') return
     if (message.type === 'snapshot') generation++
@@ -118,6 +83,58 @@ onMounted(async () => {
       // One failed frame must not stop the frames after it.
       .catch(() => {})
   })
+}
+
+// A background tab throttles xterm timers, so acknowledge frames without parsing them.
+function followVisibility(): void {
+  if (!terminal || disposed) return
+  if (document.hidden) {
+    detach?.()
+    detach = undefined
+    return
+  }
+  if (!detach) attachOutput()
+}
+
+function resize(): void {
+  if (!terminal || !fit || !props.active) return
+  if (!host.value?.clientWidth || !host.value.clientHeight) return
+  const dimensions = fit.proposeDimensions()
+  if (!dimensions) return
+  const cols = between(dimensions.cols, TERMINAL_MIN_COLS, TERMINAL_MAX_COLS)
+  const rows = between(dimensions.rows, TERMINAL_MIN_ROWS, TERMINAL_MAX_ROWS)
+  const key = `${cols}:${rows}`
+  if (lastSize === key) return
+  if (store.send({ type: 'resize', terminalId: props.session.id, cols, rows }))
+    lastSize = key
+}
+
+// A tab that becomes visible changes its size from zero, so this also fits a newly active tab.
+useElementSize({ target: host, onResize: resize })
+useEventListener(document, 'visibilitychange', followVisibility)
+
+onMounted(async () => {
+  if (!host.value) return
+  terminal = new Terminal({
+    cols: props.session.cols,
+    rows: props.session.rows,
+    scrollback: TERMINAL_SCROLLBACK,
+    fontSize: FONT_SIZE,
+    fontFamily: FONT_FAMILY,
+    theme: terminalTheme(props.dark),
+    minimumContrastRatio: contrast(),
+    disableStdin: props.session.mode === 'pipe',
+    allowProposedApi: true
+  })
+  fit = new FitAddon()
+  terminal.loadAddon(fit)
+  ignoreTerminalQueries(terminal)
+  terminal.open(host.value)
+  terminal.onData(data => {
+    if (store.state === 'connected')
+      store.send({ type: 'input', terminalId: props.session.id, data })
+  })
+  if (!document.hidden) attachOutput()
   await document.fonts.ready
   if (!disposed) resize()
 })

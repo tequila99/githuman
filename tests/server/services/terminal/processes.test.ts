@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import {
+  classifyProcessActivity,
   descendants,
   processes,
   signalProcess,
@@ -48,6 +49,13 @@ test('descendants ignores unrelated processes and survives a self-parent loop', 
 
 test('descendants finds children of a root that left the list', () => {
   assert.deepEqual(descendants([row(7, 99)], 99), [row(7, 99)])
+})
+
+test('one process list classifies idle, running and a missing pid', () => {
+  const rows = [row(10, 1), row(11, 10)]
+  assert.equal(classifyProcessActivity(rows, 10), 'running')
+  assert.equal(classifyProcessActivity([row(10, 1)], 10), 'idle')
+  assert.equal(classifyProcessActivity(rows, 99), 'unknown')
 })
 
 test('signalProcess ignores PIDs that would reach the server group or every process', () => {

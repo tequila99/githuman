@@ -9,6 +9,23 @@ import {
   TERMINAL_ORPHAN_MS
 } from '../../../../src/shared/terminal/constants.ts'
 
+test('activity poll reads the process list once for every session', async t => {
+  let calls = 0
+  const registry = new TerminalRegistry({
+    repositoryPath: '/tmp',
+    backend: async () => new FakeBackend(),
+    listProcesses: async () => {
+      calls++
+      return []
+    }
+  })
+  t.after(() => registry.dispose())
+  await registry.create(80, 24)
+  await registry.create(80, 24)
+  await registry.checkActivity()
+  assert.equal(calls, 1)
+})
+
 test('registry atomically limits concurrent creates and releases closed slots', async t => {
   const registry = new TerminalRegistry({
     repositoryPath: '/tmp',

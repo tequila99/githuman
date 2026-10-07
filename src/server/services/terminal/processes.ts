@@ -68,13 +68,19 @@ export function descendants(rows: ProcessRow[], pid: number): ProcessRow[] {
   return order.flatMap(id => byPid.get(id) ?? [])
 }
 
+export function classifyProcessActivity(
+  rows: ProcessRow[],
+  pid: number
+): TerminalRunning {
+  if (!rows.some(row => row.pid === pid)) return 'unknown'
+  return descendants(rows, pid).some(row => row.pid !== pid)
+    ? 'running'
+    : 'idle'
+}
+
 export async function processActivity(pid: number): Promise<TerminalRunning> {
   try {
-    const rows = await processes()
-    if (!rows.some(row => row.pid === pid)) return 'unknown'
-    return descendants(rows, pid).some(row => row.pid !== pid)
-      ? 'running'
-      : 'idle'
+    return classifyProcessActivity(await processes(), pid)
   } catch {
     return 'unknown'
   }
