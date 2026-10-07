@@ -141,7 +141,11 @@ export default defineConfig(ctx => {
         // changeOrigin: true, which rewrites Host to :3847 while the browser's
         // Origin stays the dev server's — the agent routes' Host/Origin check
         // (ADR 0023) would then reject every request with 403.
-        '/api': { target: 'http://localhost:3847', changeOrigin: false }
+        '/api': {
+          target: process.env.GITHUMAN_DEV_API ?? 'http://localhost:3847',
+          changeOrigin: false,
+          ws: true
+        }
       }
     },
 

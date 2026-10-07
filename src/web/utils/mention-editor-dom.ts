@@ -24,7 +24,7 @@ export function createChip(path: string): HTMLElement {
   chip.className = 'agent-mention'
   chip.contentEditable = 'false'
   chip.dataset.path = path
-  chip.title = path
+  chip.dataset.tooltip = path
   const label = document.createElement('span')
   label.className = 'agent-mention__label'
   const remove = document.createElement('button')

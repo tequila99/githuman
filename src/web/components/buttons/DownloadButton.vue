@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { ref } from 'vue'
 import { exportFile } from 'quasar'
 import { useI18n } from 'vue-i18n'
@@ -48,6 +49,8 @@ async function download() {
     :aria-label="tooltip"
     @click.stop="download"
   >
-    <q-tooltip v-if="tooltip">{{ tooltip }}</q-tooltip>
+    <q-tooltip :delay="TOOLTIP_DELAY_MS" v-if="tooltip">{{
+      tooltip
+    }}</q-tooltip>
   </q-btn>
 </template>

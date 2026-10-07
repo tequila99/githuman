@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AgentConfigOption } from '@/api/types'
@@ -64,7 +65,7 @@ const current = computed(
     :aria-label="`${option.name}: ${current}`"
     aria-haspopup="listbox"
   >
-    <q-tooltip :delay="500">
+    <q-tooltip :delay="TOOLTIP_DELAY_MS">
       {{ option.name }}<template v-if="hint"> · {{ hint }}</template>
     </q-tooltip>
     <q-menu anchor="top left" self="bottom left" @before-show="filter = ''">

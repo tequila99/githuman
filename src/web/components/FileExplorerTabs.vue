@@ -6,7 +6,7 @@ defineProps<{
   unstagedFilesLength: number
 }>()
 
-const source = defineModel<DiffSource>({ default: 'staged' })
+const source = defineModel<DiffSource>({ default: 'unstaged' })
 const { t } = useI18n()
 </script>
 
@@ -19,19 +19,19 @@ const { t } = useI18n()
     narrow-indicator
     class="text-primary q-mb-sm"
   >
-    <q-tab name="staged">
-      <div class="row items-center no-wrap q-gutter-x-xs">
-        <span>{{ t('changes.staged') }}</span>
-        <q-badge color="positive" rounded>
-          {{ stagedFilesLength }}
-        </q-badge>
-      </div>
-    </q-tab>
     <q-tab name="unstaged">
       <div class="row items-center no-wrap q-gutter-x-xs">
         <span>{{ t('changes.unstaged') }}</span>
         <q-badge color="warning" rounded>
           {{ unstagedFilesLength }}
+        </q-badge>
+      </div>
+    </q-tab>
+    <q-tab name="staged">
+      <div class="row items-center no-wrap q-gutter-x-xs">
+        <span>{{ t('changes.staged') }}</span>
+        <q-badge color="positive" rounded>
+          {{ stagedFilesLength }}
         </q-badge>
       </div>
     </q-tab>

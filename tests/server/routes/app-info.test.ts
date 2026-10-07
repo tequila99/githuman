@@ -12,5 +12,8 @@ test('GET /api/app-info returns the current app version', async t => {
   const response = await app.inject({ method: 'GET', url: '/api/app-info' })
 
   assert.equal(response.statusCode, 200)
-  assert.deepEqual(response.json(), { version: getAppVersion() })
+  assert.deepEqual(response.json(), {
+    version: getAppVersion(),
+    terminal: { available: false, mode: null }
+  })
 })

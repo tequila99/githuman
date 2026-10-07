@@ -5,6 +5,13 @@ import { join } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify'
 import fastifyStatic from '@fastify/static'
+import fastifyWebsocket from '@fastify/websocket'
+import {
+  terminalRoutes,
+  TERMINAL_WEBSOCKET_OPTIONS
+} from './routes/terminal.ts'
+import { TerminalRegistry } from './services/terminal/registry.ts'
+import { loadPty, terminalSupported } from './services/terminal/backend.ts'
 import fastifySwagger from '@fastify/swagger'
 import fastifySwaggerUi from '@fastify/swagger-ui'
 // @fastify/sse's published types declare an ESM default export that doesn't match
@@ -54,6 +61,8 @@ export interface BuildAppOptions {
    * `--api-docs` flag turn it on. `/api/openapi.json` is always served.
    */
   apiDocs?: boolean
+  terminalEnabled?: boolean
+  terminalRegistry?: TerminalRegistry
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -62,6 +71,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const db = options.db ?? createTestDatabase()
   const eventBus = options.eventBus ?? createEventBus()
 
+  // Windows includes a PTY binary, but the shell and process list are Unix-only.
+  const terminalEnabled =
+    options.terminalEnabled === true && terminalSupported()
+
+  if (terminalEnabled)
+    app.register(fastifyWebsocket, TERMINAL_WEBSOCKET_OPTIONS)
   app.register(fastifySse)
   // The spec collects routes as they are added, so it comes before them.
   app.register(fastifySwagger, openApiOptions())
@@ -70,7 +85,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
   app.register(openApiRoutes)
   app.register(healthRoutes)
-  app.register(appInfoRoutes)
+  app.register(appInfoRoutes, {
+    terminalCapability: async () => ({
+      available: terminalEnabled,
+      mode: terminalEnabled ? ((await loadPty()) ? 'pty' : 'pipe') : null
+    })
+  })
   app.register(diffRoutes, { repositoryPath })
   app.register(gitRoutes, { repositoryPath })
   app.register(reviewRoutes, { repositoryPath, db, eventBus })
@@ -80,6 +100,17 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     eventBus,
     instanceId: options.instanceId ?? randomUUID()
   })
+
+  if (terminalEnabled)
+    app.register(terminalRoutes, {
+      registry:
+        options.terminalRegistry ??
+        new TerminalRegistry({
+          repositoryPath,
+          onLifecycle: event =>
+            app.log.info({ terminal: event }, 'Terminal lifecycle')
+        })
+    })
 
   if (options.agentPresets) {
     app.register(agentRoutes, {

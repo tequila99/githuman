@@ -60,7 +60,7 @@ const commentCount = computed(
     <q-item-section class="text-mono">
       <!-- The name shrinks with an ellipsis; the badge never does, so it stays visible. -->
       <div class="file-list-item__path-row row no-wrap items-center">
-        <span class="ellipsis file-list-item__path-label" :title="path">
+        <span class="ellipsis file-list-item__path-label" :data-tooltip="path">
           {{ path }}
         </span>
         <CommentCountBadge
@@ -87,7 +87,7 @@ const commentCount = computed(
           size="sm"
           icon="undo"
           :aria-label="t('changes.actions.discard')"
-          :title="t('changes.actions.discard')"
+          :data-tooltip="t('changes.actions.discard')"
           @click.stop="discard(path)"
         />
         <q-btn
@@ -98,7 +98,7 @@ const commentCount = computed(
           size="sm"
           icon="add"
           :aria-label="t('changes.actions.stage')"
-          :title="t('changes.actions.stage')"
+          :data-tooltip="t('changes.actions.stage')"
           @click.stop="stage(path)"
         />
       </template>
@@ -111,7 +111,7 @@ const commentCount = computed(
         size="sm"
         icon="remove"
         :aria-label="t('changes.actions.unstage')"
-        :title="t('changes.actions.unstage')"
+        :data-tooltip="t('changes.actions.unstage')"
         @click.stop="unstage(path)"
       />
     </q-item-section>

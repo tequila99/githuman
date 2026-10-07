@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import { useAgentStore } from '@/stores/agent-store'
@@ -69,7 +70,7 @@ function confirmClose(entry: AgentChatEntry) {
             :aria-label="t('agent.chats.close')"
             @click.stop.prevent="confirmClose(entry)"
           />
-          <q-tooltip :delay="600">{{ entry.info.name }}</q-tooltip>
+          <q-tooltip :delay="TOOLTIP_DELAY_MS">{{ entry.info.name }}</q-tooltip>
         </div>
       </q-tab>
     </q-tabs>
@@ -84,7 +85,9 @@ function confirmClose(entry: AgentChatEntry) {
       :aria-label="t('agent.chats.add')"
       @click="store.openNewChatDialog()"
     >
-      <q-tooltip>{{ t('agent.chats.add') }}</q-tooltip>
+      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
+        t('agent.chats.add')
+      }}</q-tooltip>
     </q-btn>
   </div>
 </template>

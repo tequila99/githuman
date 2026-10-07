@@ -42,3 +42,17 @@ test('images are not rendered (no remote loads chosen by the agent)', () => {
     /<img/i
   )
 })
+
+test('link titles use delegated tooltip data with escaped text', () => {
+  const html = renderMarkdown("[x](https://example.com 'A & <B>')")
+  assert.match(html, /data-tooltip="A &amp; &lt;B&gt;"/)
+  assert.doesNotMatch(html, /\stitle=/)
+})
+
+test('code copy controls use delegated tooltips and escape labels', () => {
+  const html = renderMarkdown('```ts\nconst x = 1\n```', {
+    copyLabel: 'Copy "code" <x>'
+  })
+  assert.match(html, /data-tooltip="Copy &quot;code&quot; &lt;x&gt;"/)
+  assert.doesNotMatch(html, /\stitle=/)
+})

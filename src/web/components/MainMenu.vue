@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useAppTheme } from '@/composables/use-app-theme'
+import { useTerminalStore } from '@/stores/terminal-store'
 import { useAgentStore } from '@/stores/agent-store'
 import { AGENT_ICON } from '@/utils/agent-icon'
 import { NAV_BREAKPOINT } from '@/composables/use-nav-drawer'
@@ -12,6 +14,7 @@ const leftDrawerOpen = defineModel<boolean | null>({ required: true })
 
 const { t } = useI18n()
 const { isDark, toggleTheme } = useAppTheme()
+const terminalStore = useTerminalStore()
 const agentStore = useAgentStore()
 const { enabled: agentEnabled, activeId, panelOpen } = storeToRefs(agentStore)
 const chatsOpen = ref(true)
@@ -41,6 +44,16 @@ const chatsOpen = ref(true)
           <q-item-section>{{ t('nav.reviews') }}</q-item-section>
         </q-item>
 
+        <q-item
+          v-if="terminalStore.enabled"
+          v-ripple
+          clickable
+          @click="terminalStore.show"
+        >
+          <q-item-section avatar><q-icon name="terminal" /></q-item-section>
+          <q-item-section>{{ t('terminal.title') }}</q-item-section>
+        </q-item>
+
         <q-expansion-item
           v-if="agentEnabled"
           v-model="chatsOpen"
@@ -63,7 +76,9 @@ const chatsOpen = ref(true)
                 :aria-label="t('agent.chats.add')"
                 @click.stop="agentStore.openNewChatDialog()"
               >
-                <q-tooltip>{{ t('agent.chats.add') }}</q-tooltip>
+                <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
+                  t('agent.chats.add')
+                }}</q-tooltip>
               </q-btn>
             </q-item-section>
           </template>

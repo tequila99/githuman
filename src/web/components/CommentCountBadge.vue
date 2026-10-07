@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { useI18n } from 'vue-i18n'
 
 defineProps<{ count: number; compact?: boolean }>()
@@ -14,7 +15,9 @@ const { t } = useI18n()
   >
     <q-icon name="mode_comment" :size="compact ? '15px' : '20px'" />
     <q-badge color="primary" floating rounded>{{ count }}</q-badge>
-    <q-tooltip>{{ t('reviews.comments.count', { count }) }}</q-tooltip>
+    <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
+      t('reviews.comments.count', { count })
+    }}</q-tooltip>
   </span>
 </template>
 
