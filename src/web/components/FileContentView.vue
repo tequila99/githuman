@@ -3,18 +3,20 @@ import { computed, watchEffect } from 'vue'
 import type { Comment } from '@/api/types'
 import FileContentLine from './FileContentLine.vue'
 import RowSegment from './RowSegment.vue'
-import { groupRows, ROW_HEIGHT } from '@/utils/row-segments'
+import { groupRows, ROW_HEIGHT, rowSegmentProps } from '@/utils/row-segments'
 import CommentThread from './CommentThread.vue'
 import { useCardState } from '@/composables/use-card-state'
+import { usePendingFullComment } from '@/composables/use-pending-full-comment'
 import { useCommentActions } from '@/composables/use-comment-actions'
 import { useLineDragSelect } from '@/composables/use-line-drag-select'
 import {
   checkAnchor,
   createAnchor,
   type AnchorLine,
-  type CommentAnchor
+  anchorEndsAt
 } from '@/utils/comment-anchor'
 import { useLineTokens } from '@/composables/use-line-tokens'
+import { commentsByLine } from '@/utils/comment-threads'
 
 const props = defineProps<{
   path: string
@@ -42,7 +44,7 @@ const { tokens: highlightedLines, holdForTokens } = useLineTokens(() => {
 // (always 'full'), only the range math matters (see ADR 0017 AC14).
 // The anchor keeps the text of the selected lines: an edit on disk must not move the
 // form next to other text (see `comment-anchor.ts`).
-const pending = useCardState<CommentAnchor | null>('pending:full', () => null)
+const pending = usePendingFullComment()
 
 function anchorLines(): AnchorLine[] {
   return props.lines.map((text, index) => ({ key: index + 1, text }))
@@ -83,16 +85,7 @@ function isSelected(lineNumber: number): boolean {
 }
 
 const rows = computed(() => {
-  const byLine = new Map<number, Comment[]>()
-  for (const comment of props.comments ?? []) {
-    if (comment.lineNumberEnd === null) continue
-    const thread = byLine.get(comment.lineNumberEnd)
-    if (thread) {
-      thread.push(comment)
-    } else {
-      byLine.set(comment.lineNumberEnd, [comment])
-    }
-  }
+  const byLine = commentsByLine(props.comments ?? [])
   return props.lines.map((line, index) => ({
     line,
     index,
@@ -101,6 +94,19 @@ const rows = computed(() => {
   }))
 })
 const grouping = computed(() => groupRows(rows.value))
+
+const segments = computed(() =>
+  grouping.value.groups.map(group => ({
+    ...group,
+    props: rowSegmentProps(group, {
+      comments: row => row.comments,
+      hasForm: row => anchorEndsAt(ownAnchor.value, 'full', row.lineNumber),
+      owner: props.lines,
+      wrap: !!props.wrap,
+      commentsEditable: !!props.commentsEditable
+    })
+  }))
+)
 const pendingLineRange = computed(() =>
   ownAnchor.value
     ? { start: ownAnchor.value.startKey, end: ownAnchor.value.endKey }
@@ -149,16 +155,9 @@ function cancelNewComment() {
   <div v-else class="file-content-view">
     <component
       :is="grouping.segmented ? RowSegment : 'div'"
-      v-for="group in grouping.groups"
+      v-for="group in segments"
       :key="group.start"
-      v-bind="
-        grouping.segmented
-          ? {
-              minHeight: group.rows.length * ROW_HEIGHT,
-              keep: group.rows.some(row => ownAnchor?.endKey === row.lineNumber)
-            }
-          : {}
-      "
+      v-bind="grouping.segmented ? group.props : {}"
     >
       <template
         v-for="{ line, index, lineNumber, comments } in group.rows"

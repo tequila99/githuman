@@ -9,6 +9,11 @@ import { useDiffStore } from '@/stores/diff-store'
 import { pathOf } from '@/utils/diff-file'
 import { equalArrays } from '@/utils/equal-arrays'
 import { SCROLL_ROOT_KEY } from '@/composables/use-scroll-root'
+import {
+  useFileScroll,
+  type VirtualScrollApi
+} from '@/composables/use-file-scroll'
+import { CARD_HEIGHT_ESTIMATE } from '@/utils/diff-card-height'
 import { provideCommentActions } from '@/composables/use-comment-actions'
 import DiffStatusBar from './DiffStatusBar.vue'
 import ChangesFileCard from './ChangesFileCard.vue'
@@ -16,18 +21,11 @@ import ActiveReviewBar from './ActiveReviewBar.vue'
 import LoadErrorBanner from './LoadErrorBanner.vue'
 import CreateReviewFabButton from './buttons/CreateReviewFabButton.vue'
 
-// Height guess for a closed card, in px. Quasar replaces it with measured heights.
-const CARD_HEIGHT_ESTIMATE = 46
-
 // How many rows the list draws around the window, and how many before and after
 // per window height. More rows after than before: people scroll down.
 const SLICE_SIZE = 12
 const SLICE_RATIO_BEFORE = 1.5
 const SLICE_RATIO_AFTER = 2
-
-// Frames to wait for a card to mount after a scroll by index. Quasar scrolls in
-// `requestAnimationFrame` and `setTimeout`, so one tick is not enough.
-const SCROLL_SETTLE_FRAMES = 20
 
 const { t } = useI18n()
 
@@ -52,24 +50,12 @@ const scrollArea = ref<QScrollArea | null>(null)
 const scrollTarget = computed(() => scrollArea.value?.getScrollTarget() ?? null)
 provide(SCROLL_ROOT_KEY, () => scrollTarget.value)
 
-interface VirtualScrollApi {
-  reset: () => void
-  scrollTo: (index: number, edge?: string) => void
-}
 const virtualScroll = ref<VirtualScrollApi | null>(null)
-
-/** The virtual list, after it mounted. A scroll request can come before that. */
-function mountedList(): Promise<VirtualScrollApi> {
-  const current = virtualScroll.value
-  if (current) return Promise.resolve(current)
-  return new Promise(resolve => {
-    const stop = watch(virtualScroll, list => {
-      if (!list) return
-      stop()
-      resolve(list)
-    })
-  })
-}
+useFileScroll({
+  request: () => explorer.scrollRequest,
+  list: virtualScroll,
+  root: scrollTarget
+})
 
 // Quasar measures rows once and resets only when the list length changes.
 // Expand all, Collapse all and a switch of the source change heights at the same length.
@@ -89,27 +75,6 @@ watch(diffFiles, async (files, previous) => {
   await nextTick()
   virtualScroll.value?.reset()
 })
-
-// The card may be unmounted, so scroll by index. Then wait for it and show it whole.
-watch(
-  () => explorer.scrollRequest,
-  async request => {
-    if (!request) return
-    const list = await mountedList()
-    await nextTick()
-    // A newer request came while this one waited for the list.
-    if (explorer.scrollRequest !== request) return
-    list.scrollTo(request.index, 'start')
-    for (let frame = 0; frame < SCROLL_SETTLE_FRAMES; frame++) {
-      await new Promise(resolve => requestAnimationFrame(resolve))
-      const card = document.getElementById(`diff-file-${request.path}`)
-      if (card) {
-        card.scrollIntoView({ block: 'nearest' })
-        return
-      }
-    }
-  }
-)
 </script>
 
 <template>

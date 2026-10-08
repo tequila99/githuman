@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, shallowRef } from 'vue'
+import { usePendingDiffComment } from '@/composables/use-pending-diff-comment'
 import { useI18n } from 'vue-i18n'
 import type { Comment, DiffFile } from '@/api/types'
 import type { TokensByLine } from '@/composables/use-syntax-highlighting'
@@ -7,6 +8,14 @@ import DiffHunkView from '@/components/DiffHunkView.vue'
 import DiffFileFullView from '@/components/DiffFileFullView.vue'
 import HorizontalScrollBody from '@/components/HorizontalScrollBody.vue'
 import LoadErrorBanner from '@/components/LoadErrorBanner.vue'
+import RowSegment from '@/components/RowSegment.vue'
+import { diffAnchorEndsAt } from '@/utils/comment-anchor'
+import {
+  diffCommentThreads,
+  commentsForDiffLine
+} from '@/utils/comment-threads'
+import { hunkHeightEstimate, rowSegmentProps } from '@/utils/row-segments'
+import type { FullFileVersion } from '@/composables/use-full-file-version'
 
 const props = withDefaults(
   defineProps<{
@@ -65,10 +74,47 @@ const diffComments = computed(() =>
 const fullFileComments = computed(() =>
   props.comments.filter(c => c.lineType === null)
 )
+
+const pending = usePendingDiffComment()
+const fullFileVersion = shallowRef<FullFileVersion | null>(null)
+const hunkSegments = computed(() => {
+  if (props.commentsOnly) return []
+  const threads = diffCommentThreads(diffComments.value)
+  return props.file.hunks.map(hunk => {
+    const segment = rowSegmentProps(
+      { start: 0, rows: hunk.lines },
+      {
+        comments: line => commentsForDiffLine(line, threads),
+        // Raw anchors keep a hunk alive until its child can validate the fingerprint.
+        hasForm: line => diffAnchorEndsAt(pending.value, line),
+        owner: hunk,
+        wrap: props.wrap,
+        commentsEditable: !!props.commentsEditable,
+        slot: 'hunk',
+        // A hunk can contain queued placeholders rather than measured child rows.
+        cacheHeight: false
+      }
+    )
+    return {
+      ...segment,
+      queued: false,
+      minHeight: hunkHeightEstimate(hunk, segment.minHeight)
+    }
+  })
+})
 </script>
 
 <template>
-  <HorizontalScrollBody class="diff-file-card__body" :label="path">
+  <HorizontalScrollBody
+    class="diff-file-card__body"
+    :label="path"
+    :reset-key="[
+      path,
+      viewMode,
+      wrap,
+      viewMode === 'full' ? fullFileVersion : file
+    ]"
+  >
     <DiffFileFullView
       v-if="viewMode === 'full'"
       :path="path"
@@ -76,6 +122,7 @@ const fullFileComments = computed(() =>
       :comments-editable="commentsEditable"
       :comments="fullFileComments"
       :wrap="wrap"
+      @content-version="fullFileVersion = $event"
     />
     <template v-else>
       <p
@@ -110,18 +157,23 @@ const fullFileComments = computed(() =>
           {{ t('changes.noTextChanges') }}
         </p>
       </template>
-      <DiffHunkView
+      <component
+        :is="commentsOnly ? 'div' : RowSegment"
         v-for="(hunk, index) in holding ? [] : file.hunks"
         :key="`${hunk.oldStart}:${hunk.newStart}`"
-        :path="path"
-        :hunk="hunk"
-        :line-tokens="hunkTokens?.[index] ?? null"
-        :commentable="commentable"
-        :comments-editable="commentsEditable"
-        :comments="diffComments"
-        :comments-only="commentsOnly"
-        :wrap="wrap"
-      />
+        v-bind="hunkSegments[index] ?? {}"
+      >
+        <DiffHunkView
+          :path="path"
+          :hunk="hunk"
+          :line-tokens="hunkTokens?.[index] ?? null"
+          :commentable="commentable"
+          :comments-editable="commentsEditable"
+          :comments="diffComments"
+          :comments-only="commentsOnly"
+          :wrap="wrap"
+        />
+      </component>
     </template>
   </HorizontalScrollBody>
 </template>

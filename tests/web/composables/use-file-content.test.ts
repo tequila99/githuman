@@ -41,6 +41,7 @@ describe('useFileContent cache', () => {
     const secondRequest = second.fetchContent('cached-a.ts', 'WORKTREE')
     assert.deepEqual(second.lines.value, ['one', 'two'])
     assert.equal(second.loading.value, true)
+    assert.equal(second.loaded.value, true)
 
     answers[1]!(['one', 'two', 'three'])
     await secondRequest
@@ -124,6 +125,7 @@ describe('useFileContent lines', () => {
     }
     await content.fetchContent('error.ts', 'WORKTREE')
     assert.equal(content.error.value, 'offline')
+    assert.equal(content.loaded.value, true)
 
     globalThis.fetch = async () =>
       new Response(JSON.stringify({ lines: ['one'], isBinary: false }), {
@@ -133,4 +135,23 @@ describe('useFileContent lines', () => {
     await content.fetchContent('error.ts', 'WORKTREE')
     assert.equal(content.error.value, null)
   })
+})
+
+it('loaded distinguishes a successful empty response from a first failure and reset', async () => {
+  const content = useFileContent()
+  assert.equal(content.loaded.value, false)
+  globalThis.fetch = async () => {
+    throw new Error('offline')
+  }
+  await content.fetchContent('empty-result.ts', 'WORKTREE')
+  assert.equal(content.loaded.value, false)
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ lines: [], isBinary: false }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    })
+  await content.fetchContent('empty-result.ts', 'WORKTREE')
+  assert.equal(content.loaded.value, true)
+  content.reset()
+  assert.equal(content.loaded.value, false)
 })
