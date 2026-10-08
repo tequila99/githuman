@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, useTemplateRef, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
+import { equalArrays } from '@/utils/equal-arrays'
 
 /**
  * A native (or QScrollArea) horizontal scrollbar sits at the element's
@@ -7,9 +8,14 @@ import { ref, useTemplateRef, watch } from 'vue'
  * viewport plus a synced `position: sticky` bar.
  */
 
-defineProps<{
+const props = defineProps<{
   /** Names the focusable scroll region for screen readers. */
   label?: string
+  /**
+   * A change of any item clears the measured content width: for example a new
+   * version of the file, another view mode or wrap. Then the longest row can be shorter.
+   */
+  resetKey?: readonly unknown[]
 }>()
 
 const viewport = useTemplateRef<HTMLDivElement>('viewport')
@@ -17,6 +23,12 @@ const bar = useTemplateRef<HTMLDivElement>('bar')
 
 const scrollWidth = ref(0)
 const overflowing = ref(false)
+// Width of the content box in px, or 0 for the window width. It only grows,
+// so a segment that unmounts does not make the box narrower.
+const contentWidth = ref(0)
+let resetting = false
+let active = true
+let resetVersion = 0
 
 /**
  * Reads scrollWidth itself: QResizeObserver only reports the viewport's
@@ -26,10 +38,32 @@ const overflowing = ref(false)
  */
 function measure() {
   const el = viewport.value
-  if (!el) return
+  if (!el || resetting || !active) return
   scrollWidth.value = el.scrollWidth
   overflowing.value = el.scrollWidth > el.clientWidth + 1
+  if (overflowing.value && el.scrollWidth > contentWidth.value) {
+    contentWidth.value = el.scrollWidth
+  }
 }
+
+// The parent makes a new array on each render, so compare the items.
+watch(
+  () => props.resetKey ?? [],
+  async (key, previous) => {
+    if (equalArrays(key, previous)) return
+    const version = ++resetVersion
+    resetting = true
+    contentWidth.value = 0
+    // Read after the old CSS width is gone; mutation callbacks may arrive before it.
+    await nextTick()
+    if (!active || version !== resetVersion) return
+    resetting = false
+    measure()
+    await nextTick()
+    if (active && version === resetVersion)
+      syncScroll(viewport.value, bar.value)
+  }
+)
 
 // Post-flush: the bar must already have its new width and be visible.
 watch([scrollWidth, overflowing], () => syncScroll(viewport.value, bar.value), {
@@ -41,6 +75,10 @@ function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
     to.scrollLeft = from.scrollLeft
   }
 }
+onBeforeUnmount(() => {
+  active = false
+  resetVersion++
+})
 </script>
 
 <template>
@@ -54,7 +92,14 @@ function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
       :aria-label="label"
       @scroll="syncScroll(viewport, bar)"
     >
-      <div class="horizontal-scroll-body__content"><slot /></div>
+      <div
+        class="horizontal-scroll-body__content"
+        :style="
+          contentWidth ? { '--content-width': `${contentWidth}px` } : undefined
+        "
+      >
+        <slot />
+      </div>
       <q-resize-observer :debounce="0" @resize="measure" />
     </div>
     <div
@@ -87,10 +132,11 @@ function syncScroll(from: HTMLDivElement | null, to: HTMLDivElement | null) {
 }
 
 /* One box as wide as the widest line: sticky content can only travel within
-   its parent, so every hunk must span the whole scroll width (#38). */
+   its parent, so every hunk must span the whole scroll width (#38). The width
+   comes from the measured scroll width, not from fit-content: fit-content
+   measures every row again after each mount of a segment (ADR 0040). */
 .horizontal-scroll-body__content {
-  width: fit-content;
-  min-width: 100%;
+  width: max(100%, var(--content-width, 0px));
 }
 
 .horizontal-scroll-body__viewport:focus-visible {

@@ -1,3 +1,5 @@
+import type { DiffLine } from '@/api/types'
+
 /**
  * Where an unsent comment form is attached. The line numbers alone are not enough:
  * after an edit of the file, the same numbers can point to other text. The anchor
@@ -59,4 +61,27 @@ export function checkAnchor(
     selectedTexts(lines, anchor.startKey, anchor.endKey)
   )
   return fingerprint === anchor.fingerprint ? 'valid' : 'stale'
+}
+
+export function anchorEndsAt(
+  anchor: CommentAnchor | null,
+  column: string,
+  key: number | null
+): boolean {
+  return (
+    anchor !== null &&
+    key !== null &&
+    anchor.column === column &&
+    anchor.endKey === key
+  )
+}
+
+export function diffAnchorEndsAt(
+  anchor: CommentAnchor | null,
+  line: Pick<DiffLine, 'oldLineNumber' | 'newLineNumber'>
+): boolean {
+  return (
+    anchorEndsAt(anchor, 'old', line.oldLineNumber) ||
+    anchorEndsAt(anchor, 'new', line.newLineNumber)
+  )
 }

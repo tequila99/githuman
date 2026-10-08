@@ -5,16 +5,13 @@ import DiffFileCardBody from '@/components/DiffFileCardBody.vue'
 import DiffFileCardHeader from '@/components/DiffFileCardHeader.vue'
 import FileCardFrame from '@/components/FileCardFrame.vue'
 import RowSegment from '@/components/RowSegment.vue'
-import { ROW_HEIGHT } from '@/utils/row-segments'
+import { diffCardBodyHeight } from '@/utils/diff-card-height'
 import { CARD_STATE_KEY, useCardState } from '@/composables/use-card-state'
 import { useFileHighlight } from '@/composables/use-file-highlight'
 import { useHunksOnDemand } from '@/composables/use-hunks-on-demand'
 import { pathOf } from '@/utils/diff-file'
 import { isMarkdown } from '@/utils/file-wrap'
 import type { DiffSource } from '@/stores/diff-store'
-
-// Room for hunk headers and context lines when only the counts are known.
-const HUNK_HEADERS_ESTIMATE = 80
 
 const props = withDefaults(
   defineProps<{
@@ -89,14 +86,10 @@ watch(
   { immediate: true }
 )
 
-// Height guess for an open body that is not mounted yet. Expand all opens dozens of
-// cards at once, and only the ones near the window need real rows.
+// Height guess for an open body while its hunks load. The hunks and their rows
+// mount later, and only near the window (ADR 0040).
 const bodyHeightEstimate = computed(() =>
-  props.detail
-    ? props.detail.hunks.reduce((sum, hunk) => sum + hunk.lines.length + 1, 0) *
-      ROW_HEIGHT
-    : (props.file.additions + props.file.deletions) * ROW_HEIGHT +
-      HUNK_HEADERS_ESTIMATE
+  diffCardBodyHeight(props.file, props.detail)
 )
 
 // Only the open body of this card needs its hunks.
@@ -157,8 +150,10 @@ const showFullFile = computed({
       />
     </template>
 
+    <!-- The body mounts at once: its hunks mount near the window, and the hunk request needs it. -->
     <RowSegment
       v-if="expanded"
+      immediate
       :min-height="bodyHeightEstimate"
       @change="mounted => (bodyMounted = mounted)"
     >

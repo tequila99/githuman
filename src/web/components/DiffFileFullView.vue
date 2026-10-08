@@ -3,6 +3,10 @@ import { computed, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Comment } from '@/api/types'
 import { useFileContent } from '@/composables/use-file-content'
+import {
+  useFullFileVersion,
+  type FullFileVersion
+} from '@/composables/use-full-file-version'
 import { useServerEvents } from '@/composables/use-server-events'
 import { useDiffStore } from '@/stores/diff-store'
 import { pathOf } from '@/utils/diff-file'
@@ -20,11 +24,16 @@ const props = withDefaults(
   { commentable: false, comments: () => [] }
 )
 
+const emit = defineEmits<{
+  (e: 'content-version', version: FullFileVersion): void
+}>()
+
 const { t } = useI18n()
 // The cache shows the lines at once when the virtual list mounts the card again.
-const { lines, isBinary, loading, error, fetchContent } = useFileContent({
-  cache: true
-})
+const { lines, isBinary, loading, loaded, error, fetchContent } =
+  useFileContent({
+    cache: true
+  })
 
 // Always the file on disk, even on the Staged tab: full-file comments are
 // numbered against one version everywhere, the markdown export included (#39).
@@ -49,6 +58,20 @@ const deletedOnDisk = computed(() =>
   diffStore.unstagedFiles.some(
     f => f.status === 'deleted' && pathOf(f) === props.path
   )
+)
+const version = useFullFileVersion({
+  lines,
+  isBinary,
+  loaded,
+  error,
+  deleted: deletedOnDisk
+})
+watch(
+  version,
+  value => {
+    if (value) emit('content-version', value)
+  },
+  { immediate: true }
 )
 </script>
 

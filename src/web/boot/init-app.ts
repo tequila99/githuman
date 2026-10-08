@@ -4,8 +4,11 @@ import { useAppInfoStore } from '@/stores/app-info-store'
 import { useAgentStore } from '@/stores/agent-store'
 import { onServerHello } from '@/composables/use-server-events'
 import { detectServerRestart } from '@/utils/detect-server-restart'
+import { warmCodeFonts } from '@/utils/warm-fonts'
 
 export default defineBoot(() => {
+  warmCodeFonts()
+
   const repositoryStore = useRepositoryStore()
   void repositoryStore.fetchInfo()
 
