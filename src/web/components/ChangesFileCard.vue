@@ -21,7 +21,7 @@ import { pathOf } from '@/utils/diff-file'
 import type { DiffFile } from '@/api/types'
 import DiffFileCard from './DiffFileCard.vue'
 
-// Cheap slots reserve space; only nearby slots create a full card and load its hunks.
+// A card shell reserves space; only a nearby shell creates a full card and loads its hunks.
 const props = defineProps<{ file: DiffFile }>()
 
 const explorer = useFileExplorerStore()

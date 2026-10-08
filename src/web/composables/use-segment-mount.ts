@@ -5,6 +5,15 @@ import { observeScrollRootWidth } from '@/utils/scroll-root-width'
 import { rememberSegmentHeight, segmentHeight } from '@/utils/segment-heights'
 import { ROW_HEIGHT } from '@/utils/row-segments'
 
+// The first sources of the mount watcher reset the measured height when they change.
+const GEOMETRY_SOURCE_COUNT = 5
+
+/** Names the positions of the watcher sources in one place. */
+function splitSources(sources: readonly unknown[]) {
+  const [minHeight, cost] = sources.slice(GEOMETRY_SOURCE_COUNT)
+  return [sources.slice(0, GEOMETRY_SOURCE_COUNT), minHeight, cost] as const
+}
+
 export interface SegmentMountOptions {
   /** Fixed for this subscription: cards prepare earlier than row segments. */
   mountMargin?: number
@@ -167,15 +176,18 @@ export function useSegmentMount(
       () => options.keep
     ],
     (current, previous) => {
-      const changed = current
-        .slice(0, 5)
-        .some((value, index) => value !== previous[index])
+      const [geometry, minHeight, cost] = splitSources(current)
+      const [previousGeometry, previousMinHeight, previousCost] =
+        splitSources(previous)
+      const changed = geometry.some(
+        (value, index) => value !== previousGeometry[index]
+      )
       if (changed) {
         resetHeight()
       } else if (!measured) {
         height.value = options.minHeight
       }
-      if (changed || current[5] !== previous[5] || current[6] !== previous[6]) {
+      if (changed || minHeight !== previousMinHeight || cost !== previousCost) {
         cancelJob()
         requestMount()
       }

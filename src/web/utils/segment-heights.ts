@@ -3,7 +3,7 @@ interface HeightEntry {
   px: number
 }
 
-// Stable slots replace their previous version, so live owners do not retain edit history.
+// Stable keys replace their previous version, so live owners do not retain edit history.
 const heights = new WeakMap<object, Map<string, HeightEntry>>()
 
 export function segmentHeight(

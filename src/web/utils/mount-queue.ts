@@ -41,6 +41,8 @@ function flush() {
   let spent = 0
   try {
     for (const job of ordered) {
+      // An earlier job of this frame can cancel a later job of the same snapshot.
+      if (!queue.has(job)) continue
       const budget = job.visible ? VISIBLE_ROW_BUDGET : ROW_BUDGET
       if (spent > 0 && spent + job.cost > budget) break
       queue.delete(job)
