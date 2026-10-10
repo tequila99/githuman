@@ -24,20 +24,21 @@ interface SendQueue {
 const SEND_QUEUES = new WeakMap<SseSender, SendQueue>()
 
 /**
- * Most messages in the send queue of one connection. On a reconnect the agent
- * stream replays every session buffer at once: MAX_AGENT_SESSIONS ×
- * MAX_BUFFERED_EVENTS, plus a `gap` and a `state` for each session. A lower
- * limit closes the stream before its first send, and the client then reconnects
- * in a loop. The limit is about twice that replay, so live events have room.
- * The stall timeout is the main bound on memory; this count is a backstop.
- * There is no byte limit: most queued items point to events that the session
- * buffers hold already (#85).
+ * The maximum number of messages in the send queue of one connection. On a
+ * reconnect the agent stream replays every session buffer at once:
+ * MAX_AGENT_SESSIONS × MAX_BUFFERED_EVENTS, plus a `gap` and a `state` for
+ * each session. A lower limit closes the stream before its first send, and the
+ * client then reconnects in a loop. The limit is about twice that replay, so
+ * live events have room. This count bounds memory. There is no byte limit:
+ * most queued items point to events that the session buffers hold already (#85).
  */
 export const MAX_QUEUED_MESSAGES = 50_000
 
 /**
  * A send that has not finished after this time means that the client stopped
- * reading. A slow client that still reads finishes each send sooner. The
+ * reading. The check runs when a new message arrives, so it closes a dead
+ * connection before the count limit does. A slow client that still reads
+ * finishes each send sooner. The
  * check uses `Date.now()`: a jump of the system clock can make a false stall,
  * and the client then only reconnects.
  */

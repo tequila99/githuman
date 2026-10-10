@@ -323,6 +323,7 @@ test(
     )
     t.after(() => app.close())
     let closedByServer = false
+    let connectedAfterOverflow: boolean | undefined
     app.get('/events', { sse: true }, async (_request, reply) => {
       reply.sse.keepAlive()
       await reply.sse.send({ event: 'connected', data: {} })
@@ -333,6 +334,9 @@ test(
       for (let id = 0; id <= MAX_QUEUED_MESSAGES + 1; id++) {
         safeSend(reply.sse, { event: 'burst', data: id })
       }
+      // The agent route depends on this: right after an overflow the stream
+      // reads as closed, so it can remove its listener at once.
+      connectedAfterOverflow = reply.sse.isConnected
     })
     const address = await app.listen({ port: 0, host: '127.0.0.1' })
     const response = await fetch(`${address}/events`, {
@@ -344,5 +348,6 @@ test(
       if (chunk.done) break
     }
     assert.equal(closedByServer, true)
+    assert.equal(connectedAfterOverflow, false)
   }
 )
