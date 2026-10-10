@@ -2,6 +2,8 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   checkAnchor,
+  diffAnchorEndsAt,
+  anchorEndsAt,
   createAnchor,
   type AnchorLine
 } from '@/utils/comment-anchor'
@@ -50,4 +52,18 @@ describe('comment anchor', () => {
     const diffAnchor = createAnchor('new', 2, 3, hunk)
     assert.equal(checkAnchor(diffAnchor, hunk), 'valid')
   })
+})
+
+it('endpoint ownership does not replace fingerprint validation', () => {
+  const anchor = createAnchor('old', 1, 1, [{ key: 1, text: 'original' }])
+  assert.equal(
+    diffAnchorEndsAt(anchor, { oldLineNumber: 1, newLineNumber: 4 }),
+    true
+  )
+  assert.equal(
+    diffAnchorEndsAt(anchor, { oldLineNumber: null, newLineNumber: 1 }),
+    false
+  )
+  assert.equal(checkAnchor(anchor, [{ key: 1, text: 'changed' }]), 'stale')
+  assert.equal(anchorEndsAt(null, 'full', 1), false)
 })

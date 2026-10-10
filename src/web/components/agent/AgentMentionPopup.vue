@@ -2,6 +2,7 @@
 import { computed, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
+import { mentionParts } from '../../../shared/agents/mention-paths.ts'
 
 const props = defineProps<{
   items: string[]
@@ -17,15 +18,8 @@ const emit = defineEmits<{ (e: 'pick', index: number): void }>()
 const { t } = useI18n()
 const $q = useQuasar()
 
-function split(path: string): { name: string; dir: string } {
-  const at = path.lastIndexOf('/')
-  return at === -1
-    ? { name: path, dir: '' }
-    : { name: path.slice(at + 1), dir: path.slice(0, at) }
-}
-
 const displayItems = computed(() =>
-  props.items.map(path => ({ path, ...split(path) }))
+  props.items.map(path => ({ path, ...mentionParts(path) }))
 )
 
 watch(
@@ -54,7 +48,7 @@ watch(
         {{ t('agent.mention.noFiles') }}
       </div>
       <div
-        v-for="({ path, name, dir }, i) in displayItems"
+        v-for="({ path, name, parent, directory }, i) in displayItems"
         :id="`${idPrefix}-${i}`"
         :key="path"
         role="option"
@@ -63,8 +57,13 @@ watch(
         :aria-selected="i === active"
         @click="emit('pick', i)"
       >
+        <q-icon
+          :name="directory ? 'folder' : 'description'"
+          size="16px"
+          class="agent-mention-popup__icon"
+        />
         <span class="agent-mention-popup__name">{{ name }}</span>
-        <span class="agent-mention-popup__dir">{{ dir }}</span>
+        <span class="agent-mention-popup__dir">{{ parent }}</span>
       </div>
     </div>
   </Teleport>
@@ -91,6 +90,10 @@ watch(
 }
 .agent-mention-popup__item--active {
   background: rgba(25, 118, 210, 0.18);
+}
+.agent-mention-popup__icon {
+  flex: none;
+  opacity: 0.7;
 }
 .agent-mention-popup__name {
   flex: 0 0 auto;

@@ -27,6 +27,7 @@ export function useFileContent(options: { cache?: boolean } = {}) {
   const lines = shallowRef<string[]>([])
   const isBinary = ref(false)
   const loading = ref(false)
+  const loaded = ref(false)
   const error = ref<string | null>(null)
 
   // Guards against out-of-order responses: if the user switches files twice
@@ -47,6 +48,7 @@ export function useFileContent(options: { cache?: boolean } = {}) {
       if (cached) {
         lines.value = cached.lines
         isBinary.value = cached.isBinary
+        loaded.value = true
       }
     }
     const requestId = ++latestRequestId
@@ -63,6 +65,7 @@ export function useFileContent(options: { cache?: boolean } = {}) {
       if (!equalArrays(lines.value, data.lines)) lines.value = data.lines
       isBinary.value = data.isBinary
       error.value = null
+      loaded.value = true
       if (options.cache) {
         // Also for the same text: the entry may have left the cache.
         contentCache.set(key, { lines: lines.value, isBinary: data.isBinary })
@@ -80,11 +83,12 @@ export function useFileContent(options: { cache?: boolean } = {}) {
   function reset() {
     ++latestRequestId // an answer still in flight must not refill the state
     loading.value = false
+    loaded.value = false
     lastKey = null
     lines.value = []
     isBinary.value = false
     error.value = null
   }
 
-  return { lines, isBinary, loading, error, fetchContent, reset }
+  return { lines, isBinary, loading, loaded, error, fetchContent, reset }
 }

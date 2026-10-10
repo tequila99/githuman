@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
-import type { PanEvent } from '@/composables/use-terminal-window-geometry'
+import type { WindowPanEvent } from '@/composables/windows/use-window-geometry'
 import TerminalWindowMenu from './TerminalWindowMenu.vue'
 
 const props = defineProps<{
@@ -11,7 +11,7 @@ const props = defineProps<{
   originalColors: boolean
 }>()
 const emit = defineEmits<{
-  drag: [event: PanEvent]
+  drag: [event: WindowPanEvent]
   toggleOriginalColors: []
   minimize: []
   toggleMaximized: []
@@ -26,7 +26,7 @@ const maximizeLabel = computed(() =>
 <template>
   <div class="window-header row items-center no-wrap">
     <div
-      v-touch-pan.prevent.mouse="(event: PanEvent) => emit('drag', event)"
+      v-touch-pan.prevent.mouse="(event: WindowPanEvent) => emit('drag', event)"
       class="window-header__title terminal-header__drag col row items-center"
       :class="{ 'terminal-header__drag--static': maximized }"
       @dblclick="emit('toggleMaximized')"

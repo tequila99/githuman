@@ -11,6 +11,8 @@ import SearchInput from './SearchInput.vue'
 import FileTreeNode from './FileTreeNode.vue'
 import FileListItem from './FileListItem.vue'
 import BrowseModeToggle from './BrowseModeToggle.vue'
+import DiffTreeFolderRow from './DiffTreeFolderRow.vue'
+import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 
 // Row height guess for the file list, in px. Quasar replaces it with measured heights.
 const ROW_HEIGHT_ESTIMATE = 32
@@ -34,6 +36,9 @@ const {
   treeInitialLoading,
   treeError,
   filteredDiffFiles,
+  diffTreeRows,
+  diffListMode,
+  filtering,
   filteredTree,
   totalTreeFiles
 } = storeToRefs(explorer)
@@ -59,14 +64,33 @@ const scrollTarget = computed(() => scrollArea.value?.getScrollTarget() ?? null)
       >
     </div>
 
-    <SearchInput
-      v-model="filter"
-      :placeholder="
-        browseMode
-          ? t('browse.searchPlaceholder')
-          : t('changes.filterPlaceholder')
-      "
-    />
+    <div class="row no-wrap items-center q-gutter-x-xs">
+      <SearchInput
+        v-model="filter"
+        class="col"
+        :placeholder="
+          browseMode
+            ? t('browse.searchPlaceholder')
+            : t('changes.filterPlaceholder')
+        "
+      />
+      <q-btn
+        v-if="!browseMode"
+        flat
+        dense
+        round
+        size="sm"
+        icon="account_tree"
+        :color="diffListMode === 'tree' ? 'primary' : undefined"
+        :aria-label="t('changes.listMode.tree')"
+        :aria-pressed="diffListMode === 'tree'"
+        @click="diffListMode = diffListMode === 'tree' ? 'list' : 'tree'"
+      >
+        <q-tooltip :delay="TOOLTIP_DELAY_MS">
+          {{ t('changes.listMode.tree') }}
+        </q-tooltip>
+      </q-btn>
+    </div>
   </div>
 
   <q-separator />
@@ -113,10 +137,40 @@ const scrollTarget = computed(() => scrollArea.value?.getScrollTarget() ?? null)
       >
         {{ filter ? t('browse.noMatchingFiles') : t('changes.emptyFileList') }}
       </p>
-      <!-- The key holds the source: with the same length Quasar would keep the old heights. -->
+      <!-- The key holds the source and the mode: with the same length Quasar would keep the old heights. -->
       <q-virtual-scroll
-        v-if="scrollTarget"
-        :key="source"
+        v-if="scrollTarget && diffListMode === 'tree'"
+        :key="`${source}:tree`"
+        :scroll-target="scrollTarget"
+        :items="diffTreeRows"
+        :virtual-scroll-item-size="ROW_HEIGHT_ESTIMATE"
+      >
+        <template #default="{ item: row }">
+          <DiffTreeFolderRow
+            v-if="row.kind === 'folder'"
+            :key="`d:${row.path}`"
+            :name="row.name"
+            :path="row.path"
+            :depth="row.depth"
+            :expanded="row.expanded"
+            :locked="filtering"
+            @toggle="explorer.toggleDiffFolder(row.paths)"
+          />
+          <FileListItem
+            v-else
+            :key="`f:${row.path}`"
+            :file="row.file"
+            :label="row.name"
+            :depth="row.depth"
+            :selected="selectedPath === row.path"
+            :source="source"
+            @click="explorer.selectFile(row.path)"
+          />
+        </template>
+      </q-virtual-scroll>
+      <q-virtual-scroll
+        v-else-if="scrollTarget"
+        :key="`${source}:list`"
         :scroll-target="scrollTarget"
         :items="filteredDiffFiles"
         :virtual-scroll-item-size="ROW_HEIGHT_ESTIMATE"

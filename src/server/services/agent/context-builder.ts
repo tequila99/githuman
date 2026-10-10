@@ -2,10 +2,11 @@ import { MAX_ATTACHMENT_BYTES } from '../../../shared/agents/constants.ts'
 import { AgentContextError } from '../../errors/agents.ts'
 import { errorMessage } from '../../../shared/utils/error-message.ts'
 import { formatDiffFile } from '../../../shared/agents/context-format.ts'
+import { withoutTrailingSlash } from '../../../shared/agents/mention-paths.ts'
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
-import { mkdir, stat, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, realpath, stat, writeFile } from 'node:fs/promises'
+import { join, relative, resolve, sep } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { ContentBlock } from '@agentclientprotocol/sdk'
 import type {
@@ -109,6 +110,24 @@ async function buildDiffItem(
   )
 }
 
+/**
+ * `resolveWithinRepo` checks the path as text, but `stat` follows a symbolic
+ * link. A link that points out of the repository must not reach the agent.
+ */
+async function assertRealPathInRepo(
+  repositoryPath: string,
+  absolute: string,
+  path: string
+): Promise<void> {
+  const [root, target] = await Promise.all([
+    realpath(repositoryPath),
+    realpath(absolute)
+  ])
+  if (target !== root && !target.startsWith(root + sep)) {
+    throw new AgentContextError(`"${path}" points out of the repository`)
+  }
+}
+
 async function buildFileItem(
   item: Extract<AgentContextItem, { kind: 'file' }>,
   deps: ContextBuilderDeps
@@ -125,10 +144,45 @@ async function buildFileItem(
       `"${item.path}" is not a file in the repository`
     )
   }
+  await assertRealPathInRepo(deps.repositoryPath, absolute, item.path)
   return {
     type: 'resource_link',
     uri: pathToFileURL(absolute).href,
     name: item.path
+  }
+}
+
+async function buildDirectoryItem(
+  item: Extract<AgentContextItem, { kind: 'directory' }>,
+  deps: ContextBuilderDeps
+): Promise<ContentBlock> {
+  const path = withoutTrailingSlash(item.path)
+  let absolute: string
+  try {
+    absolute = resolveWithinRepo(deps.repositoryPath, path)
+  } catch (error) {
+    throw asContextError(error)
+  }
+  // The agent runs in the repository root already, so a link to it says nothing.
+  if (absolute === resolve(deps.repositoryPath)) {
+    throw new AgentContextError('The repository root cannot be a context item')
+  }
+  const info = await stat(absolute).catch(() => null)
+  if (!info?.isDirectory()) {
+    throw new AgentContextError(
+      `"${path}" is not a directory in the repository`
+    )
+  }
+  await assertRealPathInRepo(deps.repositoryPath, absolute, path)
+  // ACP has no type for a directory link. The trailing `/` in the URI and the
+  // name is the only sign for the agent that the link names a directory.
+  const name = relative(resolve(deps.repositoryPath), absolute)
+    .split(sep)
+    .join('/')
+  return {
+    type: 'resource_link',
+    uri: pathToFileURL(absolute + sep).href,
+    name: `${name}/`
   }
 }
 
@@ -209,6 +263,9 @@ function buildItem(
   }
   if (item.kind === 'file') {
     return buildFileItem(item, deps)
+  }
+  if (item.kind === 'directory') {
+    return buildDirectoryItem(item, deps)
   }
   if (item.kind === 'attachment') {
     return buildAttachmentItem(item, deps)

@@ -12,6 +12,7 @@ import {
   removeButtonOf
 } from '@/utils/mention-editor-dom'
 import { useMentionAutocomplete } from './use-mention-autocomplete'
+import { spokenTextToInsert } from '@/utils/speech'
 
 interface EditorOptions {
   disabled: MaybeRefOrGetter<boolean | undefined>
@@ -33,7 +34,7 @@ export function useMentionEditor(
   function serialize(): SerializedMessage {
     return root.value
       ? serializeEditor(nodesOf(root.value))
-      : { text: '', files: [] }
+      : { text: '', paths: [] }
   }
 
   function chips(): HTMLElement[] {
@@ -160,7 +161,65 @@ export function useMentionEditor(
     updateEmpty()
   }
 
-  /** Types an `@` at the caret, which opens the file list. */
+  // Where the caret was when voice input started (#82). The insert goes there
+  // when the editor has no focus at the release, for example after a key press.
+  let savedCaret: Range | null = null
+
+  function caretRange(): Range | null {
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return null
+    const range = selection.getRangeAt(0)
+    return root.value?.contains(range.startContainer) ? range : null
+  }
+
+  function saveCaret(): void {
+    savedCaret = caretRange()?.cloneRange() ?? null
+  }
+
+  /**
+   * Inserts recognized speech at the caret, with spaces where it touches words.
+   * With `takeFocus`, an editor without focus gets it back first: then the caret
+   * goes after the text and the insert is one undo step. A hidden chat must
+   * not take the focus, so it inserts the node directly.
+   */
+  function insertText(text: string, takeFocus: boolean): void {
+    const editor = root.value
+    if (!editor || toValue(options.disabled) || text === '') return
+    closePopup()
+    const focused = document.activeElement === editor
+    let range = (focused ? caretRange() : null) ?? savedCaret
+    if (!range || !editor.contains(range.startContainer)) {
+      range = document.createRange()
+      range.selectNodeContents(editor)
+      range.collapse(false)
+    }
+    // The selected text is replaced, so it is not a neighbour of the insert.
+    const before = range.cloneRange()
+    before.collapse(true)
+    before.setStart(editor, 0)
+    const after = range.cloneRange()
+    after.collapse(false)
+    after.setEnd(editor, editor.childNodes.length)
+    const insert = spokenTextToInsert(before.toString(), after.toString(), text)
+    savedCaret = null
+    if (focused || takeFocus) {
+      if (!focused) {
+        editor.focus()
+        const selection = window.getSelection()
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+      }
+      // Like a paste: `execCommand` keeps the undo stack and fires `input`.
+      document.execCommand('insertText', false, insert)
+      return
+    }
+    const node = document.createTextNode(insert)
+    range.deleteContents()
+    range.insertNode(node)
+    onChanged()
+  }
+
+  /** Types an `@` at the caret, which opens the list of files and folders. */
   function startMention(): void {
     if (toValue(options.disabled)) return
     focus()
@@ -176,6 +235,8 @@ export function useMentionEditor(
     clear,
     focus,
     startMention,
+    saveCaret,
+    insertText,
     closePopup,
     pick,
     onInput,

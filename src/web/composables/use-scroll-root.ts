@@ -9,7 +9,8 @@ export const SCROLL_ROOT_KEY: InjectionKey<() => Element | null> =
   Symbol('scroll-root')
 
 /** Finds the scroll element for `from`, or null when no Quasar scroll area holds it. */
-export function useScrollRoot(): (from: Element) => Element | null {
+export function useScrollRoot(): (from?: Element | null) => Element | null {
   const provided = inject(SCROLL_ROOT_KEY, undefined)
-  return from => provided?.() ?? from.closest('.q-scrollarea__container')
+  return from =>
+    provided?.() ?? from?.closest('.q-scrollarea__container') ?? null
 }

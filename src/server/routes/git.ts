@@ -1,4 +1,5 @@
 import { BadRequestError } from '../errors/http.ts'
+import { GitFileNotFoundError } from '../errors/git.ts'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import type { FastifyInstance } from 'fastify'
 import {
@@ -151,7 +152,7 @@ export async function gitRoutes(
     },
     async request => {
       const filePath = request.params['*']
-      const { ref } = request.query
+      const { ref, strict } = request.query
 
       if (!filePath) {
         throw new BadRequestError('File path is required')
@@ -163,9 +164,11 @@ export async function gitRoutes(
         ;({ content, isBinary } = await getFileAtRef(
           repositoryPath,
           ref,
-          filePath
+          filePath,
+          strict
         ))
       } catch (err) {
+        if (err instanceof GitFileNotFoundError) throw err
         const message =
           err instanceof Error ? err.message : 'Failed to read file'
         throw new BadRequestError(message, { cause: err })

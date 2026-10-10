@@ -1,19 +1,24 @@
 <script setup lang="ts">
 import { computed, watchEffect } from 'vue'
-import type { Comment, DiffHunk, DiffLineType } from '@/api/types'
+import type { Comment, DiffHunk } from '@/api/types'
 import DiffLineRow from '@/components/DiffLineRow.vue'
 import RowSegment from '@/components/RowSegment.vue'
-import { groupRows, ROW_HEIGHT } from '@/utils/row-segments'
+import { groupRows, rowSegmentProps } from '@/utils/row-segments'
 import CommentThread from './CommentThread.vue'
 import { useLineDragSelect } from '@/composables/use-line-drag-select'
 import type { TokensByLine } from '@/composables/use-syntax-highlighting'
-import { useCardState } from '@/composables/use-card-state'
+import { usePendingDiffComment } from '@/composables/use-pending-diff-comment'
+import {
+  commentColumn,
+  diffCommentThreads,
+  commentsForDiffLine
+} from '@/utils/comment-threads'
 import { useCommentActions } from '@/composables/use-comment-actions'
 import {
   checkAnchor,
   createAnchor,
   type AnchorLine,
-  type CommentAnchor
+  diffAnchorEndsAt
 } from '@/utils/comment-anchor'
 
 const props = defineProps<{
@@ -49,9 +54,7 @@ const header = computed(
 // One unsent comment per card and view, in the card state store: it survives the card
 // leaving the virtual list. The anchor keeps the text of the selected lines, so the form
 // never shows next to other text after an edit (see `comment-anchor.ts`).
-const pending = useCardState<
-  (CommentAnchor & { lineType: DiffLineType }) | null
->('pending:diff', () => null)
+const pending = usePendingDiffComment()
 
 function anchorLines(column: string): AnchorLine[] {
   return props.hunk.lines.map(line => ({
@@ -117,10 +120,6 @@ function isSelected(column: 'old' | 'new', key: number | null): boolean {
   return drag.isSelected(column, key)
 }
 
-function anchorColumn(comment: Comment): 'old' | 'new' {
-  return comment.lineType === 'removed' ? 'old' : 'new'
-}
-
 function isWithinAnyComment(line: {
   oldLineNumber: number | null
   newLineNumber: number | null
@@ -130,7 +129,7 @@ function isWithinAnyComment(line: {
       return false
     }
     const key =
-      anchorColumn(comment) === 'old' ? line.oldLineNumber : line.newLineNumber
+      commentColumn(comment) === 'old' ? line.oldLineNumber : line.newLineNumber
     return (
       key !== null && key >= comment.lineNumber && key <= comment.lineNumberEnd
     )
@@ -139,56 +138,42 @@ function isWithinAnyComment(line: {
 
 // Keep token indices tied to the original hunk when commentsOnly hides rows.
 const visibleLines = computed(() => {
-  const oldThreads = new Map<number, Comment[]>()
-  const newThreads = new Map<number, Comment[]>()
-  for (const comment of props.comments ?? []) {
-    if (comment.lineNumberEnd === null) continue
-    const threads = anchorColumn(comment) === 'old' ? oldThreads : newThreads
-    const thread = threads.get(comment.lineNumberEnd)
-    if (thread) {
-      thread.push(comment)
-    } else {
-      threads.set(comment.lineNumberEnd, [comment])
-    }
-  }
+  const threads = diffCommentThreads(props.comments ?? [])
   return props.hunk.lines
     .map((line, index) => ({
       line,
       index,
-      comments: [
-        ...(line.oldLineNumber === null
-          ? []
-          : (oldThreads.get(line.oldLineNumber) ?? [])),
-        ...(line.newLineNumber === null
-          ? []
-          : (newThreads.get(line.newLineNumber) ?? []))
-      ]
+      comments: commentsForDiffLine(line, threads)
     }))
     .filter(entry => !props.commentsOnly || isWithinAnyComment(entry.line))
 })
-const grouping = computed(() => groupRows(visibleLines.value))
+// Changes queues every hunk. Large review excerpts retain the file-view threshold.
+const grouping = computed(() =>
+  groupRows(visibleLines.value, props.commentsOnly ? undefined : 0)
+)
+const segments = computed(() =>
+  grouping.value.groups.map(group => ({
+    ...group,
+    props: rowSegmentProps(group, {
+      comments: row => row.comments,
+      hasForm: row => showNewForm(row.line),
+      owner: props.hunk,
+      wrap: !!props.wrap,
+      commentsEditable: !!props.commentsEditable
+    })
+  }))
+)
 const pendingLineRange = computed(() =>
   ownAnchor.value
     ? { start: ownAnchor.value.startKey, end: ownAnchor.value.endKey }
     : null
 )
 
-function isPendingFormRow(column: 'old' | 'new', key: number | null): boolean {
-  return (
-    !!ownAnchor.value &&
-    ownAnchor.value.column === column &&
-    key === ownAnchor.value.endKey
-  )
-}
-
 function showNewForm(line: {
   oldLineNumber: number | null
   newLineNumber: number | null
 }): boolean {
-  return (
-    isPendingFormRow('old', line.oldLineNumber) ||
-    isPendingFormRow('new', line.newLineNumber)
-  )
+  return diffAnchorEndsAt(ownAnchor.value, line)
 }
 
 // The form clears its own text after success; the anchor goes only then too, so a
@@ -216,16 +201,9 @@ function cancelNewComment() {
     <div class="diff-hunk__header text-mono text-primary">{{ header }}</div>
     <component
       :is="grouping.segmented ? RowSegment : 'div'"
-      v-for="group in grouping.groups"
+      v-for="group in segments"
       :key="group.start"
-      v-bind="
-        grouping.segmented
-          ? {
-              minHeight: group.rows.length * ROW_HEIGHT,
-              keep: group.rows.some(({ line }) => showNewForm(line))
-            }
-          : {}
-      "
+      v-bind="grouping.segmented ? group.props : {}"
     >
       <template v-for="{ line, index, comments } in group.rows" :key="index">
         <DiffLineRow
@@ -265,5 +243,7 @@ function cancelNewComment() {
 .diff-hunk__header {
   padding: 2px 12px;
   font-size: var(--code-font-size);
+  line-height: 21px;
+  white-space: nowrap;
 }
 </style>

@@ -1,20 +1,19 @@
 <script setup lang="ts">
-import { computed, provide, watch } from 'vue'
+import { computed, nextTick, provide, useTemplateRef, watch } from 'vue'
 import type { Comment, DiffFile } from '@/api/types'
 import DiffFileCardBody from '@/components/DiffFileCardBody.vue'
 import DiffFileCardHeader from '@/components/DiffFileCardHeader.vue'
 import FileCardFrame from '@/components/FileCardFrame.vue'
 import RowSegment from '@/components/RowSegment.vue'
-import { ROW_HEIGHT } from '@/utils/row-segments'
+import { diffCardBodyHeight } from '@/utils/diff-card-height'
 import { CARD_STATE_KEY, useCardState } from '@/composables/use-card-state'
 import { useFileHighlight } from '@/composables/use-file-highlight'
 import { useHunksOnDemand } from '@/composables/use-hunks-on-demand'
+import { useScrollRoot } from '@/composables/use-scroll-root'
 import { pathOf } from '@/utils/diff-file'
 import { isMarkdown } from '@/utils/file-wrap'
+import { isAboveRoot, scrollTopToAlign } from '@/utils/follow-scroll-target'
 import type { DiffSource } from '@/stores/diff-store'
-
-// Room for hunk headers and context lines when only the counts are known.
-const HUNK_HEADERS_ESTIMATE = 80
 
 const props = withDefaults(
   defineProps<{
@@ -29,6 +28,7 @@ const props = withDefaults(
     commentsEditable?: boolean
     /** Which side of the diff this card shows — enables "add diff to agent chat" in its menu. */
     agentSource?: DiffSource | undefined
+    previewRef?: string | undefined
     /**
      * Key in the card state store (`cardStateKey`). Set, the card keeps its view mode, line
      * selection and comment drafts there, so they survive an unmount by the virtual list.
@@ -66,6 +66,30 @@ const emit = defineEmits<{
 const path = computed(() => pathOf(props.file))
 const fullFile = computed(() => props.detail ?? props.file)
 
+const frame = useTemplateRef<InstanceType<typeof FileCardFrame>>('frame')
+const scrollRoot = useScrollRoot()
+
+/**
+ * A collapse from a sticky header shrinks the card above the scroll window. Then
+ * a later card fills the window. So the collapsed card moves back to the top of
+ * the window, as on GitHub (#77). The parent collapses the card, so the check
+ * runs before the emit.
+ */
+async function toggle() {
+  const element: unknown = frame.value?.$el
+  const root = element instanceof Element ? scrollRoot(element) : null
+  const stuck =
+    props.expanded &&
+    element instanceof Element &&
+    root !== null &&
+    isAboveRoot(root, element)
+  emit('toggle')
+  if (!stuck) return
+  await nextTick()
+  if (props.expanded) return
+  root.scrollTop = scrollTopToAlign(root, element)
+}
+
 // `stateKey` does not change in a live card: a new source makes a new `q-virtual-scroll`
 // (its `:key`), and each slot is keyed by path. So the key is read once here.
 provide(CARD_STATE_KEY, props.stateKey)
@@ -89,14 +113,10 @@ watch(
   { immediate: true }
 )
 
-// Height guess for an open body that is not mounted yet. Expand all opens dozens of
-// cards at once, and only the ones near the window need real rows.
+// Height guess for an open body while its hunks load. The hunks and their rows
+// mount later, and only near the window (ADR 0040).
 const bodyHeightEstimate = computed(() =>
-  props.detail
-    ? props.detail.hunks.reduce((sum, hunk) => sum + hunk.lines.length + 1, 0) *
-      ROW_HEIGHT
-    : (props.file.additions + props.file.deletions) * ROW_HEIGHT +
-      HUNK_HEADERS_ESTIMATE
+  diffCardBodyHeight(props.file, props.detail)
 )
 
 // Only the open body of this card needs its hunks.
@@ -140,7 +160,12 @@ const showFullFile = computed({
 </script>
 
 <template>
-  <FileCardFrame :id="`diff-file-${path}`" class="diff-file-card">
+  <FileCardFrame
+    :id="`diff-file-${path}`"
+    ref="frame"
+    sticky-header
+    class="diff-file-card"
+  >
     <template #header>
       <DiffFileCardHeader
         v-model:show-full-file="showFullFile"
@@ -153,12 +178,15 @@ const showFullFile = computed({
         :comment-count="comments.length"
         :full-file-toggle="!noFullFile && file.status !== 'deleted'"
         :agent-source="agentSource"
-        @toggle="emit('toggle')"
+        :preview-ref="previewRef"
+        @toggle="toggle"
       />
     </template>
 
+    <!-- The body mounts at once: its hunks mount near the window, and the hunk request needs it. -->
     <RowSegment
       v-if="expanded"
+      immediate
       :min-height="bodyHeightEstimate"
       @change="mounted => (bodyMounted = mounted)"
     >

@@ -2,6 +2,40 @@
 // so you can safely delete all default props below
 
 export default {
+  windows: {
+    panel: 'Window panel',
+    movePanel: 'Move window panel',
+    preview: 'Preview',
+    minimize: 'Minimize window',
+    closeAll: 'Close all previews',
+    closeTab: 'Close preview',
+    closeAllTitle: 'Close all previews?',
+    closeAllMessage: 'Are you sure you want to close all preview tabs?',
+    closeTitle: 'Close this preview?',
+    closeMessage: 'Are you sure you want to close this preview tab?',
+    cancel: 'Cancel',
+    empty: 'Open a Markdown file, image or PDF.',
+    openFile: 'Open file',
+    dropFiles: 'Drop Markdown, images or PDF files here',
+    unsupportedFile:
+      'Unsupported file: {name}. Choose Markdown, an image or PDF.',
+    imageFailed:
+      'Could not display this image. Choose a browser-supported image format.',
+    pdfPrevious: 'Previous page',
+    pdfNext: 'Next page',
+    pdfPage: 'Page {page}',
+    retry: 'Retry',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    diagram: 'diagram',
+    missing: {
+      file: 'The file was deleted or moved.',
+      message: 'The original message is no longer available.',
+      attachment: 'The attachment is no longer available.',
+      diagram: 'The diagram is no longer available.',
+      binary: 'This file cannot be previewed.'
+    }
+  },
   terminal: {
     maximize: 'Maximize',
     restore: 'Restore window',
@@ -47,6 +81,10 @@ export default {
     switchToDark: 'Dark theme'
   },
   changes: {
+    listMode: {
+      tree: 'Tree view',
+      folder: 'Folder {path}'
+    },
     staged: 'Staged',
     unstaged: 'Unstaged',
     filterPlaceholder: 'Filter files...',
@@ -170,7 +208,8 @@ export default {
   agent: {
     title: 'Agent',
     unavailable: 'not installed',
-    placeholder: "Message the agent…  (Enter to send, {'@'} for files)",
+    placeholder:
+      "Message the agent…  (Enter to send, {'@'} for files and folders)",
     send: 'Send',
     cancel: 'Stop',
     thinking: 'Thinking',
@@ -209,16 +248,37 @@ export default {
     attach: {
       menu: 'Add',
       uploadFile: 'Upload file',
-      mentionFile: 'Mention a file',
+      mentionFile: 'Mention a file or folder',
       download: 'Download',
       downloadTitle: 'Download this file?',
       downloadMessage: '"{name}" will be saved to your computer.',
       tooLarge: '"{name}" is larger than {mb} MB',
       readFailed: 'Could not read the file'
     },
+    voice: {
+      hold: 'Hold to talk',
+      privacy: "The browser's speech service processes the audio.",
+      screenReader:
+        'Hold Space or Enter to talk. In screen reader browse mode, activate once to start and once to stop.',
+      listening: 'Listening',
+      inserted: 'Inserted: {text}',
+      busy: 'Voice input is busy. Try again in a moment.',
+      language: 'Voice input language: {name}',
+      error: {
+        'not-allowed':
+          'Microphone access is blocked. Allow it in the browser and hold the button again.',
+        'service-not-allowed':
+          'The browser does not allow speech recognition here.',
+        'audio-capture': 'No microphone was found.',
+        network: "The browser's speech service is not available.",
+        'language-not-supported':
+          'The speech service does not support this language.',
+        other: 'Voice input failed.'
+      }
+    },
     mention: {
-      list: 'Files',
-      noFiles: 'No matching files',
+      list: 'Files and folders',
+      noFiles: 'No matching files or folders',
       remove: 'Remove {name}'
     },
     permission: {
@@ -270,6 +330,7 @@ export default {
     context: {
       add: 'Add to agent chat',
       file: 'File: {path}',
+      directory: 'Folder: {path}/',
       diff: 'Diff: {source}',
       diffFile: 'Diff ({source}): {path}',
       review: 'Review with comments',

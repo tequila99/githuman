@@ -7,6 +7,7 @@ import { pathOf } from '@/utils/diff-file'
 import { useFileActions } from '@/composables/use-file-actions'
 import { useActiveReviewStore } from '@/stores/active-review-store'
 import CommentCountBadge from './CommentCountBadge.vue'
+import { treeIndentPx } from '@/utils/file-tree'
 
 // Keep status markers consistent across file rows.
 const STATUS_LABEL: Record<DiffFileStatus, string> = {
@@ -28,6 +29,10 @@ const props = defineProps<{
   file: DiffFile
   selected: boolean
   source: DiffSource
+  /** Text of the row: the file name in the tree. The full path is the default. */
+  label?: string | undefined
+  /** Tree level of the row. Unset in the flat list. */
+  depth?: number | undefined
 }>()
 defineEmits<{ (e: 'click'): void }>()
 
@@ -48,6 +53,12 @@ const commentCount = computed(
     class="file-list-item"
     :active="selected"
     active-class="file-list-item--selected"
+    :aria-label="label === undefined ? undefined : path"
+    :style="
+      depth === undefined
+        ? undefined
+        : { paddingLeft: `${treeIndentPx(depth, true)}px` }
+    "
     @click="$emit('click')"
   >
     <q-item-section avatar class="file-list-item__icon-section">
@@ -61,7 +72,7 @@ const commentCount = computed(
       <!-- The name shrinks with an ellipsis; the badge never does, so it stays visible. -->
       <div class="file-list-item__path-row row no-wrap items-center">
         <span class="ellipsis file-list-item__path-label" :data-tooltip="path">
-          {{ path }}
+          {{ label ?? path }}
         </span>
         <CommentCountBadge
           v-if="commentCount > 0"

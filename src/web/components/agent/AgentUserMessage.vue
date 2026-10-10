@@ -2,7 +2,7 @@
 import type { ChatItem } from '@/utils/agent-chat'
 import AgentMessageAttachments from './AgentMessageAttachments.vue'
 
-defineProps<{ item: Extract<ChatItem, { kind: 'user' }> }>()
+defineProps<{ item: Extract<ChatItem, { kind: 'user' }>; chatId: string }>()
 </script>
 
 <template>
@@ -10,7 +10,10 @@ defineProps<{ item: Extract<ChatItem, { kind: 'user' }> }>()
     <!-- QChatMessage makes a separate bubble for each root node in its slot. -->
     <div>
       <div class="agent-item__text">{{ item.text }}</div>
-      <AgentMessageAttachments :context="item.context" />
+      <AgentMessageAttachments
+        :context="item.context"
+        :source="{ type: 'message', sessionId: chatId, messageId: item.id }"
+      />
     </div>
   </q-chat-message>
 </template>

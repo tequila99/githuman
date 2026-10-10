@@ -307,7 +307,7 @@ export async function agentRoutes(
     {
       schema: {
         tags: TAGS,
-        summary: 'Find repository files for the context picker',
+        summary: 'Find repository files and directories for the context picker',
         querystring: FileSearchQuery,
         response: {
           200: AgentFileSearchResponseSchema,
@@ -316,7 +316,7 @@ export async function agentRoutes(
       }
     },
     async request => ({
-      files: await fileIndex.search(
+      paths: await fileIndex.search(
         request.query.q ?? '',
         request.query.limit ?? DEFAULT_FILE_SEARCH_LIMIT
       )
@@ -375,6 +375,12 @@ export async function agentRoutes(
         },
         Number.isInteger(lastEventId) ? lastEventId : 0
       )
+      // The replay can close a stream whose queue is full. `onClose` callbacks
+      // have run then, so the listener is removed here.
+      if (!reply.sse.isConnected) {
+        unsubscribe()
+        return
+      }
       reply.sse.onClose(unsubscribe)
     }
   )

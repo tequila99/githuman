@@ -9,6 +9,7 @@ import AgentErrorMessage from './AgentErrorMessage.vue'
 
 defineProps<{
   item: ChatItem
+  chatId: string
   /** Offer to continue only after the error that ended the turn. */
   canContinue?: boolean
 }>()
@@ -16,8 +17,16 @@ const emit = defineEmits<{ (e: 'continue'): void }>()
 </script>
 
 <template>
-  <AgentUserMessage v-if="item.kind === 'user'" :item="item" />
-  <AgentAssistantMessage v-else-if="item.kind === 'agent'" :text="item.text" />
+  <AgentUserMessage
+    v-if="item.kind === 'user'"
+    :item="item"
+    :chat-id="chatId"
+  />
+  <AgentAssistantMessage
+    v-else-if="item.kind === 'agent'"
+    :text="item.text"
+    :source="{ type: 'message', sessionId: chatId, messageId: item.id }"
+  />
   <AgentThoughtMessage v-else-if="item.kind === 'thought'" :text="item.text" />
   <AgentAutoApprovedMessage
     v-else-if="item.kind === 'auto-approved'"

@@ -6,15 +6,13 @@ import {
   usePanelWidth
 } from '@/composables/use-panel-width'
 import { setStorageBackend } from '@/utils/safe-storage'
+import { memoryStorage } from '../helpers/memory-storage'
 
-const store = new Map<string, string>()
+const backend = memoryStorage()
+const store = backend.items
 
 function fakeStorage() {
-  setStorageBackend({
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => void store.set(key, value),
-    removeItem: (key: string) => void store.delete(key)
-  })
+  setStorageBackend(backend)
 }
 
 afterEach(() => {

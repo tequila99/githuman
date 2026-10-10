@@ -134,6 +134,7 @@ async function resume() {
           v-for="item in chat.items"
           :key="item.id"
           :item="item"
+          :chat-id="chatId"
           :can-continue="canContinue && item === lastItem"
           @continue="resume"
         />
@@ -155,7 +156,7 @@ async function resume() {
       </div>
     </q-scroll-area>
 
-    <AgentComposer ref="composer" :chat-id="chatId" />
+    <AgentComposer ref="composer" :chat-id="chatId" :active="active" />
   </div>
 </template>
 

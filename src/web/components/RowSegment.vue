@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { onBeforeUnmount, onMounted, useTemplateRef, watch } from 'vue'
 import { useScrollRoot } from '@/composables/use-scroll-root'
-
-// How far outside the scroll window a segment mounts, in px. Rows far above the
-// window unmount, but a quick scroll must not show an empty gap.
-const ROOT_MARGIN_PX = 2000
+import { useSegmentMount } from '@/composables/use-segment-mount'
 
 const props = withDefaults(
   defineProps<{
@@ -12,8 +9,35 @@ const props = withDefaults(
     minHeight: number
     /** Keeps the rows mounted outside the window, e.g. for an open comment form. */
     keep?: boolean
+    /** Cost of the mount in rows for the mount queue. Unset: the estimated rows. */
+    cost?: number | undefined
+    /** Mounts at once and stays mounted: other code needs the content, such as a card body. */
+    immediate?: boolean
+    /**
+     * False: the segment mounts when it comes near the window, without the mount
+     * queue. For cheap content, such as a hunk whose rows are segments again.
+     */
+    queued?: boolean
+    /** Object that owns the measured height (a hunk or a line array), with `heightKey`. */
+    heightOwner?: object | undefined
+    heightKey?: string | undefined
+    /** Changes when the same segment has different geometry. */
+    heightVersion?: string | undefined
+    /** Only leaf code rows with fixed height can reuse external measurements. */
+    cacheHeight?: boolean
+    widthSensitive?: boolean
   }>(),
-  { keep: false }
+  {
+    keep: false,
+    cost: undefined,
+    immediate: false,
+    queued: true,
+    heightOwner: undefined,
+    heightKey: undefined,
+    heightVersion: undefined,
+    cacheHeight: false,
+    widthSensitive: false
+  }
 )
 
 const emit = defineEmits<{
@@ -23,51 +47,11 @@ const emit = defineEmits<{
 
 const findRoot = useScrollRoot()
 const el = useTemplateRef<HTMLElement>('el')
-// Without a scroll area to watch, the rows mount at once: no check, no gaps.
-const mounted = ref(false)
-// The last measured height holds the place of the rows while they are unmounted.
-// Until the first measurement, the estimate from the parent holds the place.
-const height = ref(props.minHeight)
-let measured = false
-let observer: IntersectionObserver | undefined
+const { mounted, height, start, stop } = useSegmentMount(props, () => el.value)
 
-onMounted(() => {
-  const root = el.value ? findRoot(el.value) : null
-  if (!el.value || !root) {
-    mounted.value = true
-    return
-  }
-  observer = new IntersectionObserver(
-    entries => {
-      const latest = entries[entries.length - 1]
-      if (!latest) return
-      if (latest.isIntersecting) {
-        mounted.value = true
-      } else if (!props.keep) {
-        // Measure only real rows: a placeholder has the estimated height.
-        if (el.value && mounted.value) {
-          height.value = el.value.offsetHeight
-          measured = true
-        }
-        mounted.value = false
-      }
-    },
-    { root, rootMargin: `${ROOT_MARGIN_PX}px 0px` }
-  )
-  observer.observe(el.value)
-})
-
+onMounted(() => start(el.value ? findRoot(el.value) : null))
 watch(mounted, value => emit('change', value))
-
-// The estimate can grow, for example when the hunks of a card arrive.
-watch(
-  () => props.minHeight,
-  value => {
-    if (!measured) height.value = value
-  }
-)
-
-onBeforeUnmount(() => observer?.disconnect())
+onBeforeUnmount(stop)
 </script>
 
 <template>

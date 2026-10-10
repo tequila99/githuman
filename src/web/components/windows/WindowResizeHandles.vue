@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { useTerminalWindowResize } from '@/composables/use-terminal-window-geometry'
-import { RESIZE_EDGES } from '@/utils/terminal-window'
+import { useWindowGeometry } from '@/composables/windows/use-window-geometry'
+import { RESIZE_EDGES } from '@/constants/windows/constants'
 
-const resize = useTerminalWindowResize()
+const props = defineProps<{
+  windowId: string
+  minimum?: { width: number; height: number } | undefined
+}>()
+const resize = useWindowGeometry(props.windowId, props.minimum)
 </script>
 
 <template>

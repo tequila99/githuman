@@ -68,7 +68,12 @@ export const FileContentQuery = Type.Object({
     minLength: 1,
     description:
       'Commit, branch or tag. INDEX reads the index, WORKTREE the file on disk.'
-  })
+  }),
+  strict: Type.Optional(
+    Type.Boolean({
+      description: 'Report a missing file as 404 instead of empty content.'
+    })
+  )
 })
 
 export const OptionalPathsBody = Type.Object(

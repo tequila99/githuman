@@ -2,6 +2,7 @@
 // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file
 
 import { defineConfig } from '#q-app'
+import { viteStaticCopy } from 'vite-plugin-static-copy'
 
 export default defineConfig(ctx => {
   return {
@@ -95,6 +96,17 @@ export default defineConfig(ctx => {
       distDir: 'dist/web',
 
       extendViteConf(viteConf) {
+        // PDF.js fetches fonts and decoders only when the active document needs them.
+        viteConf.plugins ??= []
+        viteConf.plugins.push(
+          ...viteStaticCopy({
+            targets: ['cmaps', 'standard_fonts', 'wasm'].map(directory => ({
+              src: `node_modules/pdfjs-dist/${directory}/*`,
+              dest: `pdfjs/${directory}`,
+              rename: { stripBase: true }
+            }))
+          })
+        )
         // CSP defaults font-src to 'self': keep small font subsets as files,
         // rather than Vite's default data: URLs, without widening the policy.
         // The highlight worker loads Shiki grammars with dynamic imports,

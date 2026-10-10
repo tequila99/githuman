@@ -824,3 +824,28 @@ test('listChangedPaths lists a conflicted file once', async t => {
   const paths = await listChangedPaths(fixture.dir, [])
   assert.deepEqual(paths.map(p => p.newPath).sort(), ['f.txt', 'g.txt'])
 })
+
+test('strict getFileAtRef reports normalized and nested missing paths as not found', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+
+  writeFileSync(join(fixture.dir, 'a.txt'), 'hello\n')
+  await fixture.git.add('a.txt')
+  await fixture.git.commit('add a.txt')
+
+  for (const ref of ['HEAD', 'INDEX', 'WORKTREE']) {
+    for (const path of ['missing.txt', 'a.txt/child', './missing.txt']) {
+      await assert.rejects(
+        getFileAtRef(fixture.dir, ref, path, true),
+        { statusCode: 404 },
+        `${ref}:${path}`
+      )
+    }
+  }
+  await assert.rejects(
+    getFileAtRef(fixture.dir, 'no-such-ref', 'a.txt', true),
+    {
+      message: /./
+    }
+  )
+})

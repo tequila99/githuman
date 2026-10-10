@@ -7,12 +7,18 @@ import AgentComposerContext from './AgentComposerContext.vue'
 import AgentComposerAddMenu from './AgentComposerAddMenu.vue'
 import AgentComposerSubmitButton from './AgentComposerSubmitButton.vue'
 import AgentComposerSettings from './AgentComposerSettings.vue'
+import AgentVoiceButton from './AgentVoiceButton.vue'
 import { useNotifyError } from '@/composables/use-notify-error'
 import { useAgentComposerConfig } from '@/composables/use-agent-composer-config'
 import { useAgentAttachments } from '@/composables/use-agent-attachments'
 import { useAgentAutoApprove } from '@/composables/use-agent-auto-approve'
+import { mentionContext } from '@/utils/mention-editor'
 
-const props = defineProps<{ chatId: string }>()
+const props = defineProps<{
+  chatId: string
+  /** The visible chat: a hidden one stops voice input. */
+  active: boolean
+}>()
 
 const { t } = useI18n()
 const store = useAgentStore()
@@ -44,7 +50,7 @@ async function send() {
   try {
     const sent = await store.send(
       message.text,
-      message.files.map(path => ({ kind: 'file' as const, path })),
+      mentionContext(message.paths),
       targetId
     )
     if (sent && props.chatId === targetId && editor.value === targetEditor) {
@@ -83,6 +89,13 @@ defineExpose({ focus: () => editor.value?.focus() })
           @cycle-mode="cycleMode"
           @empty-change="empty => (isEmpty = empty)"
           @files="attachFiles"
+        />
+
+        <AgentVoiceButton
+          :disabled="status === 'closed'"
+          :active="active"
+          @press="editor?.saveCaret()"
+          @commit="text => editor?.insertText(text, active)"
         />
 
         <AgentComposerSubmitButton

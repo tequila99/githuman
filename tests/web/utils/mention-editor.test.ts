@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   findMentionTrigger,
+  mentionContext,
   mentionLabel,
   serializeEditor
 } from '@/utils/mention-editor'
@@ -52,7 +53,7 @@ test('serializing joins text, line breaks and mentions; each file is listed once
     { type: 'text', text: '  ' }
   ])
   assert.equal(result.text, 'please fix @src/a.ts and \nalso @src/a.ts@b.ts')
-  assert.deepEqual(result.files, ['src/a.ts', 'b.ts'])
+  assert.deepEqual(result.paths, ['src/a.ts', 'b.ts'])
 })
 
 test('blocks (new lines made by the browser) each start on their own line', () => {
@@ -66,12 +67,12 @@ test('blocks (new lines made by the browser) each start on their own line', () =
 })
 
 test('an empty editor serializes to nothing', () => {
-  assert.deepEqual(serializeEditor([]), { text: '', files: [] })
+  assert.deepEqual(serializeEditor([]), { text: '', paths: [] })
   assert.deepEqual(
     serializeEditor([{ type: 'br' }, { type: 'text', text: ' ' }]),
     {
       text: '',
-      files: []
+      paths: []
     }
   )
 })
@@ -113,4 +114,18 @@ test('settings are found by their semantic category; booleans never count', () =
   }
   assert.equal(optionByCategory([fast, mode], 'mode'), mode)
   assert.equal(optionByCategory([mode], 'model'), undefined)
+})
+
+test('a directory chip shows its name with a slash, with the parent on a clash (#80)', () => {
+  assert.equal(mentionLabel('src/web/', ['src/web/']), 'web/')
+  assert.equal(mentionLabel('src/web/', ['src/web/', 'lib/web/']), 'src/web/')
+  assert.equal(mentionLabel('src/web/', ['src/web/', 'src/web.ts']), 'web/')
+  assert.equal(mentionLabel('docs/', ['docs/']), 'docs/')
+})
+
+test('mentioned paths become file and directory context items (#80)', () => {
+  assert.deepEqual(mentionContext(['src/a.ts', 'src/web/']), [
+    { kind: 'file', path: 'src/a.ts' },
+    { kind: 'directory', path: 'src/web' }
+  ])
 })

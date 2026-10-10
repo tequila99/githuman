@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { clampWidth, readStoredWidth } from '@/composables/use-panel-width'
+import { isFiniteNumber } from '@/utils/guards'
 import { safeStorage } from '@/utils/safe-storage'
 
 /** Where the file list width is remembered between page loads. */
@@ -19,7 +20,7 @@ const limits = computed(() => [MIN_WIDTH, MAX_WIDTH])
  * report `undefined`. Check the value before it reaches the model.
  */
 function onWidth(next: number | undefined) {
-  if (typeof next !== 'number' || !Number.isFinite(next)) return
+  if (!isFiniteNumber(next)) return
   width.value = clampWidth(next, MIN_WIDTH, MAX_WIDTH)
   safeStorage.set(STORAGE_KEY, String(width.value))
 }
