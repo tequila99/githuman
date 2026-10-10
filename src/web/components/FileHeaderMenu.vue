@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '@/stores/agent-store'
 import { useAddAgentContext } from '@/composables/use-add-agent-context'
 import type { DiffSource } from '@/stores/diff-store'
 import { ADD_TO_CHAT_ICON } from '@/utils/agent-icon'
-import MarkdownPreviewDialog from './MarkdownPreviewDialog.vue'
+import { usePreviewStore } from '@/stores/windows/preview-store'
 
 const wrap = defineModel<boolean>({ required: true })
 
@@ -14,6 +14,7 @@ const props = defineProps<{
   path?: string
   /** Set on a diff card: which side of the diff the file is on. */
   diffSource?: DiffSource | undefined
+  previewRef?: string | undefined
 }>()
 
 const { t } = useI18n()
@@ -21,7 +22,17 @@ const agent = useAgentStore()
 const addToChat = useAddAgentContext()
 
 const isMarkdown = computed(() => /\.(md|markdown)$/i.test(props.path ?? ''))
-const previewOpen = ref(false)
+const preview = usePreviewStore()
+function openPreview() {
+  if (!props.path) return
+  const ref =
+    props.previewRef ?? (props.diffSource === 'staged' ? 'INDEX' : 'WORKTREE')
+  preview.open(
+    'markdown',
+    { type: 'file', path: props.path, ref },
+    `${props.path} · ${ref}`
+  )
+}
 
 function addFile() {
   if (props.path) addToChat({ kind: 'file', path: props.path })
@@ -60,7 +71,7 @@ function addDiff() {
           v-if="isMarkdown && path"
           v-close-popup
           clickable
-          @click="previewOpen = true"
+          @click="openPreview"
         >
           <q-item-section side><q-icon name="visibility" /></q-item-section>
           <q-item-section>{{ t('changes.previewMarkdown') }}</q-item-section>
@@ -82,10 +93,5 @@ function addDiff() {
         </template>
       </q-list>
     </q-menu>
-    <MarkdownPreviewDialog
-      v-if="isMarkdown && path"
-      v-model="previewOpen"
-      :path="path"
-    />
   </q-btn>
 </template>

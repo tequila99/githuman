@@ -342,3 +342,35 @@ test('GET /api/git/file/* on a nested path resolves the full path from the wildc
   assert.equal(response.statusCode, 200)
   assert.equal(response.json().path, 'src/index.ts')
 })
+
+test('strict file previews distinguish missing and empty files without changing diff reads', async t => {
+  const fixture = await createTempGitRepo()
+  t.after(fixture.cleanup)
+  writeFileSync(join(fixture.dir, 'empty.md'), '')
+  await fixture.git.add('empty.md')
+  await fixture.git.commit('empty document')
+  const app = buildApp({ repositoryPath: fixture.dir })
+  t.after(() => app.close())
+  for (const ref of ['WORKTREE', 'INDEX', 'HEAD']) {
+    const empty = await app.inject(
+      `/api/git/file/empty.md?ref=${ref}&strict=true`
+    )
+    assert.equal(empty.statusCode, 200)
+    assert.equal(empty.json().content, '')
+    const missing = await app.inject(
+      `/api/git/file/missing.md?ref=${ref}&strict=true`
+    )
+    assert.equal(missing.statusCode, 404)
+    const legacy = await app.inject(`/api/git/file/missing.md?ref=${ref}`)
+    assert.equal(legacy.statusCode, 200)
+    assert.equal(legacy.json().content, '')
+  }
+  const badRef = await app.inject(
+    '/api/git/file/empty.md?ref=not-a-real-ref&strict=true'
+  )
+  assert.equal(badRef.statusCode, 400)
+  const invalidRef = await app.inject(
+    '/api/git/file/empty.md?ref=--help&strict=true'
+  )
+  assert.equal(invalidRef.statusCode, 400)
+})

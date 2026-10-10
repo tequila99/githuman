@@ -26,6 +26,7 @@ const props = withDefaults(
     commentsEditable?: boolean
     /** Which side of the diff this card shows — enables "add diff to agent chat" in its menu. */
     agentSource?: DiffSource | undefined
+    previewRef?: string | undefined
     /**
      * Key in the card state store (`cardStateKey`). Set, the card keeps its view mode, line
      * selection and comment drafts there, so they survive an unmount by the virtual list.
@@ -146,6 +147,7 @@ const showFullFile = computed({
         :comment-count="comments.length"
         :full-file-toggle="!noFullFile && file.status !== 'deleted'"
         :agent-source="agentSource"
+        :preview-ref="previewRef"
         @toggle="emit('toggle')"
       />
     </template>

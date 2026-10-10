@@ -134,6 +134,7 @@ async function resume() {
           v-for="item in chat.items"
           :key="item.id"
           :item="item"
+          :chat-id="chatId"
           :can-continue="canContinue && item === lastItem"
           @continue="resume"
         />

@@ -5,6 +5,7 @@ import { basename, resolve, sep } from 'node:path'
 import { simpleGit } from 'simple-git'
 import type { DiffFileStatus } from '../../shared/diff/types.ts'
 import type { RepositoryInfo } from '../../shared/git/types.ts'
+import { NotFoundError } from '../errors/http.ts'
 import { isBinaryBuffer } from '../utils/text.ts'
 
 const execFileAsync = promisify(execFile)
@@ -79,7 +80,8 @@ function objectSpecFor(ref: string, path: string): string {
 export async function getFileAtRef(
   repoPath: string,
   ref: string,
-  path: string
+  path: string,
+  strict = false
 ): Promise<FileAtRef> {
   if (ref === 'WORKTREE') {
     try {
@@ -87,7 +89,17 @@ export async function getFileAtRef(
       const buffer = await readFile(absolutePath)
       const isBinary = isBinaryBuffer(buffer)
       return { content: isBinary ? '' : buffer.toString('utf-8'), isBinary }
-    } catch {
+    } catch (error) {
+      if (strict) {
+        if (
+          error &&
+          typeof error === 'object' &&
+          'code' in error &&
+          error.code === 'ENOENT'
+        )
+          throw new NotFoundError('File was deleted or moved', { cause: error })
+        throw error
+      }
       return { content: '', isBinary: false }
     }
   }
@@ -107,7 +119,14 @@ export async function getFileAtRef(
       content: isBinary ? '' : stdout.toString('utf-8'),
       isBinary
     }
-  } catch {
+  } catch (error) {
+    if (strict) {
+      // Listing validates the ref before a missing path is reported as 404.
+      const paths = await getFilesAtRef(repoPath, ref)
+      if (!paths.includes(path))
+        throw new NotFoundError('File was deleted or moved', { cause: error })
+      throw error
+    }
     return { content: '', isBinary: false }
   }
 }

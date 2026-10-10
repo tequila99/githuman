@@ -11,7 +11,7 @@ interface DiagramRenderer {
  * hostile code, so the SVG is cleaned again before it goes into the page.
  * Labels are HTML inside <foreignObject>, which DOMPurify must be told about.
  */
-function sanitizeSvg(svg: string): string {
+export function sanitizeSvg(svg: string): string {
   return DOMPurify.sanitize(svg, {
     USE_PROFILES: { svg: true, svgFilters: true, html: true },
     ADD_TAGS: ['foreignObject'],
@@ -37,7 +37,7 @@ function sanitizeSvg(svg: string): string {
  * which turns the text of any non-trivial diagram into specks in a narrow chat
  * panel. Pin the SVG to its natural size instead; the box scrolls.
  */
-function useNaturalSize(box: HTMLElement): void {
+export function setNaturalDiagramSize(box: HTMLElement): void {
   const svg = box.querySelector('svg')
   const viewBox = svg
     ?.getAttribute('viewBox')
@@ -66,20 +66,31 @@ export async function enhanceMermaidBlocks(
   isCurrent: () => boolean = () => true
 ): Promise<void> {
   const theme = dark ? 'dark' : 'light'
-  const targets: { el: HTMLElement; source: string }[] = []
+  const targets: { el: HTMLElement; source: string; index: number }[] = []
 
+  let diagramIndex = 0
   for (const code of root.querySelectorAll('pre > code.language-mermaid')) {
     const pre = code.parentElement
-    if (pre) targets.push({ el: pre, source: code.textContent ?? '' })
+    if (pre) {
+      targets.push({
+        el: pre,
+        source: code.textContent ?? '',
+        index: diagramIndex++
+      })
+    }
   }
   for (const drawn of root.querySelectorAll<HTMLElement>('.agent-mermaid')) {
     if (drawn.dataset.theme !== theme) {
-      targets.push({ el: drawn, source: drawn.dataset.source ?? '' })
+      targets.push({
+        el: drawn,
+        source: drawn.dataset.source ?? '',
+        index: Number(drawn.dataset.diagramIndex ?? 0)
+      })
     }
   }
 
   await Promise.all(
-    targets.map(async ({ el, source }) => {
+    targets.map(async ({ el, source, index }) => {
       if (source.trim() === '') return
       try {
         const svg = await renderer.render(source, dark)
@@ -87,10 +98,11 @@ export async function enhanceMermaidBlocks(
         if (!el.isConnected || !root.contains(el) || !isCurrent()) return
         const box = document.createElement('div')
         box.className = 'agent-mermaid'
+        box.dataset.diagramIndex = String(index)
         box.dataset.source = source
         box.dataset.theme = theme
         box.innerHTML = sanitizeSvg(svg)
-        useNaturalSize(box)
+        setNaturalDiagramSize(box)
         // MarkdownContent opens the diagram on click or Enter.
         box.tabIndex = 0
         box.setAttribute('role', 'button')

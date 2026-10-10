@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import TerminalWindow from '@/components/terminal/TerminalWindow.vue'
+import WindowHost from '@/components/windows/WindowHost.vue'
 import { storeToRefs } from 'pinia'
 import { onUnmounted } from 'vue'
 import { useRepositoryStore } from '@/stores/repository-store'
@@ -26,7 +26,7 @@ const {
 
 <template>
   <q-layout view="hHh lpr fFf" @resize="onResize">
-    <TerminalWindow />
+    <WindowHost />
     <MainHeader @toggle-drawer="toggleLeftDrawer" />
     <MainMenu v-model="leftDrawerOpen" />
     <AgentSidebar v-if="agentEnabled" />

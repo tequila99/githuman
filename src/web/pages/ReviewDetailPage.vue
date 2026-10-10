@@ -132,6 +132,12 @@ function goBack() {
         v-for="file in commentedFiles"
         :key="pathOf(file)"
         :file="file"
+        :preview-ref="
+          store.review?.sourceType === 'commits' ||
+          store.review?.sourceType === 'branch'
+            ? (store.review.sourceRef ?? undefined)
+            : undefined
+        "
         :expanded="expandedFiles.has(pathOf(file))"
         :comments="commentsByFile.get(pathOf(file)) ?? []"
         comments-only

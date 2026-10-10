@@ -57,3 +57,15 @@ interface RenderEnv extends Env {
 export function renderMarkdown(source: string, env: RenderEnv = {}): string {
   return md.render(source, env)
 }
+
+/** Read fences from the parser so preview identities include blocks that failed to render. */
+export function extractDiagramSources(source: string): string[] {
+  return md
+    .parse(source, {})
+    .filter(
+      token =>
+        token.type === 'fence' &&
+        token.info.trim().split(/\s+/)[0] === 'mermaid'
+    )
+    .map(token => token.content)
+}

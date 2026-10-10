@@ -2,6 +2,39 @@
 // so you can safely delete all default props below
 
 export default {
+  windows: {
+    panel: 'Window panel',
+    movePanel: 'Move window panel',
+    preview: 'Preview',
+    minimize: 'Minimize window',
+    closeAll: 'Close all previews',
+    closeTab: 'Close preview',
+    closeAllTitle: 'Close all previews?',
+    closeAllMessage: 'Are you sure you want to close all preview tabs?',
+    closeTitle: 'Close this preview?',
+    closeMessage: 'Are you sure you want to close this preview tab?',
+    cancel: 'Cancel',
+    empty: 'Open a Markdown file, image or PDF.',
+    openFile: 'Open file',
+    dropFiles: 'Drop Markdown, images or PDF files here',
+    unsupportedFile:
+      'Unsupported file: {name}. Choose Markdown, an image or PDF.',
+    imageFailed:
+      'Could not display this image. Choose a browser-supported image format.',
+    pdfPrevious: 'Previous page',
+    pdfNext: 'Next page',
+    pdfPage: 'Page {page}',
+    retry: 'Retry',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    diagram: 'diagram',
+    missing: {
+      file: 'The file was deleted or moved.',
+      message: 'The original message is no longer available.',
+      attachment: 'The attachment is no longer available.',
+      diagram: 'The diagram is no longer available.'
+    }
+  },
   terminal: {
     maximize: 'Maximize',
     restore: 'Restore window',

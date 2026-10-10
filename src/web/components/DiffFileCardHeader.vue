@@ -25,6 +25,7 @@ defineProps<{
   fullFileToggle: boolean
   /** Which side of the diff the card shows — enables "add diff to agent chat" in the menu. */
   agentSource?: DiffSource | undefined
+  previewRef?: string | undefined
 }>()
 
 defineEmits<{ (e: 'toggle'): void }>()
@@ -87,6 +88,7 @@ const { t } = useI18n()
           v-model="wrap"
           :path="path"
           :diff-source="agentSource"
+          :preview-ref="showFullFile ? 'WORKTREE' : previewRef"
         />
       </div>
     </FileCardHeader>

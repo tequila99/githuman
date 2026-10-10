@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { useQuasar } from 'quasar'
+import type { PreviewSource } from '@/types/windows/preview'
 import MarkdownContent from '@/components/MarkdownContent.vue'
 
 // Wait for streamed Markdown to settle before drawing diagrams.
 const MERMAID_DEBOUNCE_MS = 300
 
-defineProps<{ text: string }>()
+defineProps<{ text: string; source: PreviewSource }>()
 const $q = useQuasar()
 </script>
 
@@ -16,7 +17,11 @@ const $q = useQuasar()
     :text-color="$q.dark.isActive ? 'grey-2' : 'grey-10'"
     class="agent-item"
   >
-    <MarkdownContent :text="text" :mermaid-debounce="MERMAID_DEBOUNCE_MS" />
+    <MarkdownContent
+      :text="text"
+      :preview-source="source"
+      :mermaid-debounce="MERMAID_DEBOUNCE_MS"
+    />
   </q-chat-message>
 </template>
 

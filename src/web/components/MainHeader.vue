@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import { useRepositoryStore } from '@/stores/repository-store'
 import { useAppInfoStore } from '@/stores/app-info-store'
 import { useAppTheme } from '@/composables/use-app-theme'
-import { useTerminalStore } from '@/stores/terminal-store'
 import { useAgentStore } from '@/stores/agent-store'
 import { AGENT_ICON } from '@/utils/agent-icon'
 
@@ -17,7 +16,6 @@ const { t } = useI18n()
 const { info } = storeToRefs(useRepositoryStore())
 const { version } = storeToRefs(useAppInfoStore())
 const { isDark } = useAppTheme()
-const terminalStore = useTerminalStore()
 const agentStore = useAgentStore()
 const { enabled: agentEnabled, panelOpen: agentPanelOpen } =
   storeToRefs(agentStore)
@@ -64,22 +62,7 @@ const { enabled: agentEnabled, panelOpen: agentPanelOpen } =
 
       <q-space />
       <q-btn
-        v-if="terminalStore.enabled"
-        flat
-        round
-        dense
-        icon="terminal"
-        :aria-label="t('terminal.title')"
-        @click="terminalStore.show"
-      >
-        <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
-          t('terminal.title')
-        }}</q-tooltip>
-      </q-btn>
-
-      <q-btn
         v-if="agentEnabled"
-        :class="{ 'q-ml-md': terminalStore.enabled }"
         v-ripple
         flat
         round
