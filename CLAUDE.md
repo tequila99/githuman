@@ -216,8 +216,10 @@ userPath)` напрямую.
   `q-tooltip` — использовать `data-tooltip` с единственным `SharedTooltip`
   (ADR 0039). Обычные компоненты используют `QTooltip`; задержка всех
   подсказок задаётся `TOOLTIP_DELAY_MS` в `src/web/utils/tooltip.ts`.
-- **Списки Changes виртуализированы** (`q-virtual-scroll` в `DiffPanel` и плоском
-  `FileListPanel`, ADR 0032). Отступ карточки — `padding-bottom` обёртки
+- **Списки Changes виртуализированы** (`q-virtual-scroll` в `DiffPanel` и
+  `FileListPanel` — и в списке, и в дереве: дерево разворачивается в строки
+  `flattenTree`, ADR 0032, #76). В режиме дерева карточки идут в порядке
+  дерева (`diffFiles`). Отступ карточки — `padding-bottom` обёртки
   `.diff-virtual-slot`, не `margin`: виртуальный список меряет высоту без
   margin. На обёртку нельзя вешать `overflow`/`contain` — сломает sticky.
   Карточка размонтируется вне окна, поэтому её состояние (режим «весь файл»,

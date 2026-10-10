@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { FileTreeNode } from '@/api/types'
+import { treeIndentPx } from '@/utils/file-tree'
 
-const props = defineProps<{
+defineProps<{
   node: FileTreeNode
   selectedPath: string | null
   expandedFolders: Set<string>
@@ -12,8 +13,6 @@ const emit = defineEmits<{
   (e: 'toggle-folder', path: string): void
   (e: 'file-select', path: string): void
 }>()
-
-const indent = 8 + props.level * 12
 </script>
 
 <template>
@@ -23,7 +22,7 @@ const indent = 8 + props.level * 12
       v-ripple
       clickable
       dense
-      :style="{ paddingLeft: `${indent}px` }"
+      :style="{ paddingLeft: `${treeIndentPx(level, false)}px` }"
       @click="emit('toggle-folder', node.path)"
     >
       <q-item-section avatar class="file-tree-node__icon-section">
@@ -66,7 +65,7 @@ const indent = 8 + props.level * 12
       dense
       :active="node.path === selectedPath"
       active-class="file-tree-node--selected"
-      :style="{ paddingLeft: `${indent + 20}px` }"
+      :style="{ paddingLeft: `${treeIndentPx(level, true)}px` }"
       @click="emit('file-select', node.path)"
     >
       <q-item-section avatar class="file-tree-node__icon-section">

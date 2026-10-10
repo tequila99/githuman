@@ -18,6 +18,8 @@
 | `diff file` | файл в diff | Один изменённый файл в diff (тип `DiffFile`): путь, статус, hunks. | `changed file` для объекта данных |
 | `hunk` | hunk | Непрерывный блок изменённых строк в diff-файле. | `chunk`, `block` |
 | `card` | карточка | Раскрываемый блок одного diff-файла в панели diff (`DiffFileCard`). | `panel`, `item` |
+| `folder` | папка | Каталог в дереве файлов (браузер файлов и дерево Changes). В агентском контексте то же понятие называется `directory`. | `dir` в текстах |
+| `compressed folder` | сжатая папка | Строка дерева Changes, которая объединяет цепочку папок с одной вложенной папкой (`src/web/components`), как на GitHub (#76). | `merged folder`, `chain` |
 | `scroll window` | окно прокрутки | Видимая часть элемента прокрутки панели (`QScrollArea.getScrollTarget()`). | `view`, `viewport` в комментариях |
 | `sticky header` | липкая шапка | Шапка карточки, которая остаётся у верхнего края окна прокрутки, пока её карточка видна (#77). | `pinned header`, `fixed header` |
 | `full file` | весь файл | Режим карточки: показать файл с диска целиком, а не только hunks. | `full view` в текстах |

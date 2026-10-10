@@ -81,6 +81,10 @@ export default {
     switchToDark: 'Dark theme'
   },
   changes: {
+    listMode: {
+      tree: 'Tree view',
+      folder: 'Folder {path}'
+    },
     staged: 'Staged',
     unstaged: 'Unstaged',
     filterPlaceholder: 'Filter files...',
