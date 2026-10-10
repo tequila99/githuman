@@ -59,3 +59,9 @@ test('buildTree keeps a file and a folder that share a path (#76)', () => {
     ]
   )
 })
+
+test('buildTree keeps the input path of a file', () => {
+  const tree = buildTree(['a//b.ts'], new Set())
+  assert.equal(tree[0]?.children?.[0]?.path, 'a//b.ts')
+  assert.equal(tree[0]?.path, 'a')
+})

@@ -2,7 +2,12 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useDiffStore, type DiffSource } from './diff-store'
 import { useFileTree } from '@/composables/use-file-tree'
-import { buildTree, filterTree, flattenTree } from '@/utils/file-tree'
+import {
+  buildTree,
+  filterTree,
+  flattenTree,
+  type TreeRow
+} from '@/utils/file-tree'
 import { useFileContent } from '@/composables/use-file-content'
 import { pathOf } from '@/utils/diff-file'
 import { singleFlight } from '@/utils/single-flight'
@@ -17,6 +22,21 @@ export type DiffListMode = 'list' | 'tree'
 
 function readDiffListMode(): DiffListMode {
   return safeStorage.get(DIFF_LIST_MODE_KEY) === 'tree' ? 'tree' : 'list'
+}
+
+/** A row of the diff tree. A file row carries its file, so the list needs no lookup. */
+export type DiffTreeRow =
+  | Extract<TreeRow, { kind: 'folder' }>
+  | (Extract<TreeRow, { kind: 'file' }> & { file: DiffFile })
+
+/** Paths of all folders in a tree. */
+function folderPaths(nodes: readonly FileTreeNode[], into = new Set<string>()) {
+  for (const node of nodes) {
+    if (node.type !== 'directory') continue
+    into.add(node.path)
+    folderPaths(node.children ?? [], into)
+  }
+  return into
 }
 
 function hasRelevantChild(node: FileTreeNode): boolean {
@@ -68,8 +88,15 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     source.value === 'staged' ? diffStore.stagedFiles : diffStore.unstagedFiles
   )
 
-  const sourceByPath = computed(
+  const diffFileByPath = computed(
     () => new Map(sourceFiles.value.map(file => [pathOf(file), file]))
+  )
+
+  /** The tree of the source files. Only tree mode builds it: list mode does not sort twice. */
+  const diffPathTree = computed<FileTreeNode[]>(() =>
+    diffListMode.value === 'tree'
+      ? buildTree(sourceFiles.value.map(pathOf), new Set())
+      : []
   )
 
   /**
@@ -80,17 +107,14 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
   const diffFiles = computed<DiffFile[]>(() => {
     const files = sourceFiles.value
     if (diffListMode.value === 'list') return files
-    const byPath = sourceByPath.value
-    const pathTree = buildTree(files.map(pathOf), new Set())
-    const ordered = flattenTree(pathTree, new Set(), true).flatMap(row =>
-      row.kind === 'file' ? (byPath.get(row.path) ?? []) : []
+    const byPath = diffFileByPath.value
+    const ordered = flattenTree(diffPathTree.value, new Set(), true).flatMap(
+      row => (row.kind === 'file' ? (byPath.get(row.path) ?? []) : [])
     )
     // A file must never drop out of the panel, even when the tree misses it.
     const placed = new Set(ordered)
     return [...ordered, ...files.filter(file => !placed.has(file))]
   })
-
-  const diffFileByPath = sourceByPath
 
   /** True while the filter has text: the tree then shows every folder open. */
   const filtering = computed(() => (filter.value ?? '').trim() !== '')
@@ -103,10 +127,23 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     )
   })
 
-  /** Rows of the tree mode. A filter opens every folder, so no match hides. */
-  const diffTreeRows = computed(() => {
-    const pathTree = buildTree(filteredDiffFiles.value.map(pathOf), new Set())
-    return flattenTree(pathTree, collapsedDiffFolders.value, filtering.value)
+  /**
+   * Rows of the tree mode. A filter opens every folder, so no match hides.
+   * A folder name is part of each path below it, so the filter keeps the
+   * same files as `filteredDiffFiles`.
+   */
+  const diffTreeRows = computed<DiffTreeRow[]>(() => {
+    const byPath = diffFileByPath.value
+    const nodes = filterTree(diffPathTree.value, (filter.value ?? '').trim())
+    return flattenTree(
+      nodes,
+      collapsedDiffFolders.value,
+      filtering.value
+    ).flatMap((row): DiffTreeRow[] => {
+      if (row.kind === 'folder') return [row]
+      const file = byPath.get(row.path)
+      return file ? [{ ...row, file }] : []
+    })
   })
 
   const filteredTree = computed(() =>
@@ -149,8 +186,23 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
   watch(source, () => {
     selectedPath.value = null
     expandedFiles.value = new Set()
+    // Staged and unstaged have different folders, so each starts open.
+    collapsedDiffFolders.value = new Set()
     scrollRequest.value = null
     layoutVersion.value++
+  })
+
+  // A folder that left the diff and came back must not open closed.
+  watch(diffPathTree, nodes => {
+    if (diffListMode.value !== 'tree' || collapsedDiffFolders.value.size === 0)
+      return
+    const present = folderPaths(nodes)
+    const kept = [...collapsedDiffFolders.value].filter(path =>
+      present.has(path)
+    )
+    if (kept.length < collapsedDiffFolders.value.size) {
+      collapsedDiffFolders.value = new Set(kept)
+    }
   })
 
   watch(selectedPath, path => {
@@ -321,7 +373,6 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     browseFileLoading,
     browseFileError,
     diffFiles,
-    diffFileByPath,
     filtering,
     filteredDiffFiles,
     diffTreeRows,

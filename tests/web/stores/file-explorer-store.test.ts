@@ -461,3 +461,34 @@ test('a filter can split a compressed folder; its rows stay open (#76)', () => {
     ]
   )
 })
+
+test('a file row of the tree carries its own file (#76)', () => {
+  const explorer = useFileExplorerStore()
+  const files = ['src/a.ts', 'README.md'].map(fileAt)
+  useDiffStore().unstagedFiles = files
+  explorer.diffListMode = 'tree'
+  const fileRows = explorer.diffTreeRows.filter(row => row.kind === 'file')
+  assert.deepEqual(
+    fileRows.map(row => row.file),
+    [files[0], files[1]]
+  )
+})
+
+test('closed folders reset on a source change and drop out with their folder (#76)', async () => {
+  const explorer = useFileExplorerStore()
+  const diff = useDiffStore()
+  diff.unstagedFiles = ['src/a.ts', 'lib/b.ts'].map(fileAt)
+  explorer.diffListMode = 'tree'
+  explorer.toggleDiffFolder(['src'])
+  explorer.toggleDiffFolder(['lib'])
+  await nextTick()
+
+  // `lib` left the diff: it must not come back closed.
+  diff.unstagedFiles = ['src/a.ts'].map(fileAt)
+  await nextTick()
+  assert.deepEqual([...explorer.collapsedDiffFolders], ['src'])
+
+  explorer.source = 'staged'
+  await nextTick()
+  assert.equal(explorer.collapsedDiffFolders.size, 0)
+})

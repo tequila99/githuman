@@ -37,7 +37,6 @@ const {
   treeError,
   filteredDiffFiles,
   diffTreeRows,
-  diffFileByPath,
   diffListMode,
   filtering,
   filteredTree,
@@ -158,9 +157,9 @@ const scrollTarget = computed(() => scrollArea.value?.getScrollTarget() ?? null)
             @toggle="explorer.toggleDiffFolder(row.paths)"
           />
           <FileListItem
-            v-else-if="diffFileByPath.get(row.path)"
+            v-else
             :key="`f:${row.path}`"
-            :file="diffFileByPath.get(row.path)!"
+            :file="row.file"
             :label="row.name"
             :depth="row.depth"
             :selected="selectedPath === row.path"

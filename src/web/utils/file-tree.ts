@@ -67,7 +67,8 @@ export function buildTree(
       if (!node) {
         node = {
           name: part,
-          path: currentPath,
+          // A file keeps its input path, so a caller finds its own item by it.
+          path: isFile ? filePath : currentPath,
           type: isFile ? 'file' : 'directory',
           isChanged: isFile ? changedFiles.has(filePath) : false,
           children: isFile ? undefined : []
