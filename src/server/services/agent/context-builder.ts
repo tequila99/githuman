@@ -5,7 +5,7 @@ import { formatDiffFile } from '../../../shared/agents/context-format.ts'
 import { withoutTrailingSlash } from '../../../shared/agents/mention-paths.ts'
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
-import { mkdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, realpath, stat, writeFile } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { ContentBlock } from '@agentclientprotocol/sdk'
@@ -110,6 +110,24 @@ async function buildDiffItem(
   )
 }
 
+/**
+ * `resolveWithinRepo` checks the path as text, but `stat` follows a symbolic
+ * link. A link that points out of the repository must not reach the agent.
+ */
+async function assertRealPathInRepo(
+  repositoryPath: string,
+  absolute: string,
+  path: string
+): Promise<void> {
+  const [root, target] = await Promise.all([
+    realpath(repositoryPath),
+    realpath(absolute)
+  ])
+  if (target !== root && !target.startsWith(root + sep)) {
+    throw new AgentContextError(`"${path}" points out of the repository`)
+  }
+}
+
 async function buildFileItem(
   item: Extract<AgentContextItem, { kind: 'file' }>,
   deps: ContextBuilderDeps
@@ -126,6 +144,7 @@ async function buildFileItem(
       `"${item.path}" is not a file in the repository`
     )
   }
+  await assertRealPathInRepo(deps.repositoryPath, absolute, item.path)
   return {
     type: 'resource_link',
     uri: pathToFileURL(absolute).href,
@@ -154,6 +173,7 @@ async function buildDirectoryItem(
       `"${path}" is not a directory in the repository`
     )
   }
+  await assertRealPathInRepo(deps.repositoryPath, absolute, path)
   // ACP has no type for a directory link. The trailing `/` in the URI and the
   // name is the only sign for the agent that the link names a directory.
   const name = relative(resolve(deps.repositoryPath), absolute)

@@ -3,8 +3,10 @@ import assert from 'node:assert/strict'
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -687,8 +689,14 @@ for (const embedded of [true, false]) {
 }
 
 test('context with paths/refs outside the repository or nothing to attach → 400', async t => {
-  const { post, createSession } = await setup(t)
+  const { post, createSession, fixture } = await setup(t)
   const id = await createSession()
+  // Symbolic links that point out of the repository (#80).
+  const outside = mkdtempSync(join(tmpdir(), 'githuman-outside-'))
+  t.after(() => rmSync(outside, { recursive: true, force: true }))
+  writeFileSync(join(outside, 'secret.txt'), 'x')
+  symlinkSync(outside, join(fixture.dir, 'out-dir'))
+  symlinkSync(join(outside, 'secret.txt'), join(fixture.dir, 'out-file'))
   for (const context of [
     [{ kind: 'file', path: '../../etc/passwd' }],
     [{ kind: 'file', path: '/etc/passwd' }],
@@ -697,6 +705,8 @@ test('context with paths/refs outside the repository or nothing to attach → 40
     [{ kind: 'directory', path: '/' }],
     [{ kind: 'directory', path: '.' }],
     [{ kind: 'directory', path: 'src/..' }],
+    [{ kind: 'directory', path: 'out-dir' }],
+    [{ kind: 'file', path: 'out-file' }],
     [{ kind: 'directory', path: 'src/a.ts' }],
     [{ kind: 'file', path: 'src' }],
     [{ kind: 'diff', source: 'staged' }],

@@ -61,9 +61,6 @@ watch(
           :name="directory ? 'folder' : 'description'"
           size="16px"
           class="agent-mention-popup__icon"
-          :aria-label="
-            directory ? t('agent.mention.folder') : t('agent.mention.file')
-          "
         />
         <span class="agent-mention-popup__name">{{ name }}</span>
         <span class="agent-mention-popup__dir">{{ parent }}</span>
