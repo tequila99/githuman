@@ -124,7 +124,10 @@ function goBack() {
     </div>
     <q-separator />
 
-    <q-scroll-area class="col" content-style="padding: 8px">
+    <q-scroll-area
+      class="col sticky-header-scroll"
+      content-style="padding: 8px"
+    >
       <p v-if="commentedFiles.length === 0" class="q-pa-md text-grey-6">
         {{ t('reviews.detail.noComments') }}
       </p>

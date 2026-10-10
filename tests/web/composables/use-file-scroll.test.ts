@@ -6,7 +6,7 @@ import {
   type VirtualScrollApi
 } from '@/composables/use-file-scroll'
 import type { ScrollRequest } from '@/stores/file-explorer-store'
-import type { followScrollHeader } from '@/utils/follow-scroll-header'
+import type { followScrollTarget } from '@/utils/follow-scroll-target'
 
 const cleanups: Array<() => void> = []
 afterEach(() => {
@@ -33,7 +33,9 @@ function setup(ready = true) {
   const input = new EventTarget()
   let followers = 0,
     stopped = 0
-  const follow: typeof followScrollHeader = () => {
+  let target: (() => Element | null) | undefined
+  const follow: typeof followScrollTarget = options => {
+    target = options.target
     followers++
     return () => {
       stopped++
@@ -53,7 +55,8 @@ function setup(ready = true) {
     input,
     scope,
     calls,
-    counts: () => ({ followers, stopped })
+    counts: () => ({ followers, stopped }),
+    target: () => target?.()
   }
 }
 
@@ -124,4 +127,25 @@ test('changing root or source cancels rather than resumes the old operation', as
   s.request.value = null
   await flush()
   assert.deepEqual(s.counts(), { followers: 2, stopped: 2 })
+})
+
+test('the follower aligns the card itself, not its sticky header (#77)', async () => {
+  const card = { id: 'diff-file-a.ts' } as Element
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: {
+      getElementById: (id: string) => (id === card.id ? card : null)
+    }
+  })
+  cleanups.push(() => {
+    if (previous) {
+      Object.defineProperty(globalThis, 'document', previous)
+    } else {
+      Reflect.deleteProperty(globalThis, 'document')
+    }
+  })
+  const s = setup()
+  await flush()
+  assert.equal(s.target(), card)
 })
