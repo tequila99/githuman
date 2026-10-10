@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, shallowRef } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import type { AgentContextItem } from '@/api/types'
@@ -10,20 +10,25 @@ import {
   type AttachmentItem
 } from '@/utils/attachments'
 import AgentContextChip from './AgentContextChip.vue'
-import ImagePreviewDialog from '@/components/ImagePreviewDialog.vue'
+import { usePreviewStore } from '@/stores/windows/preview-store'
+import type { PreviewSource } from '@/types/windows/preview'
 
-const props = defineProps<{ context: AgentContextItem[] }>()
+const props = defineProps<{
+  context: AgentContextItem[]
+  source: PreviewSource
+}>()
 const { t } = useI18n()
 const $q = useQuasar()
 
 // A sent image opens enlarged; any other attachment can be saved again.
-const previewImage = shallowRef<AttachmentItem | null>(null)
-const previewOpen = computed({
-  get: () => previewImage.value !== null,
-  set: open => {
-    if (!open) previewImage.value = null
-  }
-})
+const preview = usePreviewStore()
+function openImage(image: AttachmentItem) {
+  preview.open('image', props.source, {
+    title: image.name,
+    index: props.context.indexOf(image),
+    content: image.data
+  })
+}
 
 function onContextChip(context: AgentContextItem) {
   if (context.kind !== 'attachment') return
@@ -59,8 +64,8 @@ const otherContext = computed<AgentContextItem[]>(() =>
         role="button"
         tabindex="0"
         :aria-label="image.name"
-        @click="previewImage = image"
-        @keydown.enter="previewImage = image"
+        @click="openImage(image)"
+        @keydown.enter="openImage(image)"
       >
         <q-img
           :src="attachmentSrc(image)"
@@ -70,12 +75,6 @@ const otherContext = computed<AgentContextItem[]>(() =>
         />
       </div>
     </div>
-    <ImagePreviewDialog
-      v-model="previewOpen"
-      :title="previewImage?.name ?? ''"
-      :alt="previewImage?.name ?? ''"
-      :src="previewImage ? attachmentSrc(previewImage) : ''"
-    />
     <div v-if="otherContext.length > 0" class="row q-gutter-xs q-mt-xs">
       <AgentContextChip
         v-for="(c, i) in otherContext"

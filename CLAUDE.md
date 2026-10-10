@@ -21,7 +21,7 @@ branch/commits) с браузером файлов и подсветкой си�
   HTTP hooks, ACP-преобразования, Node-утилиты и доменные конструкторы ошибок.
   Ошибки сервисов и HTTP оформляются через @fastify/error; Fastify сериализует
   statusCode/code/error/message. Статусы и тексты CLI/SSE сохраняются.
-- `src/web/{components,pages,stores,composables,boot,router,api,i18n}` —
+- `src/web/{components,pages,stores,composables,constants,types,utils,boot,router,api,i18n}` —
   frontend на Quasar (Vue 3 + Composition API + `<script setup>`, Pinia,
   vue-i18n). `@` в импортах указывает на `src/web` (алиас переопределён в
   `quasar.config.ts`, т.к. `src/` также содержит `cli`/`server`/`shared`,
@@ -79,6 +79,9 @@ pnpm run build        # tsc (server) + quasar build (web) → dist/
 
 ## Важные технические решения (не переоткрывать без ADR)
 
+- **Оконные модули** (ADR 0044): домен `windows` расположен внутри `constants/`, `types/`, `stores/`, `composables/`, `utils/`; компоненты общей оболочки — в `components/windows/`. `terminal-store` и компоненты приложений `terminal/preview` остаются отдельно. Тесты зеркалируют эти пути.
+- **Окна и dock** (ADR 0043): `useApplicationRegistry()` регистрирует доверенные приложения и виджеты; `WindowHost` монтирует их компоненты, `WindowDock` читает реактивные метаданные. Общая оболочка — `FloatingWindow`, геометрия и режимы — `window-store`, источники и вкладки — `preview-store`. Терминальный transport остаётся в `terminal-store`. Не добавлять отдельные перемещаемые плашки или модальные предпросмотры. Сохраняются локаторы и параметры отображения, не HTML/SVG/base64. Строгое файловое чтение для предпросмотра — `strict=true`; обычный diff сохраняет семантику пустого содержимого отсутствующей стороны. Публичный API — [docs/window-applications.md](docs/window-applications.md).
+- **Локальный предпросмотр и PDF** (ADR 0045): локальные `File` не отправляются серверу и не сохраняются в настройках. PDF.js — ленивый `PdfPreview`, один canvas с лимитом площади; worker/document уничтожаются при скрытии или размонтировании. Шрифты/CMaps/WASM раздаются локально, загружаются по потребности. Image Blob URL освобождается после закрытия последней вкладки источника.
 - **Терминал** (ADR 0037): отдельный мультиплексированный WebSocket только на loopback; token и upgrade требуют обязательный совпадающий Origin. Shell выбирает сервер, PTY загружается лениво; без бинарника — ограниченный pipe-режим. Снимок формирует headless xterm, terminal queries отвечает только сервер. История в памяти; очереди ограничены; ввод/вывод и токены не логируются.
 - **Аутентификации нет** — инструмент локальный, `--host 0.0.0.0`
   сознательно доступен без пароля в LAN (ADR 0008). Не добавлять auth без
@@ -302,6 +305,17 @@ userPath)` напрямую.
   строк делает oxfmt. JS-плагины oxlint — alpha, поэтому oxlint закреплён
   как `~1.82.0`: при обновлении прогнать `pnpm run lint:check` и
   `pnpm run test:lint-rules`.
+- **Готовые composables Quasar — первый выбор для инфраструктурной логики
+  фронтенда**: перед ручными таймерами, подписками на DOM-события, animation
+  frames и другими низкоуровневыми операциями проверять API установленной
+  версии Quasar. Если готовый composable подходит по поведению, использовать
+  его (`useTimeout`, `useInterval`, `useEventListener`, `useAnimationFrame`,
+  `useTick`, `useFilePicker` и т. п.), включая автоматическую очистку ресурсов.
+  Низкоуровневый код допустим, если готовый API не сохраняет нужную семантику
+  или не подходит по производительности; причину пояснить рядом с кодом.
+  Сохранять необходимые гарантии приложения: финальное сохранение состояния,
+  отмену асинхронной работы и защиту от устаревших результатов. Декларативные
+  обработчики Vue (`@click`, `@scroll` и т. п.) заменять без необходимости не нужно.
 - Composition API + `<script setup>` везде во Vue-компонентах — не Options
   API.
 

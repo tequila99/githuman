@@ -1,4 +1,5 @@
-import { ref, onScopeDispose } from 'vue'
+import { TERMINAL_WINDOW_ID } from '@/constants/windows/constants'
+import { ref, computed, watch, onScopeDispose } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import type {
   TerminalInfo,
@@ -11,8 +12,9 @@ import {
   type TerminalTransport,
   type TerminalConnectionState
 } from '@/api/terminal-transport'
+import { useWindowStore } from '@/stores/windows/window-store'
 import { safeStorage } from '@/utils/safe-storage'
-import { isRecord } from '../../shared/utils/guards.ts'
+import { isRecord, isFiniteNumber } from '../../shared/utils/guards.ts'
 import {
   TERMINAL_WINDOW_MIN_HEIGHT,
   TERMINAL_WINDOW_MIN_WIDTH
@@ -27,41 +29,64 @@ export type TerminalStoreError = { key: 'unavailable' } | { text: string }
 function point(value: unknown): { x: number; y: number } | null {
   if (!isRecord(value)) return null
   const { x, y } = value
-  return typeof x === 'number' &&
-    Number.isFinite(x) &&
-    typeof y === 'number' &&
-    Number.isFinite(y)
-    ? { x, y }
-    : null
+  return isFiniteNumber(x) && isFiniteNumber(y) ? { x, y } : null
 }
 
 function size(value: unknown): { width: number; height: number } | null {
   if (!isRecord(value)) return null
   const { width, height } = value
-  return typeof width === 'number' &&
-    typeof height === 'number' &&
+  return isFiniteNumber(width) &&
+    isFiniteNumber(height) &&
     width >= TERMINAL_WINDOW_MIN_WIDTH &&
-    height >= TERMINAL_WINDOW_MIN_HEIGHT &&
-    Number.isFinite(width) &&
-    Number.isFinite(height)
+    height >= TERMINAL_WINDOW_MIN_HEIGHT
     ? { width, height }
     : null
 }
 
 export const useTerminalStore = defineStore('terminal', () => {
+  const windows = useWindowStore()
+  const hasCommonPreferences = Object.hasOwn(
+    windows.windows,
+    TERMINAL_WINDOW_ID
+  )
+  const window = windows.ensure(TERMINAL_WINDOW_ID)
   const enabled = ref(false)
   const sessions = ref<TerminalInfo[]>([])
   const activeId = ref<string | null>(null)
-  const minimized = ref(false)
-  const open = ref(false)
+  const minimized = computed({
+    get: () => window.minimized,
+    set: value => {
+      window.minimized = value
+    }
+  })
+  const open = computed({
+    get: () => window.open,
+    set: value => {
+      window.open = value
+    }
+  })
   const state = ref<TerminalConnectionState>('disconnected')
   const error = ref<TerminalStoreError | null>(null)
   const creating = ref(false)
-  const position = ref({ x: 260, y: 120 })
+  const position = computed({
+    get: () => window.position,
+    set: value => {
+      window.position = value
+    }
+  })
   const originalColors = ref(false)
-  const windowSize = ref<{ width: number; height: number } | null>(null)
-  const maximized = ref(false)
-  const dockPosition = ref<{ x: number; y: number } | null>(null)
+  const windowSize = computed({
+    get: () => window.windowSize,
+    set: value => {
+      window.windowSize = value
+    }
+  })
+  const maximized = computed({
+    get: () => window.maximized,
+    set: value => {
+      window.maximized = value
+    }
+  })
   let transport: TerminalTransport | null = null
   let createRequest: string | null = null
   let operation = 0
@@ -70,13 +95,12 @@ export const useTerminalStore = defineStore('terminal', () => {
   const waiting = new Set<string>()
 
   function remember(): void {
+    windows.remember()
     safeStorage.set(
       STORAGE_KEY,
       JSON.stringify({
-        position: position.value,
-        windowSize: windowSize.value,
-        minimized: minimized.value,
-        activeId: activeId.value
+        activeId: activeId.value,
+        originalColors: originalColors.value
       })
     )
   }
@@ -86,10 +110,14 @@ export const useTerminalStore = defineStore('terminal', () => {
     try {
       const saved: unknown = JSON.parse(safeStorage.get(STORAGE_KEY) ?? 'null')
       if (isRecord(saved)) {
-        position.value = point(saved.position) ?? position.value
-        windowSize.value = size(saved.windowSize) ?? windowSize.value
-        if (typeof saved.minimized === 'boolean')
+        if (!hasCommonPreferences) {
+          position.value = point(saved.position) ?? position.value
+          windowSize.value = size(saved.windowSize) ?? windowSize.value
+        }
+        if (!hasCommonPreferences && typeof saved.minimized === 'boolean')
           minimized.value = saved.minimized
+        if (typeof saved.originalColors === 'boolean')
+          originalColors.value = saved.originalColors
         if (typeof saved.activeId === 'string') activeId.value = saved.activeId
       }
     } catch {
@@ -158,6 +186,7 @@ export const useTerminalStore = defineStore('terminal', () => {
         createRequest = null
         open.value = true
         minimized.value = false
+        windows.focus(TERMINAL_WINDOW_ID)
         remember()
         break
       case 'error':
@@ -232,6 +261,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     if (!enabled.value) return
     open.value = true
     minimized.value = false
+    windows.focus(TERMINAL_WINDOW_ID)
     if (!sessions.value.length) create()
     remember()
   }
@@ -246,6 +276,7 @@ export const useTerminalStore = defineStore('terminal', () => {
   function close(id: string): void {
     send({ type: 'close', terminalId: id, requestId: `close-${++operation}` })
   }
+  watch(originalColors, remember)
   onScopeDispose(() => {
     transport?.close()
     views.clear()
@@ -263,7 +294,6 @@ export const useTerminalStore = defineStore('terminal', () => {
     originalColors,
     windowSize,
     maximized,
-    dockPosition,
     init,
     send,
     show,

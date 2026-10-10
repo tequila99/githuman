@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useAppTheme } from '@/composables/use-app-theme'
+import { usePreviewStore } from '@/stores/windows/preview-store'
 import { useTerminalStore } from '@/stores/terminal-store'
 import { useAgentStore } from '@/stores/agent-store'
 import { AGENT_ICON } from '@/utils/agent-icon'
@@ -15,6 +16,7 @@ const leftDrawerOpen = defineModel<boolean | null>({ required: true })
 const { t } = useI18n()
 const { isDark, toggleTheme } = useAppTheme()
 const terminalStore = useTerminalStore()
+const previewStore = usePreviewStore()
 const agentStore = useAgentStore()
 const { enabled: agentEnabled, activeId, panelOpen } = storeToRefs(agentStore)
 const chatsOpen = ref(true)
@@ -52,6 +54,11 @@ const chatsOpen = ref(true)
         >
           <q-item-section avatar><q-icon name="terminal" /></q-item-section>
           <q-item-section>{{ t('terminal.title') }}</q-item-section>
+        </q-item>
+
+        <q-item v-ripple clickable @click="previewStore.show">
+          <q-item-section avatar><q-icon name="visibility" /></q-item-section>
+          <q-item-section>{{ t('windows.preview') }}</q-item-section>
         </q-item>
 
         <q-expansion-item

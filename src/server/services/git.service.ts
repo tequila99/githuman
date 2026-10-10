@@ -1,10 +1,11 @@
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import { readFile } from 'node:fs/promises'
-import { basename, resolve, sep } from 'node:path'
+import { basename, posix, resolve, sep } from 'node:path'
 import { simpleGit } from 'simple-git'
 import type { DiffFileStatus } from '../../shared/diff/types.ts'
 import type { RepositoryInfo } from '../../shared/git/types.ts'
+import { GitFileNotFoundError } from '../errors/git.ts'
 import { isBinaryBuffer } from '../utils/text.ts'
 
 const execFileAsync = promisify(execFile)
@@ -66,6 +67,39 @@ function objectSpecFor(ref: string, path: string): string {
   return ref === 'INDEX' ? `:${path}` : `${ref}:${path}`
 }
 
+/** `ENOENT` and `ENOTDIR` both mean that the file does not exist. */
+function isMissingPathError(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+  )
+}
+
+/**
+ * Checks one path with `ls-tree` instead of listing the whole tree. A failing
+ * `ls-tree` means the ref is invalid, so the path is reported as present and
+ * the caller keeps the original error.
+ */
+async function pathExistsAtRef(
+  repoPath: string,
+  ref: string,
+  path: string
+): Promise<boolean> {
+  const normalized = posix.normalize(path)
+  try {
+    const args =
+      ref === 'INDEX'
+        ? ['ls-files', '-z', '--', `:(literal)${normalized}`]
+        : ['ls-tree', '-z', ref, '--', normalized]
+    const { stdout } = await execFileAsync('git', args, { cwd: repoPath })
+    return stdout.length > 0
+  } catch {
+    return true
+  }
+}
+
 /**
  * Reads a file's content at a given git ref.
  *
@@ -79,7 +113,8 @@ function objectSpecFor(ref: string, path: string): string {
 export async function getFileAtRef(
   repoPath: string,
   ref: string,
-  path: string
+  path: string,
+  strict = false
 ): Promise<FileAtRef> {
   if (ref === 'WORKTREE') {
     try {
@@ -87,7 +122,14 @@ export async function getFileAtRef(
       const buffer = await readFile(absolutePath)
       const isBinary = isBinaryBuffer(buffer)
       return { content: isBinary ? '' : buffer.toString('utf-8'), isBinary }
-    } catch {
+    } catch (error) {
+      if (strict) {
+        if (isMissingPathError(error))
+          throw new GitFileNotFoundError('File was deleted or moved', {
+            cause: error
+          })
+        throw error
+      }
       return { content: '', isBinary: false }
     }
   }
@@ -107,7 +149,14 @@ export async function getFileAtRef(
       content: isBinary ? '' : stdout.toString('utf-8'),
       isBinary
     }
-  } catch {
+  } catch (error) {
+    if (strict) {
+      if (!(await pathExistsAtRef(repoPath, ref, path)))
+        throw new GitFileNotFoundError('File was deleted or moved', {
+          cause: error
+        })
+      throw error
+    }
     return { content: '', isBinary: false }
   }
 }

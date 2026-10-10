@@ -1,14 +1,21 @@
 <script setup lang="ts">
-import { computed, shallowRef, useTemplateRef } from 'vue'
+import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import { useCodeBlockCopy } from '@/composables/use-code-block-copy'
 import { useMermaidBlocks } from '@/composables/use-mermaid-blocks'
 import { renderMarkdown } from '@/utils/markdown'
-import MermaidPreviewDialog from './MermaidPreviewDialog.vue'
+import { usePreviewStore } from '@/stores/windows/preview-store'
+import { useAgentStore } from '@/stores/agent-store'
+import type { PreviewSource } from '@/types/windows/preview'
 
 const props = withDefaults(
-  defineProps<{ text: string; mermaidDebounce?: number }>(),
+  defineProps<{
+    text: string
+    mermaidDebounce?: number
+    previewSource?: PreviewSource
+    previewTitle?: string
+  }>(),
   {
     mermaidDebounce: 0
   }
@@ -28,26 +35,29 @@ useMermaidBlocks(
   () => props.mermaidDebounce
 )
 
-const diagramOpen = shallowRef(false)
-const diagramHtml = shallowRef('')
-let diagramTarget: HTMLElement | null = null
-
+const preview = usePreviewStore()
+const agents = useAgentStore()
 function openDiagram(event: Event) {
   const box =
     event.target instanceof Element
       ? event.target.closest<HTMLElement>('.agent-mermaid')
       : null
-  if (!box || !body.value?.contains(box)) return
-  box.focus()
-  diagramTarget = box
-  diagramHtml.value = box.innerHTML
-  diagramOpen.value = true
-}
-
-function onDiagramHide() {
-  diagramHtml.value = ''
-  if (diagramTarget?.isConnected) diagramTarget.focus()
-  diagramTarget = null
+  const source = props.previewSource
+  if (!box || !body.value?.contains(box) || !source) return
+  const index = Number(box.dataset.diagramIndex ?? 0)
+  const title =
+    props.previewTitle ??
+    (source.type === 'message'
+      ? (agents.chats[source.sessionId]?.info.name ?? t('agent.diagram.title'))
+      : source.type === 'file'
+        ? source.path
+        : t('windows.preview'))
+  preview.open('diagram', source, {
+    title: `${title} · ${t('windows.diagram')} · ${index + 1}`,
+    index,
+    content: box.dataset.source ?? '',
+    sourceText: props.text
+  })
 }
 
 async function onClick(event: MouseEvent) {
@@ -77,11 +87,6 @@ async function onClick(event: MouseEvent) {
       @click="onClick"
       @keydown.enter="openDiagram"
       v-html="html"
-    />
-    <MermaidPreviewDialog
-      v-model="diagramOpen"
-      :svg-html="diagramHtml"
-      @hide="onDiagramHide"
     />
   </div>
 </template>

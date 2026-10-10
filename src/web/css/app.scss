@@ -21,6 +21,7 @@
   --font-agent: 'Golos Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --code-font-size: 14px;
+  --control-size-compact: 9px;
   // Comment UI text is intentionally smaller than the surrounding code —
   // derived from --code-font-size so it stays proportional if that changes.
   --comment-font-size: calc(var(--code-font-size) - 1px);
