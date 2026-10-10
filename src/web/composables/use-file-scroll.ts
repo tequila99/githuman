@@ -6,7 +6,7 @@ import {
   type MaybeRefOrGetter
 } from 'vue'
 import type { ScrollRequest } from '@/stores/file-explorer-store'
-import { followScrollHeader } from '@/utils/follow-scroll-header'
+import { followScrollTarget } from '@/utils/follow-scroll-target'
 
 // Any deliberate input releases the navigation anchor, including before list readiness.
 const CANCEL_EVENTS = ['wheel', 'pointerdown', 'keydown', 'touchstart'] as const
@@ -21,12 +21,12 @@ export function useFileScroll(options: {
   list: MaybeRefOrGetter<VirtualScrollApi | null>
   root: MaybeRefOrGetter<Element | null>
   inputTarget?: EventTarget | null
-  header?: (request: ScrollRequest) => Element | null
-  follow?: typeof followScrollHeader
+  target?: (request: ScrollRequest) => Element | null
+  follow?: typeof followScrollTarget
 }) {
   const inputTarget =
     options.inputTarget ?? (typeof document === 'undefined' ? null : document)
-  const follow = options.follow ?? followScrollHeader
+  const follow = options.follow ?? followScrollTarget
   let cancelledRequest: ScrollRequest | null = null
   let stopOperation: (() => void) | undefined
   function cancel() {
@@ -66,12 +66,12 @@ export function useFileScroll(options: {
         list.scrollTo(request.index, 'start')
         stopFollowing = follow({
           root,
-          header: () =>
-            options.header
-              ? options.header(request)
-              : (document
-                  .getElementById(`diff-file-${request.path}`)
-                  ?.querySelector('.diff-file-card__header-item') ?? null)
+          // The card, not its sticky header: that header stays at the top of the
+          // scroll window while its card scrolls (#77).
+          target: () =>
+            options.target
+              ? options.target(request)
+              : document.getElementById(`diff-file-${request.path}`)
         })
         return undefined
       })

@@ -103,7 +103,7 @@ watch(diffFiles, async (files, previous) => {
     <q-separator />
     <q-scroll-area
       ref="scrollArea"
-      class="col"
+      class="col sticky-header-scroll"
       content-style="padding: 8px; width: 100%; max-width: 100%"
       content-active-style="padding: 8px; width: 100%; max-width: 100%"
     >
