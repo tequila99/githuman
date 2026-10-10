@@ -80,6 +80,10 @@ export function useSpeechInput(options: {
     run.lang = options.lang()
     run.continuous = true
     run.interimResults = true
+    // Plain listeners, not Quasar's useEventListener. Each recognition run is a
+    // new object, and its listeners go away with it, so there is no cleanup.
+    // In node tests Quasar loads its server build, and there useEventListener
+    // does nothing, so the tests could not send recognizer events.
     run.addEventListener('result', event => {
       if (run !== recognizer.value) return
       const read = readSpeechResults(event, committed)
