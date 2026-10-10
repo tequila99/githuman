@@ -4,16 +4,20 @@ import type { EventBus } from '../../event-bus.ts'
 import { getFilesAtRef } from '../git.service.ts'
 
 import { DEFAULT_FILE_SEARCH_LIMIT } from '../../../shared/agents/constants.ts'
-import { rankFiles } from '../../../shared/agents/file-search.ts'
+import { rankPaths } from '../../../shared/agents/file-search.ts'
+import { withDirectories } from '../../../shared/agents/mention-paths.ts'
 
 export interface FileIndex {
-  /** Repository files (tracked and untracked-not-ignored) matching `query`, best first. */
+  /**
+   * Repository files (tracked and untracked-not-ignored) and their directories
+   * that match `query`, best first. A directory path ends with `/` (#80).
+   */
   search: (query: string, limit?: number) => Promise<string[]>
   close: () => void
 }
 
 /**
- * The repository's file list for `@` mentions. Read once from `git ls-files`
+ * The repository's file and directory list for `@` mentions. Read once from `git ls-files`
  * and filtered in memory — the query never reaches a git argument — and
  * dropped whenever the working tree changes.
  */
@@ -40,6 +44,7 @@ export function createFileIndex(
     if (!loading) {
       const started = generation
       loading = getFilesAtRef(repositoryPath, 'WORKTREE')
+        .then(withDirectories)
         .then(list => {
           if (started === generation) {
             cached = list
@@ -55,10 +60,11 @@ export function createFileIndex(
 
   return {
     async search(query, limit = DEFAULT_FILE_SEARCH_LIMIT) {
-      const ranked = rankFiles(await files(), query)
+      const ranked = rankPaths(await files(), query)
       const found: string[] = []
       for (const path of ranked) {
-        // `ls-files --cached` still lists files deleted from the working tree.
+        // `ls-files --cached` still lists files deleted from the working tree,
+        // so a directory can also be gone.
         if (existsSync(join(repositoryPath, path))) {
           found.push(path)
           if (found.length >= limit) {

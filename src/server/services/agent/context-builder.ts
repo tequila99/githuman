@@ -2,10 +2,11 @@ import { MAX_ATTACHMENT_BYTES } from '../../../shared/agents/constants.ts'
 import { AgentContextError } from '../../errors/agents.ts'
 import { errorMessage } from '../../../shared/utils/error-message.ts'
 import { formatDiffFile } from '../../../shared/agents/context-format.ts'
+import { withoutTrailingSlash } from '../../../shared/agents/mention-paths.ts'
 import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { ContentBlock } from '@agentclientprotocol/sdk'
 import type {
@@ -132,6 +133,39 @@ async function buildFileItem(
   }
 }
 
+async function buildDirectoryItem(
+  item: Extract<AgentContextItem, { kind: 'directory' }>,
+  deps: ContextBuilderDeps
+): Promise<ContentBlock> {
+  const path = withoutTrailingSlash(item.path)
+  let absolute: string
+  try {
+    absolute = resolveWithinRepo(deps.repositoryPath, path)
+  } catch (error) {
+    throw asContextError(error)
+  }
+  // The agent runs in the repository root already, so a link to it says nothing.
+  if (absolute === resolve(deps.repositoryPath)) {
+    throw new AgentContextError('The repository root cannot be a context item')
+  }
+  const info = await stat(absolute).catch(() => null)
+  if (!info?.isDirectory()) {
+    throw new AgentContextError(
+      `"${path}" is not a directory in the repository`
+    )
+  }
+  // ACP has no type for a directory link. The trailing `/` in the URI and the
+  // name is the only sign for the agent that the link names a directory.
+  const name = relative(resolve(deps.repositoryPath), absolute)
+    .split(sep)
+    .join('/')
+  return {
+    type: 'resource_link',
+    uri: pathToFileURL(absolute + sep).href,
+    name: `${name}/`
+  }
+}
+
 async function buildReviewItem(
   item: Extract<AgentContextItem, { kind: 'review' }>,
   deps: ContextBuilderDeps
@@ -209,6 +243,9 @@ function buildItem(
   }
   if (item.kind === 'file') {
     return buildFileItem(item, deps)
+  }
+  if (item.kind === 'directory') {
+    return buildDirectoryItem(item, deps)
   }
   if (item.kind === 'attachment') {
     return buildAttachmentItem(item, deps)
