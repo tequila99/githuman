@@ -1,7 +1,7 @@
 // Late hunks can change preceding heights; bound correction instead of guessing readiness.
 export const SCROLL_FOLLOW_MS = 3000
 
-interface FollowHeaderOptions {
+interface FollowTargetOptions {
   root: Element
   target: () => Element | null
   now?: () => number
@@ -18,6 +18,11 @@ export function offsetFromRootTop(root: Element, target: Element): number {
   )
 }
 
+/** True when the top of `target` is above the scroll window, so its sticky header is stuck. */
+export function isAboveRoot(root: Element, target: Element): boolean {
+  return offsetFromRootTop(root, target) < 0
+}
+
 /** The `scrollTop` of `root` that puts the top of `target` at the top of the scroll window. */
 export function scrollTopToAlign(root: Element, target: Element): number {
   return Math.max(
@@ -30,7 +35,7 @@ export function scrollTopToAlign(root: Element, target: Element): number {
 }
 
 /** Keeps a selected element aligned until cancellation or the elapsed-time deadline. */
-export function followScrollHeader(options: FollowHeaderOptions): () => void {
+export function followScrollTarget(options: FollowTargetOptions): () => void {
   const now = options.now ?? (() => performance.now())
   const requestFrame =
     options.requestFrame ?? (callback => requestAnimationFrame(callback))

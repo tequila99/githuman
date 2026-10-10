@@ -203,3 +203,10 @@ body.body--dark {
     }
   }
 }
+
+// A focused element that the browser scrolls into view must not stop under the
+// sticky header of its card (#77). 48px is the header height plus its border.
+// Code that sets `scrollTop` itself (useFileScroll) does not use this value.
+.sticky-header-scroll .q-scrollarea__container {
+  scroll-padding-top: 48px;
+}

@@ -12,10 +12,7 @@ import { useHunksOnDemand } from '@/composables/use-hunks-on-demand'
 import { useScrollRoot } from '@/composables/use-scroll-root'
 import { pathOf } from '@/utils/diff-file'
 import { isMarkdown } from '@/utils/file-wrap'
-import {
-  offsetFromRootTop,
-  scrollTopToAlign
-} from '@/utils/follow-scroll-header'
+import { isAboveRoot, scrollTopToAlign } from '@/utils/follow-scroll-target'
 import type { DiffSource } from '@/stores/diff-store'
 
 const props = withDefaults(
@@ -85,7 +82,7 @@ function toggle() {
     props.expanded &&
     element instanceof Element &&
     root !== null &&
-    offsetFromRootTop(root, element) < 0
+    isAboveRoot(root, element)
   emit('toggle')
   if (!stuck) return
   void nextTick(() => {

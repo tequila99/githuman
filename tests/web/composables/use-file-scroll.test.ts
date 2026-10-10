@@ -6,7 +6,7 @@ import {
   type VirtualScrollApi
 } from '@/composables/use-file-scroll'
 import type { ScrollRequest } from '@/stores/file-explorer-store'
-import type { followScrollHeader } from '@/utils/follow-scroll-header'
+import type { followScrollTarget } from '@/utils/follow-scroll-target'
 
 const cleanups: Array<() => void> = []
 afterEach(() => {
@@ -34,7 +34,7 @@ function setup(ready = true) {
   let followers = 0,
     stopped = 0
   let target: (() => Element | null) | undefined
-  const follow: typeof followScrollHeader = options => {
+  const follow: typeof followScrollTarget = options => {
     target = options.target
     followers++
     return () => {

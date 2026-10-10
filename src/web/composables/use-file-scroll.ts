@@ -6,7 +6,7 @@ import {
   type MaybeRefOrGetter
 } from 'vue'
 import type { ScrollRequest } from '@/stores/file-explorer-store'
-import { followScrollHeader } from '@/utils/follow-scroll-header'
+import { followScrollTarget } from '@/utils/follow-scroll-target'
 
 // Any deliberate input releases the navigation anchor, including before list readiness.
 const CANCEL_EVENTS = ['wheel', 'pointerdown', 'keydown', 'touchstart'] as const
@@ -22,11 +22,11 @@ export function useFileScroll(options: {
   root: MaybeRefOrGetter<Element | null>
   inputTarget?: EventTarget | null
   target?: (request: ScrollRequest) => Element | null
-  follow?: typeof followScrollHeader
+  follow?: typeof followScrollTarget
 }) {
   const inputTarget =
     options.inputTarget ?? (typeof document === 'undefined' ? null : document)
-  const follow = options.follow ?? followScrollHeader
+  const follow = options.follow ?? followScrollTarget
   let cancelledRequest: ScrollRequest | null = null
   let stopOperation: (() => void) | undefined
   function cancel() {
