@@ -75,7 +75,7 @@ const scrollRoot = useScrollRoot()
  * the window, as on GitHub (#77). The parent collapses the card, so the check
  * runs before the emit.
  */
-function toggle() {
+async function toggle() {
   const element: unknown = frame.value?.$el
   const root = element instanceof Element ? scrollRoot(element) : null
   const stuck =
@@ -85,10 +85,9 @@ function toggle() {
     isAboveRoot(root, element)
   emit('toggle')
   if (!stuck) return
-  void nextTick(() => {
-    if (props.expanded) return
-    root.scrollTop = scrollTopToAlign(root, element)
-  })
+  await nextTick()
+  if (props.expanded) return
+  root.scrollTop = scrollTopToAlign(root, element)
 }
 
 // `stateKey` does not change in a live card: a new source makes a new `q-virtual-scroll`
