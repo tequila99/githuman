@@ -1,9 +1,13 @@
+import { nextTick } from 'vue'
 import { test, beforeEach, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { setActivePinia, createPinia } from 'pinia'
 import { useFileExplorerStore } from '@/stores/file-explorer-store'
 import { useDiffStore } from '@/stores/diff-store'
 import type { DiffFile } from '@/api/types'
+import { setStorageBackend } from '@/utils/safe-storage'
+import { pathOf } from '@/utils/diff-file'
+import { memoryStorage } from '../helpers/memory-storage'
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -360,4 +364,100 @@ test('expand all, collapse all and a source change bump the layout version', () 
   explorer.collapseAllFiles()
 
   assert.equal(explorer.layoutVersion, before + 2)
+})
+
+test('tree mode orders the cards like the tree and remembers the mode (#76)', async t => {
+  const storage = memoryStorage()
+  setStorageBackend(storage)
+  t.after(() => setStorageBackend(null))
+  const explorer = useFileExplorerStore()
+  useDiffStore().unstagedFiles = ['README.md', 'src/b.ts', 'src/a/x.ts'].map(
+    fileAt
+  )
+  assert.deepEqual(explorer.diffFiles.map(pathOf), [
+    'README.md',
+    'src/b.ts',
+    'src/a/x.ts'
+  ])
+  explorer.diffListMode = 'tree'
+  await nextTick()
+  assert.deepEqual(explorer.diffFiles.map(pathOf), [
+    'src/a/x.ts',
+    'src/b.ts',
+    'README.md'
+  ])
+  assert.equal(storage.getItem('githuman.diffListMode'), 'tree')
+
+  setActivePinia(createPinia())
+  assert.equal(useFileExplorerStore().diffListMode, 'tree')
+})
+
+test('a folder row of a compressed chain opens and closes as one (#76)', () => {
+  const explorer = useFileExplorerStore()
+  useDiffStore().unstagedFiles = ['src/web/a.ts', 'src/web/b.ts'].map(fileAt)
+  explorer.diffListMode = 'tree'
+  const folder = explorer.diffTreeRows[0]
+  assert.ok(folder?.kind === 'folder')
+  assert.deepEqual(folder.paths, ['src', 'src/web'])
+  explorer.toggleDiffFolder(folder.paths)
+  assert.deepEqual(
+    explorer.diffTreeRows.map(row => row.path),
+    ['src/web']
+  )
+  // A filter shows every folder open, so no match is hidden.
+  explorer.filter = 'b.ts'
+  assert.deepEqual(
+    explorer.diffTreeRows.map(row => row.path),
+    ['src/web', 'src/web/b.ts']
+  )
+  explorer.filter = ''
+  explorer.toggleDiffFolder(folder.paths)
+  assert.equal(explorer.diffTreeRows.length, 3)
+})
+
+test('a file and a folder with the same path both stay in the tree mode (#76)', () => {
+  const explorer = useFileExplorerStore()
+  // A deleted folder `foo/` and a new file `foo`: git lists the folder first.
+  useDiffStore().unstagedFiles = ['foo/bar.ts', 'foo'].map(fileAt)
+  explorer.diffListMode = 'tree'
+  assert.deepEqual(explorer.diffFiles.map(pathOf).sort(), ['foo', 'foo/bar.ts'])
+  assert.deepEqual(
+    explorer.diffTreeRows.map(row => [row.kind, row.path]),
+    [
+      ['folder', 'foo'],
+      ['file', 'foo/bar.ts'],
+      ['file', 'foo']
+    ]
+  )
+})
+
+test('a mode switch asks the panel to scroll to the selected card (#76)', async () => {
+  const explorer = useFileExplorerStore()
+  useDiffStore().unstagedFiles = ['README.md', 'src/a.ts'].map(fileAt)
+  explorer.selectFile('README.md')
+  const before = explorer.scrollRequest?.seq ?? 0
+  explorer.diffListMode = 'tree'
+  await nextTick()
+  assert.equal(explorer.scrollRequest?.path, 'README.md')
+  assert.equal(explorer.scrollRequest?.index, 1)
+  assert.equal(explorer.scrollRequest?.seq, before + 1)
+})
+
+test('a filter can split a compressed folder; its rows stay open (#76)', () => {
+  const explorer = useFileExplorerStore()
+  useDiffStore().unstagedFiles = ['src/web/a.ts', 'src/z.ts'].map(fileAt)
+  explorer.diffListMode = 'tree'
+  assert.deepEqual(
+    explorer.diffTreeRows.map(row => row.path),
+    ['src', 'src/web', 'src/web/a.ts', 'src/z.ts']
+  )
+  explorer.toggleDiffFolder(['src'])
+  explorer.filter = 'web'
+  assert.deepEqual(
+    explorer.diffTreeRows.map(row => [row.path, row.name]),
+    [
+      ['src/web', 'src/web'],
+      ['src/web/a.ts', 'a.ts']
+    ]
+  )
 })
