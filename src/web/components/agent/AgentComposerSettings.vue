@@ -6,6 +6,8 @@ import type { AgentChatEntry } from '@/utils/agent-chat'
 import AgentChatStatusDot from './AgentChatStatusDot.vue'
 import AgentConfigButton from './AgentConfigButton.vue'
 import AgentAutoApproveButton from './AgentAutoApproveButton.vue'
+import AgentSpeechLanguageButton from './AgentSpeechLanguageButton.vue'
+import { speechRecognizerClass } from '@/utils/speech'
 const props = defineProps<{
   entry: AgentChatEntry
   modelOption: AgentConfigOption | undefined
@@ -20,6 +22,9 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const status = computed(() => props.entry.chat.status)
 const autoApprove = computed(() => props.entry.chat.autoApprove)
+// The language choice matters only where the browser can recognize speech.
+const speechSupported =
+  typeof window !== 'undefined' && speechRecognizerClass(window) !== null
 </script>
 <template>
   <div class="agent-composer__status row no-wrap items-center">
@@ -49,6 +54,7 @@ const autoApprove = computed(() => props.entry.chat.autoApprove)
         @select="value => emit('select', option, value)"
       />
     </div>
+    <AgentSpeechLanguageButton v-if="speechSupported" />
     <AgentAutoApproveButton
       :enabled="autoApprove"
       :disabled="status === 'closed'"

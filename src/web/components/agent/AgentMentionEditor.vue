@@ -26,6 +26,8 @@ const {
   clear,
   focus,
   startMention,
+  saveCaret,
+  insertText,
   closePopup,
   pick,
   onInput,
@@ -42,7 +44,14 @@ const {
   onEmptyChange: isEmpty => emit('empty-change', isEmpty),
   onFiles: files => emit('files', files)
 })
-defineExpose({ serialize, clear, focus, startMention })
+defineExpose({
+  serialize,
+  clear,
+  focus,
+  startMention,
+  saveCaret,
+  insertText
+})
 </script>
 
 <template>

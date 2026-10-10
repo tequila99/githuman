@@ -156,7 +156,7 @@ async function resume() {
       </div>
     </q-scroll-area>
 
-    <AgentComposer ref="composer" :chat-id="chatId" />
+    <AgentComposer ref="composer" :chat-id="chatId" :active="active" />
   </div>
 </template>
 

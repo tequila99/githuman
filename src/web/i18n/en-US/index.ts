@@ -255,6 +255,27 @@ export default {
       tooLarge: '"{name}" is larger than {mb} MB',
       readFailed: 'Could not read the file'
     },
+    voice: {
+      hold: 'Hold to talk',
+      privacy: "The browser's speech service processes the audio.",
+      screenReader:
+        'Hold Space or Enter to talk. In screen reader browse mode, activate once to start and once to stop.',
+      listening: 'Listening',
+      inserted: 'Inserted: {text}',
+      busy: 'Voice input is busy. Try again in a moment.',
+      language: 'Voice input language: {name}',
+      error: {
+        'not-allowed':
+          'Microphone access is blocked. Allow it in the browser and hold the button again.',
+        'service-not-allowed':
+          'The browser does not allow speech recognition here.',
+        'audio-capture': 'No microphone was found.',
+        network: "The browser's speech service is not available.",
+        'language-not-supported':
+          'The speech service does not support this language.',
+        other: 'Voice input failed.'
+      }
+    },
     mention: {
       list: 'Files and folders',
       noFiles: 'No matching files or folders',
