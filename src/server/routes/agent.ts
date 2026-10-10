@@ -307,7 +307,7 @@ export async function agentRoutes(
     {
       schema: {
         tags: TAGS,
-        summary: 'Find repository files for the context picker',
+        summary: 'Find repository files and directories for the context picker',
         querystring: FileSearchQuery,
         response: {
           200: AgentFileSearchResponseSchema,
@@ -316,7 +316,7 @@ export async function agentRoutes(
       }
     },
     async request => ({
-      files: await fileIndex.search(
+      paths: await fileIndex.search(
         request.query.q ?? '',
         request.query.limit ?? DEFAULT_FILE_SEARCH_LIMIT
       )

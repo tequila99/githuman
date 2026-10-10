@@ -34,14 +34,14 @@ export function useMentionAutocomplete(
   const popup = shallowRef<PopupState | null>(null)
   let trigger: EditorTrigger | null = null
   const { search, cancel } = useMentionSearch({
-    onResult(files) {
+    onResult(paths) {
       if (
         trigger &&
         !toValue(options.disabled) &&
         validTrigger(toValue(root), trigger)
       ) {
         popup.value = {
-          items: files,
+          items: paths,
           active: 0,
           ...caretAnchor(toValue(root), POPUP_WIDTH)
         }

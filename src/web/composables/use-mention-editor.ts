@@ -33,7 +33,7 @@ export function useMentionEditor(
   function serialize(): SerializedMessage {
     return root.value
       ? serializeEditor(nodesOf(root.value))
-      : { text: '', files: [] }
+      : { text: '', paths: [] }
   }
 
   function chips(): HTMLElement[] {
@@ -160,7 +160,7 @@ export function useMentionEditor(
     updateEmpty()
   }
 
-  /** Types an `@` at the caret, which opens the file list. */
+  /** Types an `@` at the caret, which opens the list of files and folders. */
   function startMention(): void {
     if (toValue(options.disabled)) return
     focus()

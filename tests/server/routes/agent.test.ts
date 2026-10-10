@@ -1,6 +1,14 @@
 import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -653,6 +661,7 @@ for (const embedded of [true, false]) {
       context: [
         { kind: 'diff', source: 'staged', path: 'src/a.ts' },
         { kind: 'file', path: 'src/a.ts' },
+        { kind: 'directory', path: 'src' },
         { kind: 'review', reviewId: review.id }
       ]
     })
@@ -666,6 +675,11 @@ for (const embedded of [true, false]) {
       'diff content reaches the agent'
     )
     assert.match(text, /link:file:\/\/.*src\/a\.ts/, 'file is passed as a link')
+    assert.match(
+      text,
+      /link:file:\/\/\S*\/src\/(\s|$)/,
+      'a directory is passed as a link that ends with a slash'
+    )
     assert.match(text, /a\.ts/, 'review markdown mentions the file')
     if (!embedded) {
       // fence must be longer than the ``` inside the diff
@@ -675,12 +689,26 @@ for (const embedded of [true, false]) {
 }
 
 test('context with paths/refs outside the repository or nothing to attach → 400', async t => {
-  const { post, createSession } = await setup(t)
+  const { post, createSession, fixture } = await setup(t)
   const id = await createSession()
+  // Symbolic links that point out of the repository (#80).
+  const outside = mkdtempSync(join(tmpdir(), 'githuman-outside-'))
+  t.after(() => rmSync(outside, { recursive: true, force: true }))
+  writeFileSync(join(outside, 'secret.txt'), 'x')
+  symlinkSync(outside, join(fixture.dir, 'out-dir'))
+  symlinkSync(join(outside, 'secret.txt'), join(fixture.dir, 'out-file'))
   for (const context of [
     [{ kind: 'file', path: '../../etc/passwd' }],
     [{ kind: 'file', path: '/etc/passwd' }],
     [{ kind: 'file', path: 'does-not-exist.txt' }],
+    [{ kind: 'directory', path: '../outside' }],
+    [{ kind: 'directory', path: '/' }],
+    [{ kind: 'directory', path: '.' }],
+    [{ kind: 'directory', path: 'src/..' }],
+    [{ kind: 'directory', path: 'out-dir' }],
+    [{ kind: 'file', path: 'out-file' }],
+    [{ kind: 'directory', path: 'src/a.ts' }],
+    [{ kind: 'file', path: 'src' }],
     [{ kind: 'diff', source: 'staged' }],
     [{ kind: 'review', reviewId: 'nope' }]
   ]) {
@@ -993,16 +1021,25 @@ test('file search ranks by file name, ignores deleted files and never takes the 
         method: 'GET',
         url: `/api/agent/files?q=${encodeURIComponent(q)}${extra}`
       })
-    ).json<{ files: string[] }>()
+    ).json<{ paths: string[] }>()
 
-  assert.deepEqual((await search('agent')).files, [
+  assert.deepEqual((await search('agent')).paths, [
     'src/agent.ts',
     'notes agent.md',
     'src/deep/my-agent.ts'
   ])
-  assert.deepEqual((await search('agent', '&limit=1')).files, ['src/agent.ts'])
-  assert.deepEqual((await search('--upload-pack=x')).files, [])
-  assert.deepEqual((await search('NOPE')).files, [])
+  assert.deepEqual((await search('agent', '&limit=1')).paths, ['src/agent.ts'])
+  assert.deepEqual((await search('--upload-pack=x')).paths, [])
+  assert.deepEqual((await search('NOPE')).paths, [])
+  // Directories come from the file list, with a trailing slash (#80).
+  assert.deepEqual((await search('deep')).paths, [
+    'src/deep/',
+    'src/deep/my-agent.ts'
+  ])
+  // A removed directory is not offered, whatever list the index holds.
+  rmSync(join(fixture.dir, 'src', 'deep'), { recursive: true })
+  assert.deepEqual((await search('deep')).paths, [])
+
   assert.equal(
     (await app.inject({ method: 'GET', url: '/api/agent/files?limit=0' }))
       .statusCode,

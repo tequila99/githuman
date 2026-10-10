@@ -9,7 +9,7 @@ const SEARCH_DEBOUNCE_MS = 80
 const SEARCH_LIMIT = 30
 
 export function useMentionSearch(options: {
-  onResult: (files: string[]) => void
+  onResult: (paths: string[]) => void
   onError: () => void
 }) {
   const { registerTimeout, removeTimeout } = useTimeout()
@@ -20,10 +20,10 @@ export function useMentionSearch(options: {
   }
   async function lookUp(query: string, seq: number): Promise<void> {
     try {
-      const { files } = await apiGet<AgentFileSearchResponse>(
+      const { paths } = await apiGet<AgentFileSearchResponse>(
         `/api/agent/files?q=${encodeURIComponent(query)}&limit=${SEARCH_LIMIT}`
       )
-      if (seq === sequence) options.onResult(files)
+      if (seq === sequence) options.onResult(paths)
     } catch {
       if (seq === sequence) options.onError()
     }

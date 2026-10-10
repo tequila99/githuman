@@ -400,7 +400,7 @@ test('agent routes return whole bodies', async t => {
   ])
 
   const files = await app.inject('/api/agent/files?q=a')
-  assert.deepEqual(files.json(), { files: ['a.txt'] })
+  assert.deepEqual(files.json(), { paths: ['a.txt'] })
 
   // 202 keeps an empty body, as before the response schema.
   const prompted = await app.inject({
