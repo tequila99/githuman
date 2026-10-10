@@ -18,7 +18,17 @@ export interface PreviewData {
   pdf: File | null
   loading: boolean
   error: string | null
-  missing: 'file' | 'message' | 'attachment' | 'diagram' | null
+  missing: 'file' | 'message' | 'attachment' | 'diagram' | 'binary' | null
   loaded: boolean
   stale: boolean
+}
+
+export interface PreviewOpenOptions {
+  title: string
+  /** Position of the diagram or attachment inside its source. */
+  index?: number
+  /** Content that identifies a diagram or an image inside its source. */
+  content?: string
+  /** Full source text; lets an edited diagram keep its tab. */
+  sourceText?: string
 }

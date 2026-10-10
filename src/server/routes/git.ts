@@ -1,4 +1,5 @@
-import { BadRequestError, NotFoundError } from '../errors/http.ts'
+import { BadRequestError } from '../errors/http.ts'
+import { GitFileNotFoundError } from '../errors/git.ts'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import type { FastifyInstance } from 'fastify'
 import {
@@ -167,7 +168,7 @@ export async function gitRoutes(
           strict
         ))
       } catch (err) {
-        if (err instanceof NotFoundError) throw err
+        if (err instanceof GitFileNotFoundError) throw err
         const message =
           err instanceof Error ? err.message : 'Failed to read file'
         throw new BadRequestError(message, { cause: err })

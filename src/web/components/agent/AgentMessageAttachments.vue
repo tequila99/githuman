@@ -23,13 +23,11 @@ const $q = useQuasar()
 // A sent image opens enlarged; any other attachment can be saved again.
 const preview = usePreviewStore()
 function openImage(image: AttachmentItem) {
-  preview.open(
-    'image',
-    props.source,
-    image.name,
-    props.context.indexOf(image),
-    image.data
-  )
+  preview.open('image', props.source, {
+    title: image.name,
+    index: props.context.indexOf(image),
+    content: image.data
+  })
 }
 
 function onContextChip(context: AgentContextItem) {

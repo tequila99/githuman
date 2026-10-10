@@ -17,13 +17,13 @@ afterEach(() => {
 test('file previews deduplicate by source, retain state and close only their own window', () => {
   const store = usePreviewStore()
   const source = { type: 'file', path: 'a.md', ref: 'WORKTREE' } as const
-  const id = store.open('markdown', source, 'a')
+  const id = store.open('markdown', source, { title: 'a' })
   store.tabs[0]!.scroll.y = 300
   useWindowStore().ensure('preview').minimized = true
-  assert.equal(store.open('markdown', source, 'a'), id)
+  assert.equal(store.open('markdown', source, { title: 'a' }), id)
   assert.equal(store.tabs[0]?.scroll.y, 300)
   assert.equal(useWindowStore().ensure('preview').minimized, false)
-  store.open('markdown', { ...source, ref: 'INDEX' }, 'staged a')
+  store.open('markdown', { ...source, ref: 'INDEX' }, { title: 'staged a' })
   assert.equal(store.tabs.length, 2)
   useWindowStore().focus('terminal')
   store.closeAll()
@@ -41,9 +41,7 @@ test('reload restores locators and view state without persisting document data',
   store.open(
     'diagram',
     { type: 'file', path: 'a.md', ref: 'WORKTREE' },
-    'a · 1',
-    0,
-    'private diagram text'
+    { title: 'a · 1', content: 'private diagram text' }
   )
   store.tabs[0]!.scale = 2
   store.remember()
@@ -52,7 +50,8 @@ test('reload restores locators and view state without persisting document data',
   const restored = usePreviewStore()
   assert.equal(restored.tabs[0]?.scale, 2)
   assert.equal(restored.activeId, restored.tabs[0]?.id)
-  assert.equal(Object.keys(restored.data).length, 0)
+  assert.equal(restored.data[restored.tabs[0].id]?.loaded, false)
+  assert.equal(restored.data[restored.tabs[0].id]?.text, '')
 })
 test('missing files retain a tab and can recover; inactive tabs do not load', async () => {
   let missing = true
@@ -67,7 +66,7 @@ test('missing files retain a tab and can recover; inactive tabs do not load', as
   const id = store.open(
     'markdown',
     { type: 'file', path: 'a.md', ref: 'WORKTREE' },
-    'a'
+    { title: 'a' }
   )
   assert.equal(calls, 0)
   await store.load(id)
@@ -88,7 +87,7 @@ test('closing a tab during a request cannot bring back its runtime data', async 
   const id = store.open(
     'markdown',
     { type: 'file', path: 'a.md', ref: 'WORKTREE' },
-    'a'
+    { title: 'a' }
   )
   const request = store.load(id)
   store.close(id)
@@ -132,9 +131,7 @@ test('message diagrams resolve without a mounted chat and keep missing sources',
   const id = store.open(
     'diagram',
     { type: 'message', sessionId: 'session', messageId: 'ev:12' },
-    'chat · 1',
-    0,
-    'graph TD; A-->B\n'
+    { title: 'chat · 1', content: 'graph TD; A-->B\n' }
   )
   await store.load(id)
   assert.equal(store.runtime(id).text.trim(), 'graph TD; A-->B')
@@ -149,11 +146,26 @@ test('opening an edited or moved diagram reuses its original tab', () => {
   const source = { type: 'file', path: 'a.md', ref: 'WORKTREE' } as const
   const old = 'graph TD; A-->B\n'
   const fresh = 'graph TD; A-->C\n'
-  const id = store.open('diagram', source, 'a · 1', 0, old)
+  const id = store.open('diagram', source, { title: 'a · 1', content: old })
   const text = `\`\`\`mermaid\ngraph TD; X-->Y\n\`\`\`\n\`\`\`mermaid\n${old}\`\`\``
-  assert.equal(store.open('diagram', source, 'a · 2', 1, old, text), id)
+  assert.equal(
+    store.open('diagram', source, {
+      title: 'a · 2',
+      index: 1,
+      content: old,
+      sourceText: text
+    }),
+    id
+  )
   assert.equal(store.tabs[0]?.index, 1)
-  assert.equal(store.open('diagram', source, 'a · 2', 1, fresh), id)
+  assert.equal(
+    store.open('diagram', source, {
+      title: 'a · 2',
+      index: 1,
+      content: fresh
+    }),
+    id
+  )
   assert.equal(store.tabs.length, 1)
 })
 
@@ -213,13 +225,10 @@ test('local diagrams retain their file after the Markdown tab closes', async () 
   )!
   await store.load(id)
   const source = store.activeTab!.source
-  const diagramId = store.open(
-    'diagram',
-    source,
-    'diagram.md · diagram · 1',
-    0,
-    'graph TD\nA-->B\n'
-  )
+  const diagramId = store.open('diagram', source, {
+    title: 'diagram.md · diagram · 1',
+    content: 'graph TD\nA-->B\n'
+  })
   store.close(id)
   await store.load(diagramId)
   assert.equal(store.runtime(diagramId).missing, null)

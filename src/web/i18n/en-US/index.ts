@@ -32,7 +32,8 @@ export default {
       file: 'The file was deleted or moved.',
       message: 'The original message is no longer available.',
       attachment: 'The attachment is no longer available.',
-      diagram: 'The diagram is no longer available.'
+      diagram: 'The diagram is no longer available.',
+      binary: 'This file cannot be previewed.'
     }
   },
   terminal: {

@@ -52,14 +52,12 @@ function openDiagram(event: Event) {
       : source.type === 'file'
         ? source.path
         : t('windows.preview'))
-  preview.open(
-    'diagram',
-    source,
-    `${title} · ${t('windows.diagram')} · ${index + 1}`,
+  preview.open('diagram', source, {
+    title: `${title} · ${t('windows.diagram')} · ${index + 1}`,
     index,
-    box.dataset.source ?? '',
-    props.text
-  )
+    content: box.dataset.source ?? '',
+    sourceText: props.text
+  })
 }
 
 async function onClick(event: MouseEvent) {

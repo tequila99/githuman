@@ -30,7 +30,7 @@ function openPreview() {
   preview.open(
     'markdown',
     { type: 'file', path: props.path, ref },
-    `${props.path} · ${ref}`
+    { title: `${props.path} · ${ref}` }
   )
 }
 

@@ -99,9 +99,6 @@ export const useTerminalStore = defineStore('terminal', () => {
     safeStorage.set(
       STORAGE_KEY,
       JSON.stringify({
-        position: position.value,
-        windowSize: windowSize.value,
-        minimized: minimized.value,
         activeId: activeId.value,
         originalColors: originalColors.value
       })

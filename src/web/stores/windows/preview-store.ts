@@ -21,7 +21,8 @@ import { singleFlight } from '@/utils/single-flight'
 import type {
   PreviewTab,
   PreviewSource,
-  PreviewData
+  PreviewData,
+  PreviewOpenOptions
 } from '@/types/windows/preview'
 
 // Preferences contain source locators only; documents and attachments remain at their sources.
@@ -66,6 +67,7 @@ export const usePreviewStore = defineStore('preview', () => {
         const tab = parsePreviewTab(value)
         if (!tab || seen.has(tab.id)) return []
         seen.add(tab.id)
+        data.value[tab.id] = emptyData()
         return [tab]
       })
       activeId.value =
@@ -110,10 +112,7 @@ export const usePreviewStore = defineStore('preview', () => {
   function open(
     kind: PreviewTab['kind'],
     source: PreviewSource,
-    title: string,
-    index = 0,
-    content = '',
-    sourceText?: string
+    { title, index = 0, content = '', sourceText }: PreviewOpenOptions
   ) {
     if (kind === 'diagram' && sourceText !== undefined) {
       const sources = extractDiagramSources(sourceText)
@@ -178,7 +177,7 @@ export const usePreviewStore = defineStore('preview', () => {
     if (!kind) return null
     const sourceId = crypto.randomUUID()
     localFiles.set(sourceId, file)
-    return open(kind, { type: 'local', id: sourceId }, file.name)
+    return open(kind, { type: 'local', id: sourceId }, { title: file.name })
   }
   function releaseLocal(source: PreviewSource) {
     if (source.type !== 'local') return
@@ -272,8 +271,11 @@ export const usePreviewStore = defineStore('preview', () => {
         const response = await apiGet<FileContentResponse>(
           `/api/git/file/${path}?ref=${encodeURIComponent(tab.source.ref)}&strict=true`
         )
-        if (response.isBinary) throw new Error('The file contains binary data.')
-        text = response.content
+        if (response.isBinary) {
+          missing = 'binary'
+        } else {
+          text = response.content
+        }
       } else {
         const chat = useAgentStore().chats[tab.source.sessionId]
         const source = tab.source
