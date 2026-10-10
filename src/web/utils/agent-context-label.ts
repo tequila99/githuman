@@ -6,6 +6,9 @@ export function contextLabel(item: AgentContextItem, t: Translate): string {
   if (item.kind === 'file') {
     return t('agent.context.file', { path: item.path })
   }
+  if (item.kind === 'directory') {
+    return t('agent.context.directory', { path: item.path })
+  }
   if (item.kind === 'review') {
     return t('agent.context.review')
   }

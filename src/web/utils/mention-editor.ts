@@ -1,5 +1,12 @@
+import type { AgentContextItem } from '@/api/types'
+import {
+  isDirectoryPath,
+  mentionParts,
+  withoutTrailingSlash
+} from '../../shared/agents/mention-paths.ts'
+
 /**
- * Logic of the chat input's `@` file mentions, kept free of the DOM where it
+ * Logic of the chat input's `@` mentions of files and directories, kept free of the DOM where it
  * can be so it is testable: the editor component only wires it to a
  * contenteditable element.
  */
@@ -25,17 +32,29 @@ export function findMentionTrigger(
   return { query, start: textBeforeCaret.length - query.length - 1 }
 }
 
-/** The file's name, or `dir/name` when another mention in the message has the same name. */
+/**
+ * The name of a file or directory (`web/`), or `dir/name` when another mention
+ * in the message has the same name.
+ */
 export function mentionLabel(
   path: string,
   allPaths: readonly string[]
 ): string {
-  const parts = path.split('/')
-  const name = parts.at(-1) ?? path
+  const { name, parent } = mentionParts(path)
   const clash = allPaths.some(
-    other => other !== path && other.split('/').at(-1) === name
+    other => other !== path && mentionParts(other).name === name
   )
-  return clash && parts.length > 1 ? parts.slice(-2).join('/') : name
+  const above = parent.split('/').at(-1) ?? ''
+  return clash && above !== '' ? `${above}/${name}` : name
+}
+
+/** The context items for the mentioned paths: a path that ends with `/` is a directory (#80). */
+export function mentionContext(paths: readonly string[]): AgentContextItem[] {
+  return paths.map(path =>
+    isDirectoryPath(path)
+      ? { kind: 'directory', path: withoutTrailingSlash(path) }
+      : { kind: 'file', path }
+  )
 }
 
 /** The structure of the editor's content, as far as sending a message cares. */
@@ -49,19 +68,19 @@ export type EditorNode =
 export interface SerializedMessage {
   /** The message text; every mention reads `@path` in it. */
   text: string
-  /** Mentioned files, each once, in order of appearance. */
-  files: string[]
+  /** Mentioned paths, each once, in order of appearance. A directory path ends with `/`. */
+  paths: string[]
 }
 
 /**
- * Flattens the editor content to the text sent to the agent plus the files
+ * Flattens the editor content to the text sent to the agent plus the paths
  * mentioned. Mentions stay in the text as `@path` — a marker the agent can
- * read — while the file's content travels once, as context.
+ * read — while each file or directory goes once, as context.
  */
 export function serializeEditor(
   nodes: readonly EditorNode[]
 ): SerializedMessage {
-  const files: string[] = []
+  const paths: string[] = []
   let text = ''
 
   function walk(list: readonly EditorNode[]): void {
@@ -72,7 +91,7 @@ export function serializeEditor(
         text += '\n'
       } else if (node.type === 'mention') {
         text += `@${node.path}`
-        if (!files.includes(node.path)) files.push(node.path)
+        if (!paths.includes(node.path)) paths.push(node.path)
       } else {
         // A block starts a line of its own.
         if (text !== '' && !text.endsWith('\n')) text += '\n'
@@ -81,5 +100,5 @@ export function serializeEditor(
     }
   }
   walk(nodes)
-  return { text: text.replace(/ /g, ' ').trim(), files }
+  return { text: text.replace(/ /g, ' ').trim(), paths }
 }

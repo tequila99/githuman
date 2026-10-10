@@ -204,7 +204,8 @@ export default {
   agent: {
     title: 'Agent',
     unavailable: 'not installed',
-    placeholder: "Message the agent…  (Enter to send, {'@'} for files)",
+    placeholder:
+      "Message the agent…  (Enter to send, {'@'} for files and folders)",
     send: 'Send',
     cancel: 'Stop',
     thinking: 'Thinking',
@@ -243,7 +244,7 @@ export default {
     attach: {
       menu: 'Add',
       uploadFile: 'Upload file',
-      mentionFile: 'Mention a file',
+      mentionFile: 'Mention a file or folder',
       download: 'Download',
       downloadTitle: 'Download this file?',
       downloadMessage: '"{name}" will be saved to your computer.',
@@ -272,8 +273,8 @@ export default {
       }
     },
     mention: {
-      list: 'Files',
-      noFiles: 'No matching files',
+      list: 'Files and folders',
+      noFiles: 'No matching files or folders',
       remove: 'Remove {name}'
     },
     permission: {
@@ -325,6 +326,7 @@ export default {
     context: {
       add: 'Add to agent chat',
       file: 'File: {path}',
+      directory: 'Folder: {path}/',
       diff: 'Diff: {source}',
       diffFile: 'Diff ({source}): {path}',
       review: 'Review with comments',

@@ -40,7 +40,7 @@ export const FileSearchQuery = Type.Object({
   q: Type.Optional(
     Type.String({
       maxLength: 200,
-      description: 'Fuzzy text to find in paths. Empty lists files.'
+      description: 'Fuzzy text to find in paths. Empty lists files first.'
     })
   ),
   limit: Type.Optional(
@@ -75,6 +75,19 @@ export const ContextItem = Type.Union(
         })
       },
       { description: 'A link to a repository file.' }
+    ),
+    Type.Object(
+      {
+        kind: Type.Literal('directory', {
+          description: 'A repository directory.'
+        }),
+        path: Type.String({
+          minLength: 1,
+          description:
+            'Repository-relative path without a trailing slash. The agent reads the directory.'
+        })
+      },
+      { description: 'A link to a repository directory.' }
     ),
     Type.Object(
       {
@@ -191,11 +204,12 @@ export const AgentSessionInfoSchema = Type.Object(
 
 export const AgentFileSearchResponseSchema = Type.Object(
   {
-    files: Type.Array(Type.String(), {
-      description: 'Repository-relative paths, best match first.'
+    paths: Type.Array(Type.String(), {
+      description:
+        'Repository-relative paths, best match first. A directory path ends with a slash.'
     })
   },
-  { description: 'Files for the context picker.' }
+  { description: 'Files and directories for the context picker.' }
 )
 
 export const AgentEventsHeaders = Type.Object({

@@ -12,6 +12,7 @@ import { useNotifyError } from '@/composables/use-notify-error'
 import { useAgentComposerConfig } from '@/composables/use-agent-composer-config'
 import { useAgentAttachments } from '@/composables/use-agent-attachments'
 import { useAgentAutoApprove } from '@/composables/use-agent-auto-approve'
+import { mentionContext } from '@/utils/mention-editor'
 
 const props = defineProps<{
   chatId: string
@@ -49,7 +50,7 @@ async function send() {
   try {
     const sent = await store.send(
       message.text,
-      message.files.map(path => ({ kind: 'file' as const, path })),
+      mentionContext(message.paths),
       targetId
     )
     if (sent && props.chatId === targetId && editor.value === targetEditor) {
