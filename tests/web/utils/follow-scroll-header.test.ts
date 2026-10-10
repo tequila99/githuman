@@ -2,7 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   followScrollHeader,
-  SCROLL_FOLLOW_MS
+  SCROLL_FOLLOW_MS,
+  scrollTopToAlign
 } from '@/utils/follow-scroll-header'
 
 function setup() {
@@ -23,7 +24,7 @@ function setup() {
   } as Element
   const stop = followScrollHeader({
     root,
-    header: () => (present ? header : null),
+    target: () => (present ? header : null),
     now: () => time,
     requestFrame: callback => {
       const id = ++sequence
@@ -90,4 +91,22 @@ test('alignment clamps to both scroll boundaries and cancellation removes the pe
   s.stop()
   s.stop()
   assert.equal(s.frames.size, 0)
+})
+
+/** An element whose top edge is at `top` in the viewport. */
+function elementAt(top: number): Element {
+  return { getBoundingClientRect: () => ({ top }) } as Element
+}
+
+test('scrollTopToAlign puts the target at the top and clamps to the scroll range', () => {
+  const root = {
+    scrollTop: 300,
+    scrollHeight: 2000,
+    clientHeight: 500,
+    clientTop: 1,
+    getBoundingClientRect: () => ({ top: 100 })
+  } as Element
+  assert.equal(scrollTopToAlign(root, elementAt(51)), 250)
+  assert.equal(scrollTopToAlign(root, elementAt(-1000)), 0)
+  assert.equal(scrollTopToAlign(root, elementAt(5000)), 1500)
 })

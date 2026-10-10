@@ -21,7 +21,7 @@ export function useFileScroll(options: {
   list: MaybeRefOrGetter<VirtualScrollApi | null>
   root: MaybeRefOrGetter<Element | null>
   inputTarget?: EventTarget | null
-  header?: (request: ScrollRequest) => Element | null
+  target?: (request: ScrollRequest) => Element | null
   follow?: typeof followScrollHeader
 }) {
   const inputTarget =
@@ -66,12 +66,12 @@ export function useFileScroll(options: {
         list.scrollTo(request.index, 'start')
         stopFollowing = follow({
           root,
-          header: () =>
-            options.header
-              ? options.header(request)
-              : (document
-                  .getElementById(`diff-file-${request.path}`)
-                  ?.querySelector('.diff-file-card__header-item') ?? null)
+          // The card, not its sticky header: that header stays at the top of the
+          // scroll window while its card scrolls (#77).
+          target: () =>
+            options.target
+              ? options.target(request)
+              : document.getElementById(`diff-file-${request.path}`)
         })
         return undefined
       })

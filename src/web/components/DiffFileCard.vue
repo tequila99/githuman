@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, provide, watch } from 'vue'
+import { computed, nextTick, provide, useTemplateRef, watch } from 'vue'
 import type { Comment, DiffFile } from '@/api/types'
 import DiffFileCardBody from '@/components/DiffFileCardBody.vue'
 import DiffFileCardHeader from '@/components/DiffFileCardHeader.vue'
@@ -9,8 +9,13 @@ import { diffCardBodyHeight } from '@/utils/diff-card-height'
 import { CARD_STATE_KEY, useCardState } from '@/composables/use-card-state'
 import { useFileHighlight } from '@/composables/use-file-highlight'
 import { useHunksOnDemand } from '@/composables/use-hunks-on-demand'
+import { useScrollRoot } from '@/composables/use-scroll-root'
 import { pathOf } from '@/utils/diff-file'
 import { isMarkdown } from '@/utils/file-wrap'
+import {
+  offsetFromRootTop,
+  scrollTopToAlign
+} from '@/utils/follow-scroll-header'
 import type { DiffSource } from '@/stores/diff-store'
 
 const props = withDefaults(
@@ -63,6 +68,31 @@ const emit = defineEmits<{
 
 const path = computed(() => pathOf(props.file))
 const fullFile = computed(() => props.detail ?? props.file)
+
+const frame = useTemplateRef<InstanceType<typeof FileCardFrame>>('frame')
+const scrollRoot = useScrollRoot()
+
+/**
+ * A collapse from a sticky header shrinks the card above the scroll window. Then
+ * a later card fills the window. So the collapsed card moves back to the top of
+ * the window, as on GitHub (#77). The parent collapses the card, so the check
+ * runs before the emit.
+ */
+function toggle() {
+  const element: unknown = frame.value?.$el
+  const root = element instanceof Element ? scrollRoot(element) : null
+  const stuck =
+    props.expanded &&
+    element instanceof Element &&
+    root !== null &&
+    offsetFromRootTop(root, element) < 0
+  emit('toggle')
+  if (!stuck) return
+  void nextTick(() => {
+    if (props.expanded) return
+    root.scrollTop = scrollTopToAlign(root, element)
+  })
+}
 
 // `stateKey` does not change in a live card: a new source makes a new `q-virtual-scroll`
 // (its `:key`), and each slot is keyed by path. So the key is read once here.
@@ -134,7 +164,12 @@ const showFullFile = computed({
 </script>
 
 <template>
-  <FileCardFrame :id="`diff-file-${path}`" class="diff-file-card">
+  <FileCardFrame
+    :id="`diff-file-${path}`"
+    ref="frame"
+    sticky-header
+    class="diff-file-card"
+  >
     <template #header>
       <DiffFileCardHeader
         v-model:show-full-file="showFullFile"
@@ -148,7 +183,7 @@ const showFullFile = computed({
         :full-file-toggle="!noFullFile && file.status !== 'deleted'"
         :agent-source="agentSource"
         :preview-ref="previewRef"
-        @toggle="emit('toggle')"
+        @toggle="toggle"
       />
     </template>
 
