@@ -375,6 +375,12 @@ export async function agentRoutes(
         },
         Number.isInteger(lastEventId) ? lastEventId : 0
       )
+      // The replay can close a stream whose queue is full. `onClose` callbacks
+      // have run then, so the listener is removed here.
+      if (!reply.sse.isConnected) {
+        unsubscribe()
+        return
+      }
       reply.sse.onClose(unsubscribe)
     }
   )

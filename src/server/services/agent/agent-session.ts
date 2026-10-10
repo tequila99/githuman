@@ -37,7 +37,8 @@ import {
 
 /** `npx` may have to download the adapter first. */
 const START_TIMEOUT_MS = 90_000
-const MAX_BUFFERED_EVENTS = 5_000
+/** Events that one session keeps for a client that joins late or reconnects. */
+export const MAX_BUFFERED_EVENTS = 5_000
 const STDERR_TAIL_CHARS = 2_000
 /** How long a closed connection waits for the `exit` event that carries the reason. */
 const EXIT_GRACE_MS = 500

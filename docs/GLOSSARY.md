@@ -68,6 +68,7 @@
 | `permission request` | запрос разрешения | Вопрос агента перед действием; пользователь выбирает вариант. | `confirmation`, `approval request` |
 | `auto-approve` | автоподтверждение | Флаг сессии: сервер сам отвечает «разрешить» на запросы разрешений. Выключен по умолчанию. | `yolo`, `bypass`, `trust mode` |
 | `stream` | поток | Единый SSE-поток `/api/agent/events` со всеми чатами страницы. | `channel`, `socket` |
+| `send queue` | очередь отправки | Сообщения одного SSE-соединения, которые ждут записи в сокет (`safeSend`). Полная очередь (`MAX_QUEUED_MESSAGES`) или зависшая отправка (`STALL_TIMEOUT_MS`) закрывает соединение, клиент переподключается (#85). | `buffer` (занят буфером сессии), `backlog` |
 | `envelope` | конверт | Событие потока вместе с `sessionId` и сквозным `id` (`AgentStreamEnvelope`). | `message`, `packet` |
 | `session state` | состояние сессии | Текущие `status`, `autoApprove`, `config` и открытые запросы разрешений чата (`AgentSessionState`). Сервер шлёт его в потоке перед повтором событий. Не путать с `snapshot` ревью. | `snapshot` (занят), `summary` |
 | `panel` | панель | Правая панель агента. В коде — `AgentSidebar`. | `drawer` в текстах для пользователя |
