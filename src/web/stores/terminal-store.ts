@@ -12,6 +12,7 @@ import {
   type TerminalTransport,
   type TerminalConnectionState
 } from '@/api/terminal-transport'
+import { withoutWindowMotion } from '@/utils/windows/window-elements'
 import { useWindowStore } from '@/stores/windows/window-store'
 import { safeStorage } from '@/utils/safe-storage'
 import { isRecord, isFiniteNumber } from '../../shared/utils/guards.ts'
@@ -90,6 +91,7 @@ export const useTerminalStore = defineStore('terminal', () => {
   let transport: TerminalTransport | null = null
   let createRequest: string | null = null
   let operation = 0
+  let receivedList = false
   const subscribed = new Set<string>()
   const views = new Map<string, (message: TerminalServerMessage) => void>()
   const waiting = new Set<string>()
@@ -149,7 +151,22 @@ export const useTerminalStore = defineStore('terminal', () => {
     for (const id of subscribed) if (!ids.has(id)) subscribed.delete(id)
     if (!activeId.value || !ids.has(activeId.value))
       activeId.value = list[0]?.id ?? null
-    open.value = list.length > 0
+    const syncWindow = () => {
+      if (!list.length) {
+        windows.close(TERMINAL_WINDOW_ID)
+      } else {
+        open.value = true
+        if (!windows.order.includes(TERMINAL_WINDOW_ID))
+          windows.order.unshift(TERMINAL_WINDOW_ID)
+      }
+    }
+    // The first server list restores live sessions rather than opening a new window.
+    if (receivedList) {
+      syncWindow()
+    } else {
+      withoutWindowMotion(TERMINAL_WINDOW_ID, syncWindow)
+    }
+    receivedList = true
     for (const session of list) {
       if (!subscribed.has(session.id)) {
         subscribed.add(session.id)
@@ -209,6 +226,11 @@ export const useTerminalStore = defineStore('terminal', () => {
         break
       case 'exit':
         // The server sends a list after each exit. That list updates the active session.
+        if (
+          sessions.value.length === 1 &&
+          sessions.value[0]?.id === message.terminalId
+        )
+          windows.close(TERMINAL_WINDOW_ID)
         sessions.value = sessions.value.filter(
           session => session.id !== message.terminalId
         )
@@ -248,6 +270,7 @@ export const useTerminalStore = defineStore('terminal', () => {
       sessions.value.length >= MAX_TERMINAL_SESSIONS
     )
       return
+    windows.focus(TERMINAL_WINDOW_ID)
     creating.value = true
     createRequest = `create-${++operation}`
     if (
@@ -266,8 +289,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     remember()
   }
   function minimize(): void {
-    minimized.value = true
-    remember()
+    windows.minimize(TERMINAL_WINDOW_ID)
   }
   function activate(id: string): void {
     activeId.value = id

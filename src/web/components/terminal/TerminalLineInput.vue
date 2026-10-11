@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, useTemplateRef } from 'vue'
+import type { QInput } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { useTerminalStore } from '@/stores/terminal-store'
 import { editTerminalLine } from '@/utils/terminal-line-editor'
@@ -8,6 +9,8 @@ const props = defineProps<{ terminalId: string }>()
 const store = useTerminalStore()
 const { t } = useI18n()
 const draft = ref('')
+const input = useTemplateRef<QInput>('input')
+defineExpose({ focus: () => input.value?.focus() })
 
 function submit(): void {
   if (store.state !== 'connected') return
@@ -31,6 +34,7 @@ function control(event: KeyboardEvent): void {
 
 <template>
   <q-input
+    ref="input"
     v-model="draft"
     dense
     outlined

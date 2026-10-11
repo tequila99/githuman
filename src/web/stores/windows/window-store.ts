@@ -1,9 +1,9 @@
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { safeStorage } from '@/utils/safe-storage'
 import { isRecord, isFiniteNumber } from '@/utils/guards'
 import { DOCK_EDGES } from '@/constants/windows/constants'
-import type { DockState, WindowState } from '@/types/windows/window'
+import type { DockState, WindowState, WindowMode } from '@/types/windows/window'
 
 // Common preferences are separate from application data and server sessions.
 const STORAGE_KEY = 'githuman:windows:v1'
@@ -35,12 +35,27 @@ function parseWindow(value: unknown): WindowState | null {
         : null,
     open: value.open === true,
     minimized: value.minimized === true,
-    maximized: value.maximized === true
+    mode:
+      value.mode === 'normal' ||
+      value.mode === 'maximized' ||
+      value.mode === 'left' ||
+      value.mode === 'right'
+        ? value.mode
+        : value.maximized === true
+          ? 'maximized'
+          : 'normal',
+    get maximized() {
+      return this.mode === 'maximized'
+    },
+    set maximized(maximized: boolean) {
+      this.mode = maximized ? 'maximized' : 'normal'
+    }
   }
 }
 export const useWindowStore = defineStore('windows', () => {
   const windows = ref<Record<string, WindowState>>({})
   const order = ref<string[]>([])
+  let minimizedOrder: string[] = []
   const dock = ref<DockState>({ edge: 'bottom', position: null })
   try {
     const saved: unknown = JSON.parse(safeStorage.get(STORAGE_KEY) ?? 'null')
@@ -91,7 +106,13 @@ export const useWindowStore = defineStore('windows', () => {
         windowSize: null,
         open: false,
         minimized: false,
-        maximized: false
+        mode: 'normal',
+        get maximized() {
+          return this.mode === 'maximized'
+        },
+        set maximized(value: boolean) {
+          this.mode = value ? 'maximized' : 'normal'
+        }
       }
     }
     return windows.value[id]!
@@ -108,9 +129,55 @@ export const useWindowStore = defineStore('windows', () => {
     order.value = order.value.filter(key => key !== id)
     remember()
   }
+  const activeId = computed(
+    () =>
+      order.value.findLast(
+        id => windows.value[id]?.open && !windows.value[id]?.minimized
+      ) ?? null
+  )
   function isActive(id: string) {
-    return order.value.at(-1) === id && ensure(id).open && !ensure(id).minimized
+    return activeId.value === id
+  }
+  function minimize(id: string) {
+    const state = ensure(id)
+    if (!state.open || state.minimized) return
+    state.minimized = true
+    minimizedOrder = [...minimizedOrder.filter(key => key !== id), id]
+    remember()
+  }
+  function minimizeAll() {
+    for (const id of order.value) minimize(id)
+    remember()
+  }
+  function restoreLastMinimized(): boolean {
+    if (activeId.value) return false
+    const id = [...order.value, ...minimizedOrder].findLast(
+      key => windows.value[key]?.open && windows.value[key]?.minimized
+    )
+    if (!id) return false
+    minimizedOrder = minimizedOrder.filter(key => key !== id)
+    focus(id)
+    return true
+  }
+  function toggleMode(id: string, mode: Exclude<WindowMode, 'normal'>) {
+    const state = ensure(id)
+    state.mode = state.mode === mode ? 'normal' : mode
+    remember()
   }
   watch(dock, remember, { deep: true })
-  return { windows, order, dock, ensure, focus, close, isActive, remember }
+  return {
+    windows,
+    order,
+    dock,
+    activeId,
+    ensure,
+    focus,
+    close,
+    isActive,
+    minimize,
+    minimizeAll,
+    restoreLastMinimized,
+    toggleMode,
+    remember
+  }
 })

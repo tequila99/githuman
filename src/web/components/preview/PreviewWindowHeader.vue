@@ -45,7 +45,10 @@ const { t } = useI18n()
       icon="minimize"
       :aria-label="t('windows.minimize')"
       @click="emit('minimize')"
-    />
+      ><q-tooltip :delay="TOOLTIP_DELAY_MS"
+        >{{ t('windows.minimize') }} · Ctrl+Win+↓</q-tooltip
+      ></q-btn
+    >
     <q-btn
       flat
       dense
@@ -54,7 +57,11 @@ const { t } = useI18n()
       :icon="maximized ? 'filter_none' : 'crop_square'"
       :aria-label="t(maximized ? 'terminal.restore' : 'terminal.maximize')"
       @click="emit('toggleMaximized')"
-    />
+      ><q-tooltip :delay="TOOLTIP_DELAY_MS"
+        >{{ t(maximized ? 'terminal.restore' : 'terminal.maximize') }} ·
+        Ctrl+Win+↑</q-tooltip
+      ></q-btn
+    >
     <q-btn
       flat
       dense

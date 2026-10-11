@@ -24,6 +24,8 @@ import { useTerminalStore } from '@/stores/terminal-store'
 import { ignoreTerminalQueries } from '@/utils/terminal-queries'
 import { terminalTheme } from '@/utils/terminal-theme'
 import TerminalLineInput from './TerminalLineInput.vue'
+import { TERMINAL_WINDOW_ID } from '@/constants/windows/constants'
+import { registerWindowFocus } from '@/utils/windows/window-elements'
 
 // Match the code font of the diff view.
 const FONT_SIZE = 13
@@ -43,7 +45,26 @@ const store = useTerminalStore()
 // The padding and the space that the grid leaves free get the terminal color, so no strip shows.
 const background = computed(() => terminalTheme(props.dark).background)
 const host = useTemplateRef<HTMLDivElement>('host')
+const lineInput =
+  useTemplateRef<InstanceType<typeof TerminalLineInput>>('lineInput')
+
 let terminal: Terminal | null = null
+
+function focusInput(): void {
+  if (props.session.mode === 'pipe') {
+    lineInput.value?.focus()
+  } else {
+    terminal?.focus()
+  }
+}
+
+watch(
+  () => props.active,
+  (active, _previous, onCleanup) => {
+    if (active) onCleanup(registerWindowFocus(TERMINAL_WINDOW_ID, focusInput))
+  },
+  { immediate: true, flush: 'sync' }
+)
 let detach: (() => void) | undefined
 let fit: FitAddon | null = null
 let queue = Promise.resolve()
@@ -136,7 +157,10 @@ onMounted(async () => {
   })
   if (!document.hidden) attachOutput()
   await document.fonts.ready
-  if (!disposed) resize()
+  if (!disposed) {
+    resize()
+    if (props.active) focusInput()
+  }
 })
 watch(
   () => [props.dark, props.originalColors],
@@ -160,7 +184,7 @@ watch(
     if (!active) return
     await nextTick()
     resize()
-    terminal?.focus()
+    focusInput()
   }
 )
 onBeforeUnmount(() => {
@@ -176,6 +200,7 @@ onBeforeUnmount(() => {
   <div class="terminal-view" :style="{ background }">
     <div ref="host" class="terminal-view__screen" />
     <TerminalLineInput
+      ref="lineInput"
       v-if="session.mode === 'pipe'"
       :terminal-id="session.id"
       class="terminal-view__input"

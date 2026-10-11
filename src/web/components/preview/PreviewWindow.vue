@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { useFilePicker, useQuasar } from 'quasar'
 import { usePreviewStore } from '@/stores/windows/preview-store'
 import { useWindowStore } from '@/stores/windows/window-store'
+import { useWindowCloseShortcut } from '@/composables/windows/use-window-shortcuts'
 import { useWindowGeometry } from '@/composables/windows/use-window-geometry'
 import FloatingWindow from '@/components/windows/FloatingWindow.vue'
 import PreviewContent from './PreviewContent.vue'
@@ -31,6 +32,14 @@ const { openFilePicker, resetFilePicker } = useFilePicker({
     resetFilePicker()
   }
 })
+useWindowCloseShortcut(PREVIEW_WINDOW_ID, () => {
+  if (preview.activeId) {
+    preview.close(preview.activeId)
+  } else {
+    preview.closeAll()
+  }
+})
+
 const dragging = shallowRef(false)
 let dragDepth = 0
 async function openFiles(files: FileList | File[]) {
@@ -90,12 +99,10 @@ function requestClose(id: string | null) {
   })
 }
 function minimize() {
-  state.minimized = true
-  windows.remember()
+  windows.minimize(PREVIEW_WINDOW_ID)
 }
 function maximize() {
-  state.maximized = !state.maximized
-  windows.remember()
+  windows.toggleMode(PREVIEW_WINDOW_ID, 'maximized')
 }
 </script>
 

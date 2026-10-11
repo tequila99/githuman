@@ -28,25 +28,48 @@ function languageName(code: string): string {
     icon="mic_none"
     class="agent-speech-language"
     :label="language.split('-')[0]?.toUpperCase()"
+    aria-haspopup="listbox"
     :aria-label="t('agent.voice.language', { name: languageName(language) })"
   >
     <q-tooltip :delay="TOOLTIP_DELAY_MS">
       {{ t('agent.voice.language', { name: languageName(language) }) }}
     </q-tooltip>
-    <q-menu>
-      <q-list dense>
+    <q-menu anchor="top left" self="bottom left">
+      <q-list dense class="agent-menu agent-speech-language__list">
         <q-item
           v-for="code in languages"
           :key="code"
           v-close-popup
+          dense
           clickable
-          :active="code === language"
           @click="setLanguage(code)"
         >
-          <q-item-section>{{ languageName(code) }}</q-item-section>
-          <q-item-section side class="text-caption">{{ code }}</q-item-section>
+          <q-item-section avatar>
+            <q-icon
+              v-if="code === language"
+              name="check"
+              size="16px"
+              color="primary"
+            />
+          </q-item-section>
+          <q-item-section>
+            <q-item-label>{{ languageName(code) }}</q-item-label>
+            <q-item-label caption>{{ code }}</q-item-label>
+          </q-item-section>
         </q-item>
       </q-list>
     </q-menu>
   </q-btn>
 </template>
+
+<style scoped>
+.agent-speech-language {
+  font-size: 12px;
+}
+.agent-speech-language__list {
+  width: 260px;
+  max-width: calc(100vw - 24px);
+  max-height: 300px;
+  overflow-y: auto;
+}
+</style>
