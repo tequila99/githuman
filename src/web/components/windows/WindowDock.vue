@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useTemplateRef } from 'vue'
+import { computed, ref, useTemplateRef, onBeforeUnmount } from 'vue'
 import { useQuasar, useElementSize } from 'quasar'
 import { useWindowStore } from '@/stores/windows/window-store'
 import { dockPosition, dockEdge } from '@/utils/windows/dock-geometry'
@@ -7,6 +7,7 @@ import type { WindowApplication } from '@/types/windows/window'
 import type { WindowPanEvent } from '@/composables/windows/use-window-geometry'
 import { errorMessage } from '@/utils/error-message'
 import { useI18n } from 'vue-i18n'
+import { registerDockElement } from '@/utils/windows/window-elements'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 
 const props = defineProps<{ applications: readonly WindowApplication[] }>()
@@ -42,6 +43,9 @@ const entries = computed(() =>
     active: app.active()
   }))
 )
+onBeforeUnmount(() => {
+  for (const app of props.applications) registerDockElement(app.id, null)
+})
 let start = { x: 0, y: 0 }
 function drag(event: WindowPanEvent) {
   if (event.isFirst) {
@@ -89,7 +93,15 @@ async function activate(app: WindowApplication) {
       :aria-label="t('windows.movePanel')"
       ><q-icon name="drag_indicator"
     /></div>
-    <div v-for="entry in entries" :key="entry.app.id" class="window-dock__item">
+    <div
+      v-for="entry in entries"
+      :key="entry.app.id"
+      class="window-dock__item"
+      :ref="
+        element =>
+          registerDockElement(entry.app.id, element as HTMLElement | null)
+      "
+    >
       <q-btn
         flat
         :icon="entry.app.icon"
@@ -107,9 +119,14 @@ async function activate(app: WindowApplication) {
           entry.badge
         }}</q-badge>
       </q-btn>
-      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
-        entry.availability.reason ?? entry.app.title()
-      }}</q-tooltip>
+      <q-tooltip :delay="TOOLTIP_DELAY_MS"
+        >{{ entry.availability.reason ?? entry.app.title()
+        }}<div v-if="entry.app.create">{{
+          t('windows.newTerminalShortcut')
+        }}</div
+        ><div>{{ t('windows.layoutShortcuts') }}</div
+        ><div>{{ t('windows.minimizeAllShortcut') }}</div></q-tooltip
+      >
     </div>
   </nav>
 </template>

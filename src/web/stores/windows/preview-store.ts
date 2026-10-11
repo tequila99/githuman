@@ -4,6 +4,7 @@ import { defineStore } from 'pinia'
 import { apiGet, ApiRequestError } from '@/api/client'
 import type { FileContentResponse } from '@/api/types'
 import { useAgentStore } from '@/stores/agent-store'
+import { afterWindowTransition } from '@/utils/windows/window-elements'
 import { useWindowStore } from './window-store'
 import { safeStorage } from '@/utils/safe-storage'
 import { isRecord } from '@/utils/guards'
@@ -200,8 +201,10 @@ export const usePreviewStore = defineStore('preview', () => {
   function close(id: string) {
     const tab = tabs.value.find(candidate => candidate.id === id)
     const index = tabs.value.findIndex(candidate => candidate.id === id)
+    if (tab && tabs.value.length === 1) windows.close(PREVIEW_WINDOW_ID)
     tabs.value = tabs.value.filter(candidate => candidate.id !== id)
-    if (tab) releaseLocal(tab.source)
+    if (tab)
+      afterWindowTransition(PREVIEW_WINDOW_ID, () => releaseLocal(tab.source))
     delete data.value[id]
     requests.delete(id)
     if (activeId.value === id)
@@ -211,8 +214,8 @@ export const usePreviewStore = defineStore('preview', () => {
     remember()
   }
   function closeAll() {
-    for (const tab of tabs.value) close(tab.id)
     windows.close(PREVIEW_WINDOW_ID)
+    for (const tab of tabs.value) close(tab.id)
   }
   function invalidateFiles() {
     for (const tab of tabs.value) {

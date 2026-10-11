@@ -156,3 +156,45 @@ test('LAN capability never creates a transport', () => {
   assert.equal(store.enabled, false)
   assert.equal(transport.sent.length, 0)
 })
+
+test('create reveals the terminal once and respects connection, pending request and session limit', () => {
+  const transport = new FakeTransport()
+  store.init(true, transport)
+  transport.message({ type: 'list', sessions: [info('one')] })
+  store.minimize()
+  store.create()
+  store.create()
+  assert.equal(store.minimized, false)
+  assert.equal(
+    transport.sent.filter(message => message.type === 'create').length,
+    1
+  )
+  transport.state('disconnected')
+  store.create()
+  assert.equal(
+    transport.sent.filter(message => message.type === 'create').length,
+    1
+  )
+  transport.state('connected')
+  transport.message({
+    type: 'list',
+    sessions: Array.from({ length: 8 }, (_, i) => info(String(i)))
+  })
+  store.create()
+  assert.equal(
+    transport.sent.filter(message => message.type === 'create').length,
+    1
+  )
+})
+
+test('exit of the last session closes the window before removing its contents', () => {
+  const transport = new FakeTransport()
+  store.init(true, transport)
+  transport.message({ type: 'list', sessions: [info('one')] })
+  transport.message({
+    type: 'exit',
+    terminalId: 'one'
+  })
+  assert.equal(store.sessions.length, 0)
+  assert.equal(store.open, false)
+})

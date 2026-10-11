@@ -2,7 +2,10 @@ import type { Component } from 'vue'
 
 import type { DOCK_EDGES } from '@/constants/windows/constants'
 
+export type WindowMode = 'normal' | 'maximized' | 'left' | 'right'
+
 export interface WindowState {
+  mode: WindowMode
   position: WindowPoint
   windowSize: WindowSize | null
   open: boolean
@@ -23,6 +26,7 @@ export interface WindowApplication {
   badge: () => number | null
   active: () => boolean
   activate: () => void | Promise<void>
+  create?: () => void | Promise<void>
   persistence?: ApplicationPersistence
 }
 

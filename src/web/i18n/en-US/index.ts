@@ -4,6 +4,9 @@
 export default {
   windows: {
     panel: 'Window panel',
+    newTerminalShortcut: 'New terminal tab: Ctrl+Win+T',
+    layoutShortcuts: 'Window layout: Ctrl+Win+← / → / ↑ / ↓',
+    minimizeAllShortcut: 'Minimize all: Ctrl+Win+M',
     movePanel: 'Move window panel',
     preview: 'Preview',
     minimize: 'Minimize window',
@@ -261,6 +264,8 @@ export default {
       screenReader:
         'Hold Space or Enter to talk. In screen reader browse mode, activate once to start and once to stop.',
       listening: 'Listening',
+      finishing: 'Finishing voice input',
+      shortcut: 'Hold Win+Alt+Space for voice input',
       inserted: 'Inserted: {text}',
       busy: 'Voice input is busy. Try again in a moment.',
       language: 'Voice input language: {name}',

@@ -2,9 +2,10 @@
 import { TERMINAL_WINDOW_ID } from '@/constants/windows/constants'
 import { ref, computed, defineAsyncComponent, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useKeyboardShortcut } from 'quasar'
 import { useAppTheme } from '@/composables/use-app-theme'
+import { useWindowStore } from '@/stores/windows/window-store'
 import { useTerminalStore } from '@/stores/terminal-store'
+import { useWindowCloseShortcut } from '@/composables/windows/use-window-shortcuts'
 import { useWindowGeometry } from '@/composables/windows/use-window-geometry'
 import TerminalWindowHeader from './TerminalWindowHeader.vue'
 import TerminalTabs from './TerminalTabs.vue'
@@ -14,6 +15,7 @@ import TerminalCloseDialog from './TerminalCloseDialog.vue'
 
 const TerminalView = defineAsyncComponent(() => import('./TerminalView.vue'))
 const store = useTerminalStore()
+const windows = useWindowStore()
 const { isDark } = useAppTheme()
 const { t } = useI18n()
 const { drag } = useWindowGeometry(TERMINAL_WINDOW_ID)
@@ -35,8 +37,7 @@ function minimize(): void {
   store.minimize()
 }
 function toggleMaximized(): void {
-  store.maximized = !store.maximized
-  store.remember()
+  windows.toggleMode(TERMINAL_WINDOW_ID, 'maximized')
 }
 function requestClose(id: string | null): void {
   closeTarget.value = id
@@ -50,18 +51,10 @@ function confirmClose(): void {
   }
 }
 
-useKeyboardShortcut(
-  'Ctrl+Shift+Backquote',
-  event => {
-    event.stopPropagation()
-    if (store.open && !store.minimized) {
-      minimize()
-    } else {
-      store.show()
-    }
-  },
-  () => ({ capture: true, disabled: !store.enabled || closeDialog.value })
-)
+useWindowCloseShortcut(TERMINAL_WINDOW_ID, () => {
+  requestClose(store.sessions.length > 1 ? store.activeId : null)
+})
+
 // The dialog has nothing to close when its session or every session is gone.
 watch(
   () => store.sessions,
@@ -74,11 +67,7 @@ watch(
 </script>
 
 <template>
-  <FloatingWindow
-    v-if="store.sessions.length"
-    :window-id="TERMINAL_WINDOW_ID"
-    :title="t('terminal.title')"
-  >
+  <FloatingWindow :window-id="TERMINAL_WINDOW_ID" :title="t('terminal.title')">
     <template #header>
       <TerminalWindowHeader
         :maximized="store.maximized"
@@ -116,7 +105,9 @@ watch(
         v-show="store.activeId === session.id"
         :key="session.id"
         :session="session"
-        :active="store.activeId === session.id && !store.minimized"
+        :active="
+          store.activeId === session.id && windows.isActive(TERMINAL_WINDOW_ID)
+        "
         :dark="isDark"
         :original-colors="store.originalColors"
       />

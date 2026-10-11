@@ -10,6 +10,16 @@ export const PREVIEW_MIN_SCALE = 0.25
 export const PREVIEW_MAX_SCALE = 4
 // Each zoom action changes the scale by 25 percentage points.
 export const PREVIEW_SCALE_STEP = 0.25
+// Keep window transitions visible without delaying repeated commands.
+export const WINDOW_ANIMATION_DURATION_MS = 300
+// When true, window transitions run even if the system asks for reduced motion.
+export const WINDOW_IGNORE_REDUCED_MOTION = true
+// A window from the dock moves fast first and then settles into place.
+export const WINDOW_ENTER_EASING = 'cubic-bezier(0.05, 0.7, 0.1, 1)'
+// A window to the dock starts slowly and then accelerates out of view.
+export const WINDOW_EXIT_EASING = 'cubic-bezier(0.4, 0, 1, 1)'
+// A layout change starts immediately and decelerates to the new place.
+export const WINDOW_LAYOUT_EASING = 'cubic-bezier(0.2, 0, 0, 1)'
 // Window stacking starts above the main application layout.
 export const WINDOW_BASE_Z_INDEX = 2500
 

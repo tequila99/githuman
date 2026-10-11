@@ -61,9 +61,9 @@ const maximizeLabel = computed(() =>
       :aria-label="t('terminal.minimize')"
       @click="emit('minimize')"
     >
-      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
-        t('terminal.minimize')
-      }}</q-tooltip>
+      <q-tooltip :delay="TOOLTIP_DELAY_MS"
+        >{{ t('terminal.minimize') }} · Ctrl+Win+↓</q-tooltip
+      >
     </q-btn>
     <q-btn
       flat
@@ -74,7 +74,9 @@ const maximizeLabel = computed(() =>
       :aria-label="maximizeLabel"
       @click="emit('toggleMaximized')"
     >
-      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{ maximizeLabel }}</q-tooltip>
+      <q-tooltip :delay="TOOLTIP_DELAY_MS"
+        >{{ maximizeLabel }} · Ctrl+Win+↑</q-tooltip
+      >
     </q-btn>
     <q-btn
       flat
