@@ -5,6 +5,7 @@ import {
   WINDOW_TOP
 } from '@/constants/windows/constants'
 import type {
+  WindowState,
   WindowPoint,
   WindowSize,
   WindowRect,
@@ -101,4 +102,20 @@ export function resizeWindow(
   if (edge.includes('s'))
     bottom = between(bottom + delta.y, top + minimum.height, viewport.height)
   return { x: left, y: top, width: right - left, height: bottom - top }
+}
+
+export function windowLayoutRect(
+  state: WindowState,
+  viewport: WindowSize
+): WindowRect {
+  if (state.mode === 'maximized') return { x: 0, y: 0, ...viewport }
+  if (state.mode === 'left' || state.mode === 'right')
+    return {
+      x: state.mode === 'right' ? viewport.width / 2 : 0,
+      y: 0,
+      width: viewport.width / 2,
+      height: viewport.height
+    }
+  const size = windowSize(state.windowSize, viewport)
+  return { ...clampWindowPosition(state.position, size, viewport), ...size }
 }

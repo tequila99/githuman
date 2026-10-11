@@ -1,5 +1,7 @@
 import { test, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
+import { watch } from 'vue'
+import { trackWindowTransition } from '@/utils/windows/window-elements'
 import { createPinia, setActivePinia } from 'pinia'
 import { usePreviewStore } from '@/stores/windows/preview-store'
 import { useWindowStore } from '@/stores/windows/window-store'
@@ -235,4 +237,45 @@ test('local diagrams retain their file after the Markdown tab closes', async () 
   assert.equal(store.runtime(diagramId).text, 'graph TD\nA-->B\n')
   store.close(diagramId)
   assert.equal(store.tabs.length, 0)
+})
+
+test('closing all previews captures the intact window and retains image URLs until motion ends', async () => {
+  const store = usePreviewStore()
+  const first = store.openLocal(new File(['one'], 'one.png'))!
+  const second = store.openLocal(new File(['two'], 'two.png'))!
+  await store.load(first)
+  await store.load(second)
+  let finish!: () => void
+  const transition = new Promise<void>(resolve => {
+    finish = resolve
+  })
+  let capturedTabs = 0
+  const stop = watch(
+    () => useWindowStore().ensure('preview').open,
+    open => {
+      if (open) return
+      capturedTabs = store.tabs.length
+      trackWindowTransition('preview', transition)
+    },
+    { flush: 'sync' }
+  )
+  const original = URL.revokeObjectURL
+  const released: string[] = []
+  URL.revokeObjectURL = url => {
+    released.push(url)
+    original(url)
+  }
+  try {
+    store.closeAll()
+    assert.equal(capturedTabs, 2)
+    assert.equal(store.tabs.length, 0)
+    assert.deepEqual(released, [])
+    finish()
+    await transition
+    assert.equal(released.length, 2)
+  } finally {
+    finish()
+    stop()
+    URL.revokeObjectURL = original
+  }
 })

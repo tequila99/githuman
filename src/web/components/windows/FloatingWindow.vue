@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useTemplateRef } from 'vue'
+import { useWindowMotion } from '@/composables/windows/use-window-motion'
 import { useWindowStore } from '@/stores/windows/window-store'
 import { useWindowGeometry } from '@/composables/windows/use-window-geometry'
 import WindowResizeHandles from './WindowResizeHandles.vue'
@@ -10,10 +12,15 @@ const props = defineProps<{
 }>()
 const windows = useWindowStore()
 const { state, style } = useWindowGeometry(props.windowId)
+const element = useTemplateRef<HTMLElement>('window')
+useWindowMotion(props.windowId, state, element)
 </script>
 
 <template>
   <section
+    ref="window"
+    tabindex="-1"
+    :data-window-id="windowId"
     v-if="state.open"
     v-show="!state.minimized"
     class="floating-window"
@@ -21,6 +28,7 @@ const { state, style } = useWindowGeometry(props.windowId)
     :style="style"
     :aria-label="title"
     @pointerdown.capture="windows.focus(windowId)"
+    @focusin="windows.focus(windowId)"
   >
     <div
       class="floating-window__frame"

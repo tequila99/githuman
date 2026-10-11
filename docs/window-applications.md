@@ -51,3 +51,34 @@ Window modules are grouped by responsibility: `constants/windows`, `types/window
 The empty preview offers Open file; the header retains the action when tabs are open. The picker and file drop accept Markdown, browser-supported images and PDF. Every local file opens an active tab. Local File objects remain in browser memory, are never uploaded and are not saved in preferences. Reopen local files after a page reload. Image Blob URLs are revoked when their last tab closes.
 
 PDF.js and its worker load only when a PDF tab is visible. One canvas renders the selected page; its bitmap is capped at four million pixels (about 16 MiB). This cap applies to the bitmap, not total document memory. Fonts, CMaps and image decoders are served locally on demand. Page changes cancel earlier renders and clean the previous page. Switching tabs, minimizing or closing destroys the PDF document and worker. Returning restores the selected page and scale. This viewer provides page navigation and zoom; text selection, forms and annotations are outside this implementation.
+
+## Window commands and motion
+
+`window-store` owns `toggleMode(id, mode)`, `minimize(id)` and `minimizeAll()`.
+Modes are `normal`, `maximized`, `left` and `right`. Position and windowSize describe
+normal geometry; special modes derive their rectangles from the current viewport.
+Repeating a mode restores normal geometry. The legacy maximized accessor remains writable.
+Dragging a half-screen window restores its normal size; resizing exits the half-screen mode.
+
+`WindowHost` installs one Quasar `useKeyboardShortcut` listener on window in the capture phase.
+Ctrl+Meta+ArrowLeft/Right/Up/Down selects halves, toggles maximization or minimizes the active window.
+When no window is active, Ctrl+Meta+ArrowUp restores the last minimized open window
+and focuses it without changing its mode or normal geometry.
+Ctrl+Meta+KeyM minimizes every open window. The terminal application's optional `create()`
+callback creates a session for Ctrl+Meta+KeyT. Letter codes work across keyboard layouts.
+Ctrl+Shift+Backquote retains its terminal toggle action. Modal dialogs block all these commands.
+On Linux and Windows, Meta is the Win/Super key; on macOS it is Command.
+
+`FloatingWindow` animates opening, restoring, minimizing and closing through the application's
+registered dock target. Layout changes use the same transition: one Web Animations API
+transform of the visual copy, with `WINDOW_ANIMATION_DURATION_MS`. Motion from the dock
+decelerates, motion to the dock accelerates, and the copy fades near the dock.
+Visual copies are inert, have no IDs and copy canvas pixels and scroll positions explicitly.
+The live content receives only the final size. New commands finish the preceding transition;
+resize, teardown and hidden documents clean up pending motion. Reduced motion skips animation.
+Restored windows do not animate on initial page load.
+
+DOM references, visual copies and transition promises stay in memory. When releasing a Blob URL
+on close, use `afterWindowTransition(id, release)` so the visual copy retains its source until
+completion. PDF renderers and workers follow the live component's visibility lifecycle; the
+visual copy owns canvas pixels and does not retain a worker or document.

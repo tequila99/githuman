@@ -13,6 +13,7 @@ import { useServerEvents } from '@/composables/use-server-events'
 import TerminalWindow from '@/components/terminal/TerminalWindow.vue'
 import PreviewWindow from '@/components/preview/PreviewWindow.vue'
 import WindowDock from './WindowDock.vue'
+import { useWindowShortcuts } from '@/composables/windows/use-window-shortcuts'
 
 const { t } = useI18n()
 const windows = useWindowStore()
@@ -31,7 +32,8 @@ const unregisterTerminal = registry.register({
       : { enabled: false, reason: t('terminal.unavailable') },
   badge: () => terminal.sessions.length || null,
   active: () => windows.isActive(TERMINAL_WINDOW_ID),
-  activate: () => terminal.show()
+  activate: () => terminal.show(),
+  create: () => terminal.create()
 })
 const unregisterPreview = registry.register({
   id: PREVIEW_WINDOW_ID,
@@ -43,6 +45,7 @@ const unregisterPreview = registry.register({
   active: () => windows.isActive(PREVIEW_WINDOW_ID),
   activate: preview.show
 })
+useWindowShortcuts()
 const events = useServerEvents(['files:changed'], preview.invalidateFiles)
 onBeforeUnmount(() => {
   events.close()

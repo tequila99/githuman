@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, shallowRef, useTemplateRef } from 'vue'
+import {
+  computed,
+  nextTick,
+  onScopeDispose,
+  shallowRef,
+  useTemplateRef,
+  watch
+} from 'vue'
+import { useEventListener } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '@/stores/agent-store'
 import AgentMentionEditor from './AgentMentionEditor.vue'
@@ -13,6 +21,7 @@ import { useAgentComposerConfig } from '@/composables/use-agent-composer-config'
 import { useAgentAttachments } from '@/composables/use-agent-attachments'
 import { useAgentAutoApprove } from '@/composables/use-agent-auto-approve'
 import { mentionContext } from '@/utils/mention-editor'
+import { isVoiceShortcut, isVoiceShortcutRelease } from '@/utils/speech'
 
 const props = defineProps<{
   chatId: string
@@ -28,7 +37,81 @@ const status = computed(() => entry.value?.chat.status ?? 'closed')
 const pending = computed(() => entry.value?.pendingContext ?? [])
 
 const editor = useTemplateRef<InstanceType<typeof AgentMentionEditor>>('editor')
+const voice = useTemplateRef<InstanceType<typeof AgentVoiceButton>>('voice')
 const isEmpty = shallowRef(true)
+const voiceShortcutHeld = shallowRef(false)
+
+function releaseVoiceShortcut() {
+  if (!voiceShortcutHeld.value) return
+  voiceShortcutHeld.value = false
+  voice.value?.release()
+}
+
+useEventListener(
+  () => window,
+  'keyup',
+  (event: KeyboardEvent) => {
+    if (!isVoiceShortcutRelease(event)) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    releaseVoiceShortcut()
+  },
+  () => ({ capture: true, disabled: !voiceShortcutHeld.value })
+)
+useEventListener(
+  () => window,
+  'blur',
+  releaseVoiceShortcut,
+  () => ({ disabled: !voiceShortcutHeld.value })
+)
+useEventListener(
+  () => document,
+  'visibilitychange',
+  () => {
+    if (document.visibilityState === 'hidden') releaseVoiceShortcut()
+  },
+  () => ({ disabled: !voiceShortcutHeld.value })
+)
+watch(
+  () => [props.active, store.panelOpen, status.value] as const,
+  ([active, open, state]) => {
+    if (!active || !open || state === 'closed') releaseVoiceShortcut()
+  },
+  { flush: 'sync' }
+)
+onScopeDispose(releaseVoiceShortcut)
+
+// Quasar's Space alias matches the character only; modified keys can have a different key value.
+useEventListener(
+  () => window,
+  'keydown',
+  async (event: KeyboardEvent) => {
+    if (voiceShortcutHeld.value && event.code === 'Space') {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      return
+    }
+    if (!isVoiceShortcut(event)) return
+    if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
+    if (!voice.value) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    store.panelOpen = true
+    voiceShortcutHeld.value = true
+    await nextTick()
+    if (!voiceShortcutHeld.value || !props.active || status.value === 'closed')
+      return
+    if (!voice.value?.press()) {
+      voiceShortcutHeld.value = false
+      return
+    }
+    editor.value?.focus()
+  },
+  () => ({
+    capture: true,
+    disabled: !props.active || status.value === 'closed'
+  })
+)
 
 const notifyError = useNotifyError()
 const {
@@ -92,8 +175,9 @@ defineExpose({ focus: () => editor.value?.focus() })
         />
 
         <AgentVoiceButton
+          ref="voice"
           :disabled="status === 'closed'"
-          :active="active"
+          :active="active && store.panelOpen"
           @press="editor?.saveCaret()"
           @commit="text => editor?.insertText(text, active)"
         />

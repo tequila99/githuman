@@ -96,3 +96,40 @@ export function spokenTextToInsert(
   const tail = after !== '' && !/^\s/.test(after) ? ' ' : ''
   return `${lead}${text}${tail}`
 }
+
+/** Match the physical space key even when modifiers change its character. */
+export function isVoiceShortcut(
+  event: Pick<
+    KeyboardEvent,
+    | 'key'
+    | 'code'
+    | 'ctrlKey'
+    | 'metaKey'
+    | 'altKey'
+    | 'shiftKey'
+    | 'repeat'
+    | 'isComposing'
+  >
+): boolean {
+  return (
+    (event.code === 'Space' || event.key === ' ') &&
+    !event.ctrlKey &&
+    event.metaKey &&
+    event.altKey &&
+    !event.shiftKey &&
+    !event.repeat &&
+    !event.isComposing
+  )
+}
+
+/**
+ * True when a keyup ends the voice shortcut. Space ends it, and so does
+ * the release of Meta or Alt. On macOS, Space keyup often never arrives
+ * while Cmd is down, so the modifier release is the only end signal.
+ */
+export function isVoiceShortcutRelease(
+  event: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'altKey'>
+): boolean {
+  const isSpace = event.code === 'Space' || event.key === ' '
+  return isSpace || !event.metaKey || !event.altKey
+}

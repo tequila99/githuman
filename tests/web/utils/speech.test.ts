@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  isVoiceShortcut,
+  isVoiceShortcutRelease,
   joinSpoken,
   readSpeechResults,
   speechLanguages,
@@ -95,4 +97,44 @@ test('inserted speech gets a space only where it touches a word', () => {
   assert.equal(spokenTextToInsert('look', '', 'hi'), ' hi')
   assert.equal(spokenTextToInsert('look ', 'there', 'hi'), 'hi ')
   assert.equal(spokenTextToInsert('look', ' there', 'hi'), ' hi')
+})
+
+test('voice shortcut accepts physical Space with a modified character and rejects repeats and composition', () => {
+  const event = {
+    key: ' ',
+    code: 'Space',
+    ctrlKey: false,
+    metaKey: true,
+    altKey: true,
+    shiftKey: false,
+    repeat: false,
+    isComposing: false
+  }
+  assert.equal(isVoiceShortcut(event), true)
+  assert.equal(isVoiceShortcut({ ...event, key: 'Unidentified' }), true)
+  assert.equal(isVoiceShortcut({ ...event, key: '\u00a0' }), true)
+  assert.equal(isVoiceShortcut({ ...event, code: '' }), true)
+  assert.equal(isVoiceShortcut({ ...event, key: 'a', code: 'KeyA' }), false)
+  for (const flag of ['altKey', 'metaKey'] as const) {
+    assert.equal(isVoiceShortcut({ ...event, [flag]: false }), false)
+  }
+  for (const flag of [
+    'ctrlKey',
+    'shiftKey',
+    'repeat',
+    'isComposing'
+  ] as const) {
+    assert.equal(isVoiceShortcut({ ...event, [flag]: true }), false)
+  }
+})
+
+test('voice shortcut release accepts Space or a released modifier only', () => {
+  const held = { key: 'a', code: 'KeyA', metaKey: true, altKey: true }
+  assert.equal(isVoiceShortcutRelease(held), false)
+  assert.equal(
+    isVoiceShortcutRelease({ ...held, key: ' ', code: 'Space' }),
+    true
+  )
+  assert.equal(isVoiceShortcutRelease({ ...held, metaKey: false }), true)
+  assert.equal(isVoiceShortcutRelease({ ...held, altKey: false }), true)
 })

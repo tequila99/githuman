@@ -3,6 +3,7 @@ import { ref, useId, watch } from 'vue'
 import { useEventListener, useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { useSpeechInput } from '@/composables/use-speech-input'
+import { useSpeechSpectrum } from '@/composables/use-speech-spectrum'
 import { useSpeechLanguage } from '@/composables/use-speech-language'
 import { FATAL_SPEECH_ERRORS, speechRecognizerClass } from '@/utils/speech'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
@@ -44,20 +45,29 @@ const speech = useSpeechInput({
   }
 })
 const { listening, finishing, preview } = speech
+const { bars } = useSpeechSpectrum(listening)
 // True from a key press to its release. QBtn turns the release into a click,
 // and that click must not toggle the recognition.
 let keyHeld = false
 
-function press(): void {
-  if (props.disabled) return
+function press(): boolean {
+  if (props.disabled || !speech.supported) return false
+  if (finishing.value) return notifyBusy()
   emit('press')
   if (speech.press()) {
     announcement.value = t('agent.voice.listening')
-    return
+    return true
   }
+  return notifyBusy()
+}
+
+function notifyBusy(): false {
   announcement.value = t('agent.voice.busy')
   $q.notify({ type: 'warning', message: t('agent.voice.busy') })
+  return false
 }
+
+defineExpose({ press, release: speech.release })
 
 function onPointerdown(event: PointerEvent): void {
   if (event.button !== 0) return
@@ -67,13 +77,19 @@ function onPointerdown(event: PointerEvent): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (!HOLD_KEYS.has(event.key)) return
+  if (
+    !HOLD_KEYS.has(event.key) ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey
+  )
+    return
   keyHeld = true
   if (!event.repeat) press()
 }
 
 function onKeyup(event: KeyboardEvent): void {
-  if (!HOLD_KEYS.has(event.key)) return
+  if (!HOLD_KEYS.has(event.key) || !keyHeld) return
   keyHeld = false
   speech.release()
 }
@@ -147,15 +163,23 @@ watch(
     <q-btn
       round
       dense
-      flat
+      :flat="!listening && !finishing"
+      :unelevated="listening || finishing"
       size="sm"
       :ripple="false"
       class="q-ma-xs agent-voice__button"
-      :class="{ 'agent-voice__button--on': listening }"
-      :color="listening ? 'negative' : undefined"
-      :icon="listening ? 'mic' : 'mic_none'"
+      :color="listening || finishing ? 'primary' : undefined"
+      :icon="listening || finishing ? undefined : 'mic_none'"
       :disable="disabled"
-      :aria-label="t('agent.voice.hold')"
+      :aria-label="
+        t(
+          finishing
+            ? 'agent.voice.finishing'
+            : listening
+              ? 'agent.voice.listening'
+              : 'agent.voice.hold'
+        )
+      "
       :aria-describedby="descriptionId"
       :aria-pressed="listening"
       @mousedown.prevent
@@ -170,9 +194,19 @@ watch(
       @click="onClick"
       @blur="onBlur"
     >
+      <span v-if="listening" class="agent-voice__spectrum" aria-hidden="true">
+        <span
+          v-for="(scale, index) in bars"
+          :key="index"
+          class="agent-voice__bar"
+          :style="{ transform: `scaleY(${scale})` }"
+        />
+      </span>
+      <q-spinner v-if="finishing" size="18px" aria-hidden="true" />
       <!-- A long press on a touch screen would open it over the preview. -->
       <q-tooltip v-if="!$q.platform.is.mobile" :delay="TOOLTIP_DELAY_MS">
-        {{ t('agent.voice.hold') }}<br />
+        {{ t(listening ? 'agent.voice.listening' : 'agent.voice.hold') }}<br />
+        {{ t('agent.voice.shortcut') }}<br />
         {{ t('agent.voice.privacy') }}
       </q-tooltip>
     </q-btn>
@@ -196,8 +230,26 @@ watch(
   touch-action: none;
   user-select: none;
 }
-.agent-voice__button--on {
-  animation: agent-voice-pulse 1.2s ease-in-out infinite;
+.agent-voice__spectrum {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+}
+.agent-voice__bar {
+  width: 2px;
+  height: 18px;
+  border-radius: 1px;
+  background: currentColor;
+  transition: transform 100ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-voice__bar {
+    transition: none;
+  }
 }
 .agent-voice__preview {
   position: absolute;
@@ -211,10 +263,5 @@ watch(
   line-height: 1.4;
   white-space: pre-wrap;
   pointer-events: none;
-}
-@keyframes agent-voice-pulse {
-  50% {
-    opacity: 0.55;
-  }
 }
 </style>

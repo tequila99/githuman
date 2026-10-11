@@ -1,10 +1,11 @@
 import { WINDOW_BASE_Z_INDEX } from '@/constants/windows/constants'
 import { computed } from 'vue'
 import { useQuasar, type TouchPanValue } from 'quasar'
+import { withoutWindowMotion } from '@/utils/windows/window-elements'
 import { useWindowStore } from '@/stores/windows/window-store'
 import {
   clampWindowPosition,
-  windowSize,
+  windowLayoutRect,
   resizeWindow
 } from '@/utils/windows/window-geometry'
 import type {
@@ -28,16 +29,12 @@ export function useWindowGeometry(
     width: $q.screen.width,
     height: $q.screen.height
   }))
-  const size = computed(() =>
-    state.maximized
-      ? viewport.value
-      : windowSize(state.windowSize, viewport.value)
-  )
-  const position = computed(() =>
-    state.maximized
-      ? { ...ORIGIN }
-      : clampWindowPosition(state.position, size.value, viewport.value)
-  )
+  const layout = computed(() => windowLayoutRect(state, viewport.value))
+  const size = computed(() => ({
+    width: layout.value.width,
+    height: layout.value.height
+  }))
+  const position = computed(() => ({ x: layout.value.x, y: layout.value.y }))
   const style = computed(() => ({
     left: `${position.value.x}px`,
     top: `${position.value.y}px`,
@@ -55,6 +52,23 @@ export function useWindowGeometry(
   function drag(event: WindowPanEvent) {
     if (state.maximized) return
     if (event.isFirst) {
+      if (state.mode === 'left' || state.mode === 'right') {
+        const rect = { ...position.value, ...size.value }
+        withoutWindowMotion(id, () => {
+          state.mode = 'normal'
+        })
+        const left = event.position?.left ?? rect.x + rect.width / 2
+        const top = event.position?.top ?? rect.y + 24
+        const ratio = Math.max(0, Math.min(1, (left - rect.x) / rect.width))
+        state.position = clampWindowPosition(
+          {
+            x: left - size.value.width * ratio,
+            y: top - Math.min(24, top - rect.y)
+          },
+          size.value,
+          viewport.value
+        )
+      }
       dragStart = { ...position.value }
       store.focus(id)
     }
@@ -78,10 +92,18 @@ export function useWindowGeometry(
     event.preventDefault()
     store.focus(id)
     event.currentTarget.setPointerCapture(event.pointerId)
+    const rect = { ...position.value, ...size.value }
+    if (state.mode === 'left' || state.mode === 'right') {
+      withoutWindowMotion(id, () => {
+        state.mode = 'normal'
+      })
+      state.position = { x: rect.x, y: rect.y }
+      state.windowSize = { width: rect.width, height: rect.height }
+    }
     active = {
       edge,
       pointerId: event.pointerId,
-      start: { ...position.value, ...size.value },
+      start: rect,
       pointer: { x: event.clientX, y: event.clientY }
     }
   }
