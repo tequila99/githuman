@@ -107,7 +107,12 @@ export const useTerminalStore = defineStore('terminal', () => {
     )
   }
   function init(available: boolean, provided?: TerminalTransport): void {
-    if (!available || transport) return
+    if (!available) {
+      // A saved open window must not outlive a terminal that the server disabled.
+      windows.close(TERMINAL_WINDOW_ID)
+      return
+    }
+    if (transport) return
     enabled.value = true
     try {
       const saved: unknown = JSON.parse(safeStorage.get(STORAGE_KEY) ?? 'null')
@@ -211,6 +216,8 @@ export const useTerminalStore = defineStore('terminal', () => {
         if (message.requestId === createRequest) {
           creating.value = false
           createRequest = null
+          // Show no empty window when the failed request was the first session.
+          if (!sessions.value.length) windows.close(TERMINAL_WINDOW_ID)
         }
         break
       case 'title': {

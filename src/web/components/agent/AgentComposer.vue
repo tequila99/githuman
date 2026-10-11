@@ -21,7 +21,7 @@ import { useAgentComposerConfig } from '@/composables/use-agent-composer-config'
 import { useAgentAttachments } from '@/composables/use-agent-attachments'
 import { useAgentAutoApprove } from '@/composables/use-agent-auto-approve'
 import { mentionContext } from '@/utils/mention-editor'
-import { isVoiceShortcut } from '@/utils/speech'
+import { isVoiceShortcut, isVoiceShortcutRelease } from '@/utils/speech'
 
 const props = defineProps<{
   chatId: string
@@ -51,13 +51,7 @@ useEventListener(
   () => window,
   'keyup',
   (event: KeyboardEvent) => {
-    if (
-      event.code !== 'Space' &&
-      event.key !== ' ' &&
-      event.metaKey &&
-      event.altKey
-    )
-      return
+    if (!isVoiceShortcutRelease(event)) return
     event.preventDefault()
     event.stopImmediatePropagation()
     releaseVoiceShortcut()

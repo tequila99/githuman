@@ -51,12 +51,17 @@ const { bars } = useSpeechSpectrum(listening)
 let keyHeld = false
 
 function press(): boolean {
-  if (props.disabled || !speech.supported || finishing.value) return false
+  if (props.disabled || !speech.supported) return false
+  if (finishing.value) return notifyBusy()
   emit('press')
   if (speech.press()) {
     announcement.value = t('agent.voice.listening')
     return true
   }
+  return notifyBusy()
+}
+
+function notifyBusy(): false {
   announcement.value = t('agent.voice.busy')
   $q.notify({ type: 'warning', message: t('agent.voice.busy') })
   return false

@@ -14,6 +14,22 @@ const DEFAULT_POSITION = { x: 260, y: 120 }
 // These property names cannot identify windows in an object-backed registry.
 const RESERVED_WINDOW_IDS = new Set(['__proto__', 'constructor', 'prototype'])
 
+// The `maximized` field stays for old callers. It is a view of `mode`.
+// JSON.stringify writes both fields, so older builds still read `maximized`.
+function createWindowState(
+  fields: Omit<WindowState, 'maximized'>
+): WindowState {
+  return {
+    ...fields,
+    get maximized() {
+      return this.mode === 'maximized'
+    },
+    set maximized(maximized: boolean) {
+      this.mode = maximized ? 'maximized' : 'normal'
+    }
+  }
+}
+
 function parseWindow(value: unknown): WindowState | null {
   if (
     !isRecord(value) ||
@@ -23,7 +39,7 @@ function parseWindow(value: unknown): WindowState | null {
   )
     return null
   const size = value.windowSize
-  return {
+  return createWindowState({
     position: { x: value.position.x, y: value.position.y },
     windowSize:
       isRecord(size) &&
@@ -43,14 +59,8 @@ function parseWindow(value: unknown): WindowState | null {
         ? value.mode
         : value.maximized === true
           ? 'maximized'
-          : 'normal',
-    get maximized() {
-      return this.mode === 'maximized'
-    },
-    set maximized(maximized: boolean) {
-      this.mode = maximized ? 'maximized' : 'normal'
-    }
-  }
+          : 'normal'
+  })
 }
 export const useWindowStore = defineStore('windows', () => {
   const windows = ref<Record<string, WindowState>>({})
@@ -101,19 +111,13 @@ export const useWindowStore = defineStore('windows', () => {
   function ensure(id: string): WindowState {
     if (!id || RESERVED_WINDOW_IDS.has(id)) throw new Error('Invalid window id')
     if (!Object.hasOwn(windows.value, id)) {
-      windows.value[id] = {
+      windows.value[id] = createWindowState({
         position: { ...DEFAULT_POSITION },
         windowSize: null,
         open: false,
         minimized: false,
-        mode: 'normal',
-        get maximized() {
-          return this.mode === 'maximized'
-        },
-        set maximized(value: boolean) {
-          this.mode = value ? 'maximized' : 'normal'
-        }
-      }
+        mode: 'normal'
+      })
     }
     return windows.value[id]!
   }

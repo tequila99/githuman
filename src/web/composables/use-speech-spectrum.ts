@@ -12,6 +12,10 @@ const SMOOTHING = 0.65
 // Ignore low background noise and amplify normal speech.
 const NOISE_FLOOR = 0.12
 const SENSITIVITY = 1.4
+// Quiet room noise sits below this level, so the bars stay at rest.
+const MIN_DECIBELS = -85
+// Normal speech at a desk microphone stays below this level, so the bars do not clip.
+const MAX_DECIBELS = -25
 
 interface SpectrumServices {
   getUserMedia: () => Promise<MediaStream>
@@ -64,8 +68,8 @@ export function useSpeechSpectrum(
       const analyser = context.createAnalyser()
       analyser.fftSize = FFT_SIZE
       analyser.smoothingTimeConstant = SMOOTHING
-      analyser.minDecibels = -85
-      analyser.maxDecibels = -25
+      analyser.minDecibels = MIN_DECIBELS
+      analyser.maxDecibels = MAX_DECIBELS
       // Do not connect to the output: monitoring must never play microphone audio.
       context.createMediaStreamSource(stream).connect(analyser)
       const data = new Uint8Array(analyser.frequencyBinCount)

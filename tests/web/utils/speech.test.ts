@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   isVoiceShortcut,
+  isVoiceShortcutRelease,
   joinSpoken,
   readSpeechResults,
   speechLanguages,
@@ -125,4 +126,15 @@ test('voice shortcut accepts physical Space with a modified character and reject
   ] as const) {
     assert.equal(isVoiceShortcut({ ...event, [flag]: true }), false)
   }
+})
+
+test('voice shortcut release accepts Space or a released modifier only', () => {
+  const held = { key: 'a', code: 'KeyA', metaKey: true, altKey: true }
+  assert.equal(isVoiceShortcutRelease(held), false)
+  assert.equal(
+    isVoiceShortcutRelease({ ...held, key: ' ', code: 'Space' }),
+    true
+  )
+  assert.equal(isVoiceShortcutRelease({ ...held, metaKey: false }), true)
+  assert.equal(isVoiceShortcutRelease({ ...held, altKey: false }), true)
 })

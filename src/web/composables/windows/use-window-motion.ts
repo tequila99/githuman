@@ -2,6 +2,7 @@ import { nextTick, onBeforeUnmount, onMounted, watch, type Ref } from 'vue'
 import { useEventListener, useTimeout } from 'quasar'
 import {
   WINDOW_ANIMATION_DURATION_MS,
+  WINDOW_BASE_Z_INDEX,
   WINDOW_ENTER_EASING,
   WINDOW_EXIT_EASING,
   WINDOW_IGNORE_REDUCED_MOTION,
@@ -147,9 +148,10 @@ export function useWindowMotion(
               position: 'fixed',
               pointerEvents: 'none',
               overflow: 'hidden',
-              zIndex: String(
-                element?.style.zIndex ?? original?.style.zIndex ?? 2500
-              ),
+              zIndex:
+                element?.style.zIndex ||
+                original?.style.zIndex ||
+                String(WINDOW_BASE_Z_INDEX),
               transformOrigin: '0 0'
             })
             Object.assign(copy.style, {

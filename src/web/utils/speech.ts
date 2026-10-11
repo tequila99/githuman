@@ -121,3 +121,15 @@ export function isVoiceShortcut(
     !event.isComposing
   )
 }
+
+/**
+ * True when a keyup ends the voice shortcut. Space ends it, and so does
+ * the release of Meta or Alt. On macOS, Space keyup often never arrives
+ * while Cmd is down, so the modifier release is the only end signal.
+ */
+export function isVoiceShortcutRelease(
+  event: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'altKey'>
+): boolean {
+  const isSpace = event.code === 'Space' || event.key === ' '
+  return isSpace || !event.metaKey || !event.altKey
+}
