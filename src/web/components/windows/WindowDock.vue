@@ -107,17 +107,23 @@ async function activate(app: WindowApplication) {
         :icon="entry.app.icon"
         class="window-dock__button"
         :class="{
-          'window-dock__button--running': entry.active || !!entry.badge
+          'window-dock__button--running': entry.active || !!entry.badge,
+          'window-dock__button--active': entry.active
         }"
-        :color="entry.active || entry.badge ? 'primary' : undefined"
+        :color="entry.active ? 'white' : entry.badge ? 'primary' : undefined"
         :disable="!entry.availability.enabled"
         :loading="busy.includes(entry.app.id)"
         :aria-label="entry.app.title()"
+        :aria-current="entry.active ? 'true' : undefined"
         @click="activate(entry.app)"
       >
-        <q-badge v-if="entry.badge" floating color="primary">{{
-          entry.badge
-        }}</q-badge>
+        <q-badge
+          v-if="entry.badge"
+          floating
+          :color="entry.active ? 'white' : 'primary'"
+          :text-color="entry.active ? 'primary' : 'white'"
+          >{{ entry.badge }}</q-badge
+        >
       </q-btn>
       <q-tooltip :delay="TOOLTIP_DELAY_MS"
         >{{ entry.availability.reason ?? entry.app.title()
@@ -181,5 +187,13 @@ async function activate(app: WindowApplication) {
 }
 .window-dock__item {
   position: relative;
+}
+.window-dock__button--active {
+  border-color: var(--q-primary);
+  background: var(--q-primary);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.3),
+    0 0 0 2px color-mix(in srgb, var(--q-primary) 35%, transparent),
+    0 2px 3px rgba(0, 0, 0, 0.2);
 }
 </style>
