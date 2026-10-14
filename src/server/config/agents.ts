@@ -1,3 +1,4 @@
+import { isSystemError } from '../utils/system-error.ts'
 import { readFileSync } from 'node:fs'
 import { Type } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
@@ -94,7 +95,7 @@ function readOverrides(overridesPath: string): Record<string, unknown> {
   try {
     raw = readFileSync(overridesPath, 'utf-8')
   } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+    if (isSystemError(error, 'ENOENT')) {
       return {}
     }
     throw error

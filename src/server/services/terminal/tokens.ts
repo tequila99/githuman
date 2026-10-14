@@ -15,8 +15,9 @@ export class TerminalTokens {
   }
   issue(origin: string): string {
     this.prune()
-    if (this.tokens.size >= MAX_TOKENS)
+    if (this.tokens.size >= MAX_TOKENS) {
       this.tokens.delete(this.tokens.keys().next().value ?? '')
+    }
     const token = randomBytes(32).toString('base64url')
     this.tokens.set(token, { origin, expires: this.now() + TERMINAL_TOKEN_MS })
     return token
@@ -27,8 +28,9 @@ export class TerminalTokens {
     return !!info && info.expires > this.now() && info.origin === origin
   }
   private prune(): void {
-    for (const [token, info] of this.tokens)
+    for (const [token, info] of this.tokens) {
       if (info.expires <= this.now()) this.tokens.delete(token)
+    }
   }
   clear(): void {
     this.tokens.clear()

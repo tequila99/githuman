@@ -7,14 +7,21 @@ import { useMermaidBlocks } from '@/composables/use-mermaid-blocks'
 import { renderMarkdown } from '@/utils/markdown'
 import { usePreviewStore } from '@/stores/windows/preview-store'
 import { useAgentStore } from '@/stores/agent-store'
+import { useRepositoryStore } from '@/stores/repository-store'
+import {
+  parseMarkdownFileLink,
+  resolveMarkdownFileLink
+} from '@/utils/windows/markdown-file-link'
 import type { PreviewSource } from '@/types/windows/preview'
 
 const props = withDefaults(
   defineProps<{
     text: string
+    headingAnchors?: boolean
     mermaidDebounce?: number
     previewSource?: PreviewSource
     previewTitle?: string
+    fileLinks?: boolean
   }>(),
   {
     mermaidDebounce: 0
@@ -24,7 +31,10 @@ const { t } = useI18n()
 const $q = useQuasar()
 const body = useTemplateRef<HTMLElement>('body')
 const html = computed(() =>
-  renderMarkdown(props.text, { copyLabel: t('agent.code.copy') })
+  renderMarkdown(props.text, {
+    copyLabel: t('agent.code.copy'),
+    headingAnchors: props.headingAnchors
+  })
 )
 const { copyCodeBlock } = useCodeBlockCopy(html)
 useMermaidBlocks(
@@ -37,6 +47,49 @@ useMermaidBlocks(
 
 const preview = usePreviewStore()
 const agents = useAgentStore()
+const repository = useRepositoryStore()
+async function openFileLink(event: MouseEvent): Promise<boolean> {
+  if (!props.fileLinks) return false
+  const anchor =
+    event.target instanceof Element ? event.target.closest('a') : null
+  if (!anchor || !body.value?.contains(anchor)) return false
+  const href = anchor.getAttribute('href') ?? ''
+  try {
+    const link = parseMarkdownFileLink(href)
+    if (!link) return false
+    event.preventDefault()
+    if (!repository.info) await repository.fetchInfo()
+    if (!repository.info) {
+      $q.notify({
+        type: 'negative',
+        message: repository.error ?? t('windows.fileLinkFailed')
+      })
+      return true
+    }
+    const source = props.previewSource
+    const path = resolveMarkdownFileLink(
+      link,
+      repository.info.path,
+      source?.type === 'file' ? source.path : ''
+    )
+    preview.open(
+      'markdown',
+      {
+        type: 'file',
+        path,
+        ref: source?.type === 'file' ? source.ref : 'WORKTREE'
+      },
+      {
+        title: path,
+        anchor: link.anchor
+      }
+    )
+  } catch {
+    event.preventDefault()
+    $q.notify({ type: 'negative', message: t('windows.fileLinkFailed') })
+  }
+  return true
+}
 function openDiagram(event: Event) {
   const box =
     event.target instanceof Element
@@ -61,6 +114,7 @@ function openDiagram(event: Event) {
 }
 
 async function onClick(event: MouseEvent) {
+  if (event.defaultPrevented || (await openFileLink(event))) return
   const button =
     event.target instanceof Element
       ? event.target.closest<HTMLElement>('[data-copy]')
@@ -73,8 +127,9 @@ async function onClick(event: MouseEvent) {
     copy: t('agent.code.copy'),
     copied: t('agent.code.copied')
   })
-  if (!copied)
+  if (!copied) {
     $q.notify({ type: 'negative', message: t('agent.code.copyFailed') })
+  }
 }
 </script>
 

@@ -42,6 +42,8 @@ Preview tabs store file refs or chat/message locators. MD, Mermaid and image tab
 
 The file API accepts `strict=true` for previews. It returns 404 for missing files and keeps empty files distinct. Reads without this option keep the previous empty-content behavior used by diff views.
 
+Markdown file links in assistant messages open file tabs in this window. Absolute paths must be inside the current repository; relative paths start at the repository root. Links in a file preview resolve from that file's directory and retain its ref. Markdown heading fragments scroll to the heading. A `:line` or `:line:column` suffix is removed when opening a rendered document; it does not select a source line. Other file types and external URLs remain browser links. Strict working-tree reads also reject symlinks whose real target is outside the repository.
+
 ## Module layout
 
 Window modules are grouped by responsibility: `constants/windows`, `types/windows`, `stores/windows`, `composables/windows`, and `utils/windows`. The shared shell components live in `components/windows`. Terminal transport remains in `stores/terminal-store`; terminal and preview components retain their own directories. Tests mirror the source directories.

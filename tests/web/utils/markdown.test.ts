@@ -1,6 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { renderMarkdown } from '@/utils/markdown'
+import {
+  renderMarkdown,
+  sameMarkdownContent,
+  hasMarkdownImages,
+  normalizeNoteEmptyParagraphs
+} from '@/utils/markdown'
 
 test('renders basic markdown', () => {
   const html = renderMarkdown('**bold** and `code`\n\n- a\n- b')
@@ -55,4 +60,65 @@ test('code copy controls use delegated tooltips and escape labels', () => {
   })
   assert.match(html, /data-tooltip="Copy &quot;code&quot; &lt;x&gt;"/)
   assert.doesNotMatch(html, /\stitle=/)
+})
+
+test('note heading anchors use visible text, disambiguate duplicates and reset on each render', () => {
+  const source =
+    '# **Hello** [world](https://example.com)\n\n# Hello world\n\n## Привет `мир`\n'
+  const options = { headingAnchors: true }
+  const first = renderMarkdown(source, options)
+  assert.match(first, /id="hello-world"/)
+  assert.match(first, /id="hello-world-1"/)
+  assert.match(first, /id="привет-мир"/)
+  assert.equal(renderMarkdown(source, options), first)
+  assert.doesNotMatch(renderMarkdown(source), /id="hello-world"/)
+})
+
+test('visual normalization keeps Markdown meaning but unsupported content loss is detected', () => {
+  assert.equal(sameMarkdownContent('- one\n- two\n', '* one\n* two\n'), true)
+  assert.equal(
+    sameMarkdownContent(
+      '[Plan][plan]\n\n[plan]: ./plan.md "Title"\n',
+      '[Plan](./plan.md "Title")\n'
+    ),
+    true
+  )
+  assert.equal(sameMarkdownContent('![diagram](./diagram.png)\n', ''), false)
+  assert.equal(
+    sameMarkdownContent(
+      '```ts\nconst x = 1\n```\n',
+      '```ts\nconst x = 2\n```\n'
+    ),
+    false
+  )
+  assert.equal(sameMarkdownContent('[link](../a.md)', '[link](../b.md)'), false)
+})
+
+test('images use source mode while image-like code and escaped text stay editable', () => {
+  assert.equal(hasMarkdownImages('![diagram](https://example.com/a.png)'), true)
+  assert.equal(hasMarkdownImages('![diagram][pic]\n\n[pic]: ./a.png'), true)
+  assert.equal(hasMarkdownImages('```md\n![diagram](./a.png)\n```'), false)
+  assert.equal(hasMarkdownImages('`![diagram](./a.png)`'), false)
+  assert.equal(hasMarkdownImages('\\![diagram](./a.png)'), false)
+})
+
+test('note empty-paragraph placeholders become blank lines while code and inline HTML stay intact', () => {
+  const source =
+    '# Title\n\n<br />\n\nText<br />next\n\n```html\n<br />\n```\n\n`<br />`\n'
+  assert.equal(
+    normalizeNoteEmptyParagraphs(source),
+    '# Title\n\n\n\nText<br />next\n\n```html\n<br />\n```\n\n`<br />`\n'
+  )
+})
+
+test('permanent local note attachments render and stay editable after reload', () => {
+  const url = '/api/notes/assets/' + 'a'.repeat(64) + '.png'
+  const source = `![image](${url})`
+  assert.match(renderMarkdown(source), /<img src="\/api\/notes\/assets\//)
+  assert.equal(hasMarkdownImages(source), false)
+  assert.equal(sameMarkdownContent(source, 'image'), false)
+  assert.doesNotMatch(
+    renderMarkdown('![x](https://example.com/pixel.png)'),
+    /<img/
+  )
 })

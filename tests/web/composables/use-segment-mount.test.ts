@@ -254,8 +254,9 @@ test('a hunk aggregate never enters the cache in either parent/child exit order'
     parent.near(true)
     child.near(true)
     frame()
-    for (const item of parentFirst ? [parent, child] : [child, parent])
+    for (const item of parentFirst ? [parent, child] : [child, parent]) {
       item.near(false)
+    }
     assert.equal(segmentHeight(owner, 'hunk', 'v'), undefined)
     assert.equal(segmentHeight(owner, 'rows:0', 'v'), 900)
     parent.scope.stop()

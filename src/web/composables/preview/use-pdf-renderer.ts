@@ -91,8 +91,9 @@ export function usePdfRenderer(options: PdfRendererOptions) {
             await task.promise
             if (!disposed && version === generation) options.onRendered?.()
           } catch (failure) {
-            if (!disposed && version === generation)
+            if (!disposed && version === generation) {
               error.value = errorMessage(failure)
+            }
           } finally {
             task = null
             if (!disposed && version === generation) busy.value = false

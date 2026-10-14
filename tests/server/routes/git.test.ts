@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
+import { writeFileSync, mkdirSync, existsSync, symlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { createTempGitRepo } from '../helpers/git-fixture.ts'
 import { buildApp } from '../../../src/server/app.ts'
@@ -373,4 +373,33 @@ test('strict file previews distinguish missing and empty files without changing 
     '/api/git/file/empty.md?ref=--help&strict=true'
   )
   assert.equal(invalidRef.statusCode, 400)
+})
+
+test('strict worktree previews allow internal symlinks but reject files and directories linked outside the repository', async t => {
+  const fixture = await createTempGitRepo()
+  const outside = await createTempGitRepo()
+  t.after(fixture.cleanup)
+  t.after(outside.cleanup)
+  writeFileSync(join(fixture.dir, 'inside.md'), '# Inside')
+  writeFileSync(join(outside.dir, 'secret.md'), '# Outside')
+  symlinkSync(join(fixture.dir, 'inside.md'), join(fixture.dir, 'internal.md'))
+  symlinkSync(join(outside.dir, 'secret.md'), join(fixture.dir, 'external.md'))
+  symlinkSync(outside.dir, join(fixture.dir, 'linked-directory'))
+  const app = buildApp({ repositoryPath: fixture.dir })
+  t.after(() => app.close())
+  const internal = await app.inject(
+    '/api/git/file/internal.md?ref=WORKTREE&strict=true'
+  )
+  assert.equal(internal.statusCode, 200)
+  assert.equal(internal.json().content, '# Inside')
+  for (const path of ['external.md', 'linked-directory/secret.md']) {
+    const response = await app.inject(
+      `/api/git/file/${path}?ref=WORKTREE&strict=true`
+    )
+    assert.equal(response.statusCode, 400)
+    assert.ok(!response.body.includes('# Outside'))
+  }
+  const legacy = await app.inject('/api/git/file/external.md?ref=WORKTREE')
+  assert.equal(legacy.statusCode, 200)
+  assert.equal(legacy.json().content, '# Outside')
 })

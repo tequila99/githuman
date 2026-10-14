@@ -34,11 +34,12 @@ export function useFileScroll(options: {
     stopOperation?.()
     stopOperation = undefined
   }
-  for (const event of CANCEL_EVENTS)
+  for (const event of CANCEL_EVENTS) {
     inputTarget?.addEventListener(event, cancel, {
       capture: true,
       passive: true
     })
+  }
   const stopWatch = watch(
     [
       () => toValue(options.request),
@@ -81,7 +82,8 @@ export function useFileScroll(options: {
   onScopeDispose(() => {
     stopWatch()
     stopOperation?.()
-    for (const event of CANCEL_EVENTS)
+    for (const event of CANCEL_EVENTS) {
       inputTarget?.removeEventListener(event, cancel, true)
+    }
   })
 }

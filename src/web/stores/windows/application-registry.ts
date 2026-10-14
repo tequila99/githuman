@@ -18,8 +18,9 @@ export function createApplicationRegistry() {
     if (persistence) {
       try {
         const saved: unknown = JSON.parse(safeStorage.get(key) ?? 'null')
-        if (isRecord(saved) && typeof saved.version === 'number')
+        if (isRecord(saved) && typeof saved.version === 'number') {
           persistence.restore(saved.data, saved.version)
+        }
       } catch {
         /* An invalid application state must not block other applications. */
       }

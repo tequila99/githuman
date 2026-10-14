@@ -18,6 +18,7 @@ const $q = useQuasar()
     class="agent-item"
   >
     <MarkdownContent
+      file-links
       :text="text"
       :preview-source="source"
       :mermaid-debounce="MERMAID_DEBOUNCE_MS"

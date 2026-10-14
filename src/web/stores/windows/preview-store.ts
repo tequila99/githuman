@@ -52,6 +52,7 @@ export const usePreviewStore = defineStore('preview', () => {
   const tabs = ref<PreviewTab[]>([])
   const activeId = ref<string | null>(null)
   const data = ref<Record<string, PreviewData>>({})
+  const anchorRequests = ref<Record<string, string>>({})
   const state = windows.ensure(PREVIEW_WINDOW_ID)
   const localFiles = new Map<string, File>()
   const localUrls = new Map<string, string>()
@@ -113,7 +114,7 @@ export const usePreviewStore = defineStore('preview', () => {
   function open(
     kind: PreviewTab['kind'],
     source: PreviewSource,
-    { title, index = 0, content = '', sourceText }: PreviewOpenOptions
+    { title, index = 0, content = '', sourceText, anchor }: PreviewOpenOptions
   ) {
     if (kind === 'diagram' && sourceText !== undefined) {
       const sources = extractDiagramSources(sourceText)
@@ -121,8 +122,9 @@ export const usePreviewStore = defineStore('preview', () => {
         if (
           tab.kind !== 'diagram' ||
           previewSourceKey(tab.source) !== previewSourceKey(source)
-        )
+        ) {
           continue
+        }
         const position = findDiagram(sources, tab.index, tab.fingerprint)
         if (position < 0) continue
         tab.index = position
@@ -155,6 +157,11 @@ export const usePreviewStore = defineStore('preview', () => {
           (tab.index === index && tab.fingerprint === fingerprint))
     )
     if (existing) {
+      if (anchor) {
+        anchorRequests.value[existing.id] = anchor
+      } else if (anchor !== undefined) {
+        delete anchorRequests.value[existing.id]
+      }
       activate(existing.id)
       return existing.id
     }
@@ -170,6 +177,7 @@ export const usePreviewStore = defineStore('preview', () => {
       scale: 1
     })
     data.value[id] = emptyData()
+    if (anchor) anchorRequests.value[id] = anchor
     activate(id)
     return id
   }
@@ -186,8 +194,9 @@ export const usePreviewStore = defineStore('preview', () => {
       tabs.value.some(
         tab => previewSourceKey(tab.source) === previewSourceKey(source)
       )
-    )
+    ) {
       return
+    }
     localFiles.delete(source.id)
     const url = localUrls.get(source.id)
     if (url) URL.revokeObjectURL(url)
@@ -203,13 +212,16 @@ export const usePreviewStore = defineStore('preview', () => {
     const index = tabs.value.findIndex(candidate => candidate.id === id)
     if (tab && tabs.value.length === 1) windows.close(PREVIEW_WINDOW_ID)
     tabs.value = tabs.value.filter(candidate => candidate.id !== id)
-    if (tab)
+    if (tab) {
       afterWindowTransition(PREVIEW_WINDOW_ID, () => releaseLocal(tab.source))
+    }
     delete data.value[id]
+    delete anchorRequests.value[id]
     requests.delete(id)
-    if (activeId.value === id)
+    if (activeId.value === id) {
       activeId.value =
         tabs.value[index]?.id ?? tabs.value[index - 1]?.id ?? null
+    }
     if (!tabs.value.length) windows.close(PREVIEW_WINDOW_ID)
     remember()
   }
@@ -326,7 +338,7 @@ export const usePreviewStore = defineStore('preview', () => {
         error = errorMessage(failure)
       }
     } finally {
-      if (tabs.value.includes(tab))
+      if (tabs.value.includes(tab)) {
         Object.assign(entry, {
           text,
           image,
@@ -336,6 +348,7 @@ export const usePreviewStore = defineStore('preview', () => {
           loading: false,
           loaded: true
         })
+      }
     }
   }
   return {
@@ -343,6 +356,7 @@ export const usePreviewStore = defineStore('preview', () => {
     activeId,
     activeTab,
     data,
+    anchorRequests,
     show,
     open,
     openLocal,

@@ -61,8 +61,9 @@ export function useMentionEditor(
   function updateEmpty(): void {
     const nowEmpty = serialize().text === ''
     // A browser leaves a stray <br> behind after the last character is deleted.
-    if (nowEmpty && root.value && chips().length === 0)
+    if (nowEmpty && root.value && chips().length === 0) {
       root.value.replaceChildren()
+    }
     if (nowEmpty !== empty.value) {
       empty.value = nowEmpty
       options.onEmptyChange(nowEmpty)

@@ -39,6 +39,10 @@ const chatsOpen = ref(true)
           <q-item-section>{{ t('nav.changes') }}</q-item-section>
         </q-item>
 
+        <q-item v-ripple clickable :to="{ path: '/notes' }">
+          <q-item-section avatar><q-icon name="description" /></q-item-section>
+          <q-item-section>{{ t('notes.title') }}</q-item-section>
+        </q-item>
         <q-item v-ripple clickable :to="{ path: '/reviews' }">
           <q-item-section avatar>
             <q-icon name="rate_review" />

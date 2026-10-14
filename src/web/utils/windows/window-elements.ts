@@ -70,8 +70,9 @@ export function focusWindow(id: string | null) {
   if (
     typeof document === 'undefined' ||
     document.querySelector('[role="dialog"][aria-modal="true"]')
-  )
+  ) {
     return
+  }
   const element = id ? windows.get(id) : null
   if (element) {
     const focus = id ? focusTargets.get(id) : undefined

@@ -75,15 +75,18 @@ export class TerminalRegistry {
   }
   get(id: string): TerminalSession {
     const entry = this.entries.get(id)
-    if (!entry)
+    if (!entry) {
       throw new TerminalNotFoundError('Terminal session no longer exists.')
+    }
     return entry.session
   }
   async create(cols: number, rows: number): Promise<TerminalSession> {
-    if (this.stopped)
+    if (this.stopped) {
       throw new TerminalNotFoundError('Terminal server is stopping.')
-    if (this.entries.size + this.creating >= MAX_TERMINAL_SESSIONS)
+    }
+    if (this.entries.size + this.creating >= MAX_TERMINAL_SESSIONS) {
       throw new TerminalLimitError('The terminal limit has been reached.')
+    }
     this.creating++
     try {
       const backend = await (this.options.backend ?? createBackend)(
@@ -122,16 +125,18 @@ export class TerminalRegistry {
   }
   attach(id: string, subscriber: object): void {
     const entry = this.entries.get(id)
-    if (!entry)
+    if (!entry) {
       throw new TerminalNotFoundError('Terminal session no longer exists.')
+    }
     entry.subscribers.add(subscriber)
     entry.orphanedSince = null
     entry.idleSince = null
   }
   detach(subscriber: object): void {
     for (const entry of this.entries.values()) {
-      if (!entry.subscribers.delete(subscriber) || entry.subscribers.size)
+      if (!entry.subscribers.delete(subscriber) || entry.subscribers.size) {
         continue
+      }
       entry.orphanedSince = this.now()
       entry.idleSince = entry.session.running === 'idle' ? this.now() : null
     }

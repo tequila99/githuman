@@ -25,6 +25,8 @@ export interface PreviewData {
 
 export interface PreviewOpenOptions {
   title: string
+  /** A heading fragment for this navigation; it is not a saved view preference. */
+  anchor?: string
   /** Position of the diagram or attachment inside its source. */
   index?: number
   /** Content that identifies a diagram or an image inside its source. */

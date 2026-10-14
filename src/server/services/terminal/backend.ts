@@ -40,8 +40,9 @@ function promptPrefix(shellName: string): string {
 function promptSetup(shellName: string): string {
   const assign = `PS1=${promptPrefix(shellName)}"$PS1"`
   const marker = "printf '\\033]133;A\\007'"
-  if (shellName === 'bash')
+  if (shellName === 'bash') {
     return `${assign}; history -d $HISTCMD || true; ${marker}`
+  }
   return `${assign}; ${marker}`
 }
 
@@ -186,8 +187,9 @@ export class PipeBackend implements PtyBackend {
     this.child.stdout.setEncoding('utf8')
     this.child.stdout.on('data', (data: string) => {
       this.prompt.output(data)
-      for (const listener of this.dataListeners)
+      for (const listener of this.dataListeners) {
         listener(data.replace(/\n/g, '\r\n'))
+      }
     })
     this.child.on('error', () => {
       for (const listener of this.exitListeners) listener()
@@ -235,8 +237,9 @@ export async function createBackend(
   cols: number,
   rows: number
 ): Promise<PtyBackend> {
-  if (!terminalSupported())
+  if (!terminalSupported()) {
     throw new TerminalError('The terminal is not available on Windows.')
+  }
   const module = await loadPty()
   if (!module) return new PipeBackend(cwd)
   const shell = process.env.SHELL || '/bin/sh'

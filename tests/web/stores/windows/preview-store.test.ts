@@ -16,6 +16,34 @@ afterEach(() => {
   globalThis.fetch = originalFetch
   setStorageBackend(null)
 })
+test('heading navigation reuses a file tab and does not persist navigation requests', () => {
+  const saved = new Map<string, string>()
+  setStorageBackend({
+    getItem: key => saved.get(key),
+    setItem: (key, value) => saved.set(key, value),
+    removeItem: key => saved.delete(key)
+  })
+  const store = usePreviewStore()
+  const source = {
+    type: 'file',
+    path: '.claude/report.md',
+    ref: 'WORKTREE'
+  } as const
+  const id = store.open('markdown', source, {
+    title: 'Report',
+    anchor: 'results'
+  })
+  assert.equal(store.anchorRequests[id], 'results')
+  assert.ok(!saved.get('githuman:preview:v1')?.includes('results'))
+  assert.equal(
+    store.open('markdown', source, { title: 'Report', anchor: 'details' }),
+    id
+  )
+  assert.equal(store.anchorRequests[id], 'details')
+  assert.equal(store.tabs.length, 1)
+  store.close(id)
+  assert.equal(store.anchorRequests[id], undefined)
+})
 test('file previews deduplicate by source, retain state and close only their own window', () => {
   const store = usePreviewStore()
   const source = { type: 'file', path: 'a.md', ref: 'WORKTREE' } as const

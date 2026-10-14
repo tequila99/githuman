@@ -25,8 +25,9 @@ function isTerminalOrigin(host?: string, origin?: string): boolean {
 export async function requireTerminalOrigin(
   request: FastifyRequest
 ): Promise<void> {
-  if (!isTerminalOrigin(request.headers.host, request.headers.origin))
+  if (!isTerminalOrigin(request.headers.host, request.headers.origin)) {
     throw new ForbiddenError(
       'Terminal endpoints only accept requests from this local server. Open the app via localhost.'
     )
+  }
 }

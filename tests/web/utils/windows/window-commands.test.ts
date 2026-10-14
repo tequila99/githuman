@@ -32,8 +32,9 @@ function target(activeId: string | null = 'preview', available = true) {
 }
 test('modal dialogs block every window command', () => {
   const { calls, commands } = target()
-  for (const shortcut of WINDOW_SHORTCUTS)
+  for (const shortcut of WINDOW_SHORTCUTS) {
     assert.equal(dispatchWindowCommand(shortcut, commands, true), false)
+  }
   assert.deepEqual(calls, [])
 })
 test('layout commands address the active window while global commands need no active window', () => {

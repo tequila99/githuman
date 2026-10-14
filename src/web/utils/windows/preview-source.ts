@@ -31,14 +31,16 @@ export function parsePreviewTab(value: unknown): PreviewTab | null {
     typeof value.id !== 'string' ||
     typeof value.title !== 'string' ||
     typeof value.fingerprint !== 'string'
-  )
+  ) {
     return null
+  }
   if (
     value.kind !== 'markdown' &&
     value.kind !== 'diagram' &&
     value.kind !== 'image'
-  )
+  ) {
     return null
+  }
   const raw = value.source
   if (!isRecord(raw)) return null
   let source: PreviewSource
@@ -67,8 +69,9 @@ export function parsePreviewTab(value: unknown): PreviewTab | null {
     !Number.isSafeInteger(value.index) ||
     typeof value.index !== 'number' ||
     value.index < 0
-  )
+  ) {
     return null
+  }
   const scroll = isRecord(value.scroll) ? value.scroll : {}
   return {
     id: value.id,
@@ -94,8 +97,9 @@ export function findDiagram(
   if (
     sources[index] !== undefined &&
     previewFingerprint(sources[index]) === fingerprint
-  )
+  ) {
     return index
+  }
   const matching = sources
     .map((source, position) => ({
       position,

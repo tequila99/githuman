@@ -194,8 +194,12 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
 
   // A folder that left the diff and came back must not open closed.
   watch(diffPathTree, nodes => {
-    if (diffListMode.value !== 'tree' || collapsedDiffFolders.value.size === 0)
+    if (
+      diffListMode.value !== 'tree' ||
+      collapsedDiffFolders.value.size === 0
+    ) {
       return
+    }
     const present = folderPaths(nodes)
     const kept = [...collapsedDiffFolders.value].filter(path =>
       present.has(path)
@@ -217,8 +221,9 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
   watch(diffListMode, mode => {
     safeStorage.set(DIFF_LIST_MODE_KEY, mode)
     // The cards change order, so the selected card moves: the panel follows it.
-    if (selectedPath.value && !browseMode.value)
+    if (selectedPath.value && !browseMode.value) {
       scrollToFile(selectedPath.value)
+    }
   })
 
   /**

@@ -164,8 +164,9 @@ test('fetchDiff reuses object identity for files unchanged since the last fetch'
 test('changedPaths combines staged and unstaged paths', async () => {
   globalThis.fetch = (async (input: string | URL) => {
     const url = input.toString()
-    if (url.includes('/staged'))
+    if (url.includes('/staged')) {
       return jsonResponse([file({ newPath: 's.txt' })])
+    }
     return jsonResponse([file({ newPath: 'u.txt' })])
   }) as typeof fetch
 
