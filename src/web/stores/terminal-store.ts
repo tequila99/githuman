@@ -121,10 +121,12 @@ export const useTerminalStore = defineStore('terminal', () => {
           position.value = point(saved.position) ?? position.value
           windowSize.value = size(saved.windowSize) ?? windowSize.value
         }
-        if (!hasCommonPreferences && typeof saved.minimized === 'boolean')
+        if (!hasCommonPreferences && typeof saved.minimized === 'boolean') {
           minimized.value = saved.minimized
-        if (typeof saved.originalColors === 'boolean')
+        }
+        if (typeof saved.originalColors === 'boolean') {
           originalColors.value = saved.originalColors
+        }
         if (typeof saved.activeId === 'string') activeId.value = saved.activeId
       }
     } catch {
@@ -154,15 +156,17 @@ export const useTerminalStore = defineStore('terminal', () => {
     sessions.value = list
     const ids = new Set(list.map(session => session.id))
     for (const id of subscribed) if (!ids.has(id)) subscribed.delete(id)
-    if (!activeId.value || !ids.has(activeId.value))
+    if (!activeId.value || !ids.has(activeId.value)) {
       activeId.value = list[0]?.id ?? null
+    }
     const syncWindow = () => {
       if (!list.length) {
         windows.close(TERMINAL_WINDOW_ID)
       } else {
         open.value = true
-        if (!windows.order.includes(TERMINAL_WINDOW_ID))
+        if (!windows.order.includes(TERMINAL_WINDOW_ID)) {
           windows.order.unshift(TERMINAL_WINDOW_ID)
+        }
       }
     }
     // The first server list restores live sessions rather than opening a new window.
@@ -236,8 +240,9 @@ export const useTerminalStore = defineStore('terminal', () => {
         if (
           sessions.value.length === 1 &&
           sessions.value[0]?.id === message.terminalId
-        )
+        ) {
           windows.close(TERMINAL_WINDOW_ID)
+        }
         sessions.value = sessions.value.filter(
           session => session.id !== message.terminalId
         )
@@ -275,8 +280,9 @@ export const useTerminalStore = defineStore('terminal', () => {
       creating.value ||
       state.value !== 'connected' ||
       sessions.value.length >= MAX_TERMINAL_SESSIONS
-    )
+    ) {
       return
+    }
     windows.focus(TERMINAL_WINDOW_ID)
     creating.value = true
     createRequest = `create-${++operation}`
@@ -336,5 +342,6 @@ export const useTerminalStore = defineStore('terminal', () => {
   }
 })
 
-if (import.meta.hot)
+if (import.meta.hot) {
   import.meta.hot.accept(acceptHMRUpdate(useTerminalStore, import.meta.hot))
+}

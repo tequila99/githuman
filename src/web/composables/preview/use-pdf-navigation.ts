@@ -23,8 +23,9 @@ export function usePdfNavigation(options: PdfNavigationOptions) {
       event.target !== event.currentTarget ||
       !canvas ||
       toValue(options.blocked)
-    )
+    ) {
       return
+    }
     const bounds = canvas.getBoundingClientRect()
     if (event.clientX < bounds.left) {
       navigate(-1)

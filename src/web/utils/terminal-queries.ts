@@ -19,13 +19,16 @@ export function ignoreTerminalQueries(terminal: Terminal): void {
   const { parser } = terminal
   for (const final of CSI_QUERY_FINALS) {
     parser.registerCsiHandler({ final }, () => true)
-    for (const prefix of CSI_QUERY_PREFIXES)
+    for (const prefix of CSI_QUERY_PREFIXES) {
       parser.registerCsiHandler({ prefix, final }, () => true)
+    }
   }
   // A color OSC with `?` is a query. Without `?` it sets a color, and xterm must apply it.
-  for (const identifier of OSC_COLOR_QUERIES)
+  for (const identifier of OSC_COLOR_QUERIES) {
     parser.registerOscHandler(identifier, data => data.includes('?'))
+  }
   parser.registerOscHandler(OSC_CLIPBOARD, () => true)
-  for (const intermediates of DCS_QUERY_INTERMEDIATES)
+  for (const intermediates of DCS_QUERY_INTERMEDIATES) {
     parser.registerDcsHandler({ intermediates, final: 'q' }, () => true)
+  }
 }

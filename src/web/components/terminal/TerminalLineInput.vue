@@ -15,8 +15,9 @@ defineExpose({ focus: () => input.value?.focus() })
 function submit(): void {
   if (store.state !== 'connected') return
   const { lines } = editTerminalLine('', draft.value + '\n')
-  for (const data of lines)
+  for (const data of lines) {
     store.send({ type: 'line', terminalId: props.terminalId, data })
+  }
   draft.value = ''
 }
 

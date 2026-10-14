@@ -93,14 +93,18 @@ export function resizeWindow(
   let top = start.y
   let right = start.x + start.width
   let bottom = start.y + start.height
-  if (edge.includes('w'))
+  if (edge.includes('w')) {
     left = between(left + delta.x, 0, right - minimum.width)
-  if (edge.includes('e'))
+  }
+  if (edge.includes('e')) {
     right = between(right + delta.x, left + minimum.width, viewport.width)
-  if (edge.includes('n'))
+  }
+  if (edge.includes('n')) {
     top = between(top + delta.y, WINDOW_TOP, bottom - minimum.height)
-  if (edge.includes('s'))
+  }
+  if (edge.includes('s')) {
     bottom = between(bottom + delta.y, top + minimum.height, viewport.height)
+  }
   return { x: left, y: top, width: right - left, height: bottom - top }
 }
 
@@ -109,13 +113,14 @@ export function windowLayoutRect(
   viewport: WindowSize
 ): WindowRect {
   if (state.mode === 'maximized') return { x: 0, y: 0, ...viewport }
-  if (state.mode === 'left' || state.mode === 'right')
+  if (state.mode === 'left' || state.mode === 'right') {
     return {
       x: state.mode === 'right' ? viewport.width / 2 : 0,
       y: 0,
       width: viewport.width / 2,
       height: viewport.height
     }
+  }
   const size = windowSize(state.windowSize, viewport)
   return { ...clampWindowPosition(state.position, size, viewport), ...size }
 }

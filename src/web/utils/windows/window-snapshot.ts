@@ -3,8 +3,9 @@ export function copyWindow(element: HTMLElement): HTMLElement {
   if (!(copy instanceof HTMLElement)) throw new Error('Invalid window snapshot')
   copy.inert = true
   copy.setAttribute('aria-hidden', 'true')
-  for (const node of [copy, ...copy.querySelectorAll<HTMLElement>('*')])
+  for (const node of [copy, ...copy.querySelectorAll<HTMLElement>('*')]) {
     node.removeAttribute('id')
+  }
   const sources = element.querySelectorAll('canvas')
   const canvases = copy.querySelectorAll('canvas')
   sources.forEach((canvas, index) => {

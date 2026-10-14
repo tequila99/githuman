@@ -90,7 +90,7 @@ test('theme palettes cover ANSI colors in both modes', () => {
   const dark = terminalTheme(true)
   const light = terminalTheme(false)
   assert.notEqual(dark.background, light.background)
-  for (const theme of [dark, light])
+  for (const theme of [dark, light]) {
     for (const key of [
       'red',
       'green',
@@ -99,8 +99,10 @@ test('theme palettes cover ANSI colors in both modes', () => {
       'brightWhite',
       'foreground',
       'cursor'
-    ])
+    ]) {
       assert.ok(key in theme)
+    }
+  }
 })
 
 test('terminal tab titles keep the directory and remove the shell prompt', () => {

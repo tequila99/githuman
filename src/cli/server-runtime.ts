@@ -94,6 +94,8 @@ export async function startServer(
   const app = buildApp({
     staticRoot: resolveStaticRoot(),
     repositoryPath,
+    projectPath: process.cwd(),
+    notesDir: options.notesDir,
     db,
     watchFiles: true,
     apiDocs: options.apiDocs === true,

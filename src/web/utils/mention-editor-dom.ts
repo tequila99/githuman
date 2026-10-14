@@ -67,8 +67,9 @@ export function chipBeforeCaret(root: HTMLElement | null): HTMLElement | null {
     !root ||
     !sel.focusNode ||
     !root.contains(sel.focusNode)
-  )
+  ) {
     return null
+  }
   const { focusNode: node, focusOffset: offset } = sel
   if (node instanceof Text && offset === 0) {
     const before = node.previousSibling

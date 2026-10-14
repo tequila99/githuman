@@ -153,8 +153,9 @@ export function useSegmentMount(
       options.cacheHeight &&
       options.heightOwner &&
       options.heightKey !== undefined
-    )
+    ) {
       measure()
+    }
     active = false
     cancelJob()
     stopPosition?.()

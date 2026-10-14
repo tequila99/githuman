@@ -1,10 +1,14 @@
+import { watchNotes } from './services/notes-watcher.service.ts'
+import { notesRoutes } from './routes/notes.ts'
+import { NotesService } from './services/notes.service.ts'
 import { NotFoundError } from './errors/http.ts'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import Fastify, { type FastifyInstance, type FastifyPluginAsync } from 'fastify'
 import fastifyStatic from '@fastify/static'
+import { ajvFilePlugin } from '@fastify/multipart'
 import fastifyWebsocket from '@fastify/websocket'
 import {
   terminalRoutes,
@@ -38,6 +42,10 @@ import { watchRepository } from './services/file-watcher.service.ts'
 const fastifySse = fastifySseImport as unknown as FastifyPluginAsync
 
 export interface BuildAppOptions {
+  /** Launch directory used for project notes; it can differ from the Git root. */
+  projectPath?: string
+  /** Notes storage path, resolved relative to projectPath. */
+  notesDir?: string
   /** Directory containing the built SPA (index.html + assets). Omit if no SPA should be served (e.g. some tests). */
   staticRoot?: string
   /** Git repository this server instance operates on. Defaults to process.cwd(). */
@@ -66,7 +74,18 @@ export interface BuildAppOptions {
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
-  const app = Fastify({ logger: false, forceCloseConnections: true })
+  const app = Fastify({
+    logger: false,
+    forceCloseConnections: true,
+    ajv: {
+      plugins: [
+        ajv => {
+          ajvFilePlugin(ajv)
+          return ajv
+        }
+      ]
+    }
+  })
   const repositoryPath = options.repositoryPath ?? process.cwd()
   const db = options.db ?? createTestDatabase()
   const eventBus = options.eventBus ?? createEventBus()
@@ -75,8 +94,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const terminalEnabled =
     options.terminalEnabled === true && terminalSupported()
 
-  if (terminalEnabled)
+  if (terminalEnabled) {
     app.register(fastifyWebsocket, TERMINAL_WEBSOCKET_OPTIONS)
+  }
   app.register(fastifySse)
   // The spec collects routes as they are added, so it comes before them.
   app.register(fastifySwagger, openApiOptions())
@@ -91,6 +111,26 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       mode: terminalEnabled ? ((await loadPty()) ? 'pty' : 'pipe') : null
     })
   })
+  const projectPath = options.projectPath ?? repositoryPath
+  const notes = new NotesService(
+    projectPath,
+    resolve(projectPath, options.notesDir ?? '.githuman/notes'),
+    options.notesDir === undefined,
+    eventBus,
+    db
+  )
+  app.register(notesRoutes, { service: notes })
+  app.addHook('onClose', async () => {
+    await notes.identity.close()
+  })
+  if (options.watchFiles) {
+    const watcher = watchNotes(notes, () =>
+      eventBus.publish({ type: 'notes:changed' })
+    )
+    app.addHook('onClose', async () => {
+      watcher.close()
+    })
+  }
   app.register(diffRoutes, { repositoryPath })
   app.register(gitRoutes, { repositoryPath })
   app.register(reviewRoutes, { repositoryPath, db, eventBus })
@@ -101,7 +141,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     instanceId: options.instanceId ?? randomUUID()
   })
 
-  if (terminalEnabled)
+  if (terminalEnabled) {
     app.register(terminalRoutes, {
       registry:
         options.terminalRegistry ??
@@ -111,6 +151,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
             app.log.info({ terminal: event }, 'Terminal lifecycle')
         })
     })
+  }
 
   if (options.agentPresets) {
     app.register(agentRoutes, {

@@ -59,12 +59,13 @@ export class TerminalChannel {
           switch (value.type) {
             case 'create': {
               const session = await this.registry.create(value.cols, value.rows)
-              if (!this.stopped)
+              if (!this.stopped) {
                 this.send({
                   type: 'created',
                   requestId: value.requestId,
                   terminalId: session.id
                 })
+              }
               break
             }
             case 'subscribe':
@@ -100,13 +101,14 @@ export class TerminalChannel {
               break
           }
         } catch (error) {
-          if (!this.stopped)
+          if (!this.stopped) {
             this.send({
               type: 'error',
               ...('requestId' in value ? { requestId: value.requestId } : {}),
               code: 'GHT_TERMINAL',
               message: errorMessage(error)
             })
+          }
         }
 
         return undefined
@@ -148,11 +150,12 @@ export class TerminalChannel {
       this.disconnect()
       return
     }
-    for (const [key, bytes] of credit.frames)
+    for (const [key, bytes] of credit.frames) {
       if (key <= sequence) {
         credit.bytes -= bytes
         credit.frames.delete(key)
       }
+    }
     this.flow(id, credit)
   }
   private flow(id: string, credit: Credit): void {

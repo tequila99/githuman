@@ -26,7 +26,11 @@ const { entry, reload } = usePreviewSource(
 const { rememberScroll, prepareRestore, restoreScroll } = usePreviewScroll({
   target: el,
   tab: () => props.tab,
-  remember: preview.remember
+  remember: preview.remember,
+  anchor: () => preview.anchorRequests[props.tab.id],
+  clearAnchor: () => {
+    delete preview.anchorRequests[props.tab.id]
+  }
 })
 const missingText = computed(() =>
   entry.value.missing ? t(`windows.missing.${entry.value.missing}`) : null
@@ -45,7 +49,8 @@ watch(
     entry.value.pdf,
     entry.value.loaded,
     entry.value.error,
-    entry.value.missing
+    entry.value.missing,
+    preview.anchorRequests[props.tab.id]
   ],
   () => {
     prepareRestore()
@@ -74,6 +79,8 @@ watch(
         :text="entry.text"
         :preview-source="tab.source"
         :preview-title="tab.title"
+        :file-links="tab.source.type === 'file'"
+        heading-anchors
       />
       <DiagramPreview
         v-else-if="tab.kind === 'diagram'"

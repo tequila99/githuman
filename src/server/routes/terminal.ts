@@ -64,10 +64,13 @@ export async function terminalRoutes(
       },
       onRequest: requireTerminalOrigin,
       preValidation: async request => {
-        if (!tokens.consume(request.query.token, request.headers.origin ?? ''))
+        if (
+          !tokens.consume(request.query.token, request.headers.origin ?? '')
+        ) {
           throw new ForbiddenError(
             'Terminal connection token is invalid or expired.'
           )
+        }
       }
     },
     socket => {

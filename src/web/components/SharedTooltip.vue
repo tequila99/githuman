@@ -66,8 +66,9 @@ function findTarget(target: EventTarget | null): HTMLElement | null {
   if (
     !element?.dataset.tooltip ||
     element.closest('[disabled], [aria-disabled="true"]')
-  )
+  ) {
     return null
+  }
   return element
 }
 
@@ -75,8 +76,9 @@ function enter(event: PointerEvent | FocusEvent): void {
   if (
     event instanceof PointerEvent &&
     (event.pointerType === 'touch' || event.buttons)
-  )
+  ) {
     return
+  }
   const element = findTarget(event.target)
   if (!element) return
   if (element === active) {
@@ -115,8 +117,9 @@ function leave(event: PointerEvent | FocusEvent): void {
   if (
     event.relatedTarget instanceof Node &&
     active.contains(event.relatedTarget)
-  )
+  ) {
     return
+  }
   cancel()
 }
 

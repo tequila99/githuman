@@ -1,11 +1,20 @@
-import MarkdownIt, { type Env } from 'markdown-it'
+import { headingSlug } from '../../shared/utils/heading-slug.ts'
+import MarkdownIt, { type Env, type Token } from 'markdown-it'
 
 // Output goes into v-html, so this is the trust boundary: raw HTML in the
 // source is escaped (html: false), markdown-it's default link validation
-// rejects javascript:/vbscript:/data: URLs, and images are off entirely — an
-// agent-controlled <img src> would be a free tracking pixel.
+// rejects unsafe URLs. Only local note attachments can render as images.
 const md = new MarkdownIt({ html: false, linkify: false, breaks: false })
-md.disable('image')
+const renderImage = md.renderer.rules.image!
+md.renderer.rules.image = (tokens, index, options, env, self) => {
+  const source = String(tokens[index]?.attrGet('src') ?? '')
+  if (/^\/api\/notes\/assets\/[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(source)) {
+    return renderImage(tokens, index, options, env, self)
+  }
+  return md.utils.escapeHtml(tokens[index]?.content ?? '')
+}
+// A separate parser compares image syntax, including unsupported image sources.
+const imageParser = new MarkdownIt({ html: false })
 
 const renderLinkOpen =
   md.renderer.rules.link_open ??
@@ -49,13 +58,46 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   )
 }
 
+const defaultHeadingOpen = md.renderer.rules.heading_open
+md.renderer.rules.heading_open = (tokens, index, options, env, self) => {
+  if (env?.headingAnchors) {
+    const text = (tokens[index + 1]?.children ?? [])
+      .map(token =>
+        token.type === 'text' || token.type === 'code_inline'
+          ? token.content
+          : token.type === 'softbreak'
+            ? ' '
+            : ''
+      )
+      .join('')
+    const slug = headingSlug(text)
+    const counts: Map<string, number> =
+      env.headingCounts instanceof Map
+        ? env.headingCounts
+        : new Map<string, number>()
+    env.headingCounts = counts
+    const count = counts.get(slug) ?? 0
+    counts.set(slug, count + 1)
+    tokens[index]?.attrSet('id', count ? `${slug}-${count}` : slug)
+  }
+  return defaultHeadingOpen
+    ? defaultHeadingOpen(tokens, index, options, env, self)
+    : self.renderToken(tokens, index, options)
+}
+
 interface RenderEnv extends Env {
+  headingAnchors?: boolean
   /** Accessible name of the copy button on code blocks. */
   copyLabel?: string
 }
 
 export function renderMarkdown(source: string, env: RenderEnv = {}): string {
-  return md.render(source, env)
+  return md.render(
+    source,
+    env.headingAnchors
+      ? { ...env, headingCounts: new Map<string, number>() }
+      : env
+  )
 }
 
 /** Read fences from the parser so preview identities include blocks that failed to render. */
@@ -68,4 +110,59 @@ export function extractDiagramSources(source: string): string[] {
         token.info.trim().split(/\s+/)[0] === 'mermaid'
     )
     .map(token => token.content)
+}
+
+function markdownSignature(tokens: Token[]): unknown[] {
+  return tokens.map(token => ({
+    type: token.type,
+    tag: token.tag,
+    info: token.info,
+    attrs: [...(token.attrs ?? [])].sort(([a], [b]) => a.localeCompare(b)),
+    content: token.children ? undefined : token.content,
+    children: token.children ? markdownSignature(token.children) : undefined
+  }))
+}
+
+/** Compare parsed content so visual-editor normalization cannot hide unsupported syntax loss. */
+export function sameMarkdownContent(before: string, after: string): boolean {
+  return (
+    JSON.stringify(markdownSignature(imageParser.parse(before, {}))) ===
+    JSON.stringify(markdownSignature(imageParser.parse(after, {})))
+  )
+}
+
+export function hasMarkdownImages(source: string): boolean {
+  return imageParser
+    .parse(source, {})
+    .some(token =>
+      token.children?.some(
+        child =>
+          child.type === 'image' &&
+          !/^\/api\/notes\/assets\/[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(
+            String(child.attrGet('src') ?? '')
+          )
+      )
+    )
+}
+
+/** Remove editor placeholders without changing code blocks or inline HTML. */
+export function normalizeNoteEmptyParagraphs(source: string): string {
+  const lines = source.split('\n')
+  const tokens = md.parse(source, {})
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index]
+    const inline = tokens[index + 1]
+    if (
+      token?.type === 'paragraph_open' &&
+      token.level === 0 &&
+      token.map &&
+      inline?.type === 'inline' &&
+      /^<br\s*\/?\s*>$/i.test(inline.content.trim())
+    ) {
+      for (let line = token.map[0]; line < token.map[1]; line++) {
+        lines[line] = ''
+      }
+    }
+  }
+  return lines.join('\n')
 }

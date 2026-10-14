@@ -60,8 +60,9 @@ watch(
   () => store.sessions,
   sessions => {
     const target = closeTarget.value
-    if (!sessions.length || (target && !sessions.some(s => s.id === target)))
+    if (!sessions.length || (target && !sessions.some(s => s.id === target))) {
       closeDialog.value = false
+    }
   }
 )
 </script>
