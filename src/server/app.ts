@@ -69,6 +69,8 @@ export interface BuildAppOptions {
    * `--api-docs` flag turn it on. `/api/openapi.json` is always served.
    */
   apiDocs?: boolean
+  /** True when the server listens on loopback only. Notes then also require a loopback Host (DNS rebinding). */
+  loopbackBind?: boolean
   terminalEnabled?: boolean
   terminalRegistry?: TerminalRegistry
 }
@@ -119,7 +121,10 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     eventBus,
     db
   )
-  app.register(notesRoutes, { service: notes })
+  app.register(notesRoutes, {
+    service: notes,
+    loopbackBind: options.loopbackBind === true
+  })
   app.addHook('onClose', async () => {
     await notes.identity.close()
   })

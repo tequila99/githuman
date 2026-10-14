@@ -4,6 +4,7 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 import { isMap, isSeq, isScalar, parseDocument } from 'yaml'
 import { splitNote } from './document.ts'
 import { noteLink } from './links.ts'
+import { safeDecodeURIComponent } from '../utils/safe-decode.ts'
 
 export interface NoteReference {
   href: string
@@ -193,7 +194,7 @@ export function rewriteReferences(
       replacement =
         '[[' +
         change.target.replace(/\.md$/i, '') +
-        (change.anchor ? '#' + decodeURIComponent(change.anchor) : '') +
+        (change.anchor ? '#' + safeDecodeURIComponent(change.anchor) : '') +
         (alias ? '|' + alias : '') +
         ']]'
     }

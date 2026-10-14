@@ -1,14 +1,23 @@
 import { headingSlug } from '../../shared/utils/heading-slug.ts'
 import MarkdownIt, { type Env, type Token } from 'markdown-it'
+import { NOTE_ASSET_ID_PATTERN } from '../../shared/notes/asset-formats.ts'
+
+// Same-origin note attachment URL. The server and the renderer share one
+// identifier pattern, so a new asset format cannot be accepted by only one side.
+const NOTE_ASSET_URL = new RegExp(
+  '^/api/notes/assets/' + NOTE_ASSET_ID_PATTERN.slice(1)
+)
 
 // Output goes into v-html, so this is the trust boundary: raw HTML in the
 // source is escaped (html: false), markdown-it's default link validation
 // rejects unsafe URLs. Only local note attachments can render as images.
+// This parser also renders agent messages, so image rendering there is limited
+// to the same attachments: no external image URL can load from message text.
 const md = new MarkdownIt({ html: false, linkify: false, breaks: false })
 const renderImage = md.renderer.rules.image!
 md.renderer.rules.image = (tokens, index, options, env, self) => {
   const source = String(tokens[index]?.attrGet('src') ?? '')
-  if (/^\/api\/notes\/assets\/[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(source)) {
+  if (NOTE_ASSET_URL.test(source)) {
     return renderImage(tokens, index, options, env, self)
   }
   return md.utils.escapeHtml(tokens[index]?.content ?? '')
@@ -138,9 +147,7 @@ export function hasMarkdownImages(source: string): boolean {
       token.children?.some(
         child =>
           child.type === 'image' &&
-          !/^\/api\/notes\/assets\/[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(
-            String(child.attrGet('src') ?? '')
-          )
+          !NOTE_ASSET_URL.test(String(child.attrGet('src') ?? ''))
       )
     )
 }

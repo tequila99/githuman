@@ -25,6 +25,7 @@ import type {
 import { BadRequestError, NotFoundError } from '../errors/http.ts'
 import { NoteConflictError, NoteExistsError } from '../errors/notes.ts'
 import { sha256Hex } from '../utils/hash.ts'
+import { safeDecodeURIComponent } from '../../shared/utils/safe-decode.ts'
 
 // A second complete scan confirms absence, instead of treating an atomic save as deletion.
 const ABSENCE_GRACE_MS = 2500
@@ -71,6 +72,8 @@ export class NotesIdentityService {
     }
   >()
   private readonly absentSince = new Map<string, number>()
+  // Signature of each file that failed to read, so a poll does not read it again.
+  private readonly unreadable = new Map<string, string>()
   private closed = false
   readonly files: NotesRepository
   constructor(files: NotesRepository, db: DatabaseSync) {
@@ -160,7 +163,25 @@ export class NotesIdentityService {
       let references: NoteReference[] | undefined
       let cached = this.cache.get(entry.path)
       if (!cached || cached.signature !== entry.signature) {
-        const note = await this.files.read(entry.path)
+        if (this.unreadable.get(entry.path) === entry.signature) continue
+        let note: Note
+        try {
+          note = await this.files.read(entry.path)
+        } catch (error) {
+          // One bad file must not stop the synchronization of other notes.
+          if (!(error instanceof BadRequestError)) throw error
+          this.unreadable.set(entry.path, entry.signature)
+          this.issue(
+            'unreadable:' + entry.path,
+            'Skipped ' + entry.path + ': ' + error.message,
+            null,
+            null,
+            'metadata'
+          )
+          continue
+        }
+        this.unreadable.delete(entry.path)
+        this.catalog.dismiss('unreadable:' + entry.path)
         cached = {
           signature: entry.signature,
           note: { version: note.version },
@@ -177,6 +198,12 @@ export class NotesIdentityService {
         identityWarning: cached.identity.warning,
         ...(references ? { references } : {})
       })
+    }
+    const entryPaths = new Set(entries.map(entry => entry.path))
+    for (const path of this.unreadable.keys()) {
+      if (entryPaths.has(path)) continue
+      this.unreadable.delete(path)
+      this.catalog.dismiss('unreadable:' + path)
     }
     const records = this.catalog.all()
     const byId = new Map(records.map(record => [record.id, record]))
@@ -333,7 +360,10 @@ export class NotesIdentityService {
     for (const path of this.cache.keys()) {
       if (!livePaths.has(path)) this.cache.delete(path)
     }
-    return entries
+    // Unreadable files stay visible through their issue, not as openable entries.
+    return entries.filter(
+      entry => this.unreadable.get(entry.path) !== entry.signature
+    )
   }
   private indexLinks(id: string, text: string, snapshot?: CatalogNote[]) {
     this.indexReferences(id, noteReferences(text), snapshot)
@@ -850,7 +880,7 @@ export class NotesIdentityService {
           'This link is missing or ambiguous. Edit its destination to choose a note.'
         )
       }
-      return { id: [...targets][0], anchor: decodeURIComponent(anchor) }
+      return { id: [...targets][0], anchor: safeDecodeURIComponent(anchor) }
     })
   }
   graph() {

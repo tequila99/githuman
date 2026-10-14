@@ -576,3 +576,73 @@ test('identity, graph, resolution and mutation responses retain every contract f
     version: record.version
   })
 })
+
+test('notes work below a symlinked root and skip unreadable files', async t => {
+  const project = await mkdtemp(join(tmpdir(), 'notes-link-root-'))
+  t.after(() => rm(project, { recursive: true, force: true }))
+  const real = join(project, 'real')
+  await mkdir(join(real, 'node_modules'), { recursive: true })
+  await writeFile(join(real, 'node_modules', 'dep.md'), '# dep')
+  await writeFile(join(real, 'good.md'), '# good')
+  await writeFile(join(real, 'big.md'), 'x'.repeat(1_000_001))
+  await writeFile(join(real, 'binary.md'), Buffer.from([0xff, 0xfe, 0xfd]))
+  await symlink(real, join(project, 'linked'))
+  const app = buildApp({ projectPath: project, notesDir: 'linked' })
+  t.after(() => app.close())
+  const response = await app.inject('/api/notes')
+  assert.equal(response.statusCode, 200, response.body)
+  const index = response.json<NotesIndex>()
+  assert.deepEqual(
+    index.entries.map(entry => entry.path),
+    ['good.md']
+  )
+  assert.deepEqual(index.issues?.map(issue => issue.id).sort(), [
+    'unreadable:big.md',
+    'unreadable:binary.md'
+  ])
+  const saved = await app.inject({
+    method: 'POST',
+    url: '/api/notes/document',
+    payload: { path: 'created.md', text: '# created' }
+  })
+  assert.equal(saved.statusCode, 201, saved.body)
+})
+
+test('loopback binds reject rebound hosts, other binds accept any matching origin', async t => {
+  const project = await mkdtemp(join(tmpdir(), 'notes-rebind-'))
+  t.after(() => rm(project, { recursive: true, force: true }))
+  const local = buildApp({ projectPath: project, loopbackBind: true })
+  t.after(() => local.close())
+  const lan = buildApp({ projectPath: project })
+  t.after(() => lan.close())
+  const rebound = {
+    host: 'evil.example:3847',
+    origin: 'http://evil.example:3847'
+  }
+  assert.equal(
+    (await local.inject({ url: '/api/notes', headers: rebound })).statusCode,
+    403
+  )
+  assert.equal(
+    (
+      await local.inject({
+        url: '/api/notes',
+        headers: { host: 'localhost:3847', origin: 'http://localhost:3847' }
+      })
+    ).statusCode,
+    200
+  )
+  assert.equal(
+    (await lan.inject({ url: '/api/notes', headers: rebound })).statusCode,
+    200
+  )
+  assert.equal(
+    (
+      await lan.inject({
+        url: '/api/notes',
+        headers: { host: 'a:1', origin: 'http://b:1' }
+      })
+    ).statusCode,
+    403
+  )
+})

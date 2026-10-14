@@ -26,31 +26,22 @@ import {
 } from '../../shared/notes/schemas.ts'
 import { ERROR_RESPONSES, NoContentSchema } from '../../shared/http/schemas.ts'
 import type { NotesService } from '../services/notes.service.ts'
-import { BadRequestError, ForbiddenError } from '../errors/http.ts'
+import { BadRequestError } from '../errors/http.ts'
+import { createNotesOriginHook } from '../hooks/notes/same-origin.ts'
 
 export async function notesRoutes(
   app: FastifyInstance,
-  { service }: { service: NotesService }
+  {
+    service,
+    loopbackBind = false
+  }: { service: NotesService; loopbackBind?: boolean }
 ) {
   await app.register(multipart, {
     attachFieldsToBody: true,
     limits: { fileSize: MAX_NOTE_ASSET_BYTES, files: 1, fields: 0, parts: 1 }
   })
   const typed = app.withTypeProvider<TypeBoxTypeProvider>()
-  app.addHook('onRequest', async request => {
-    const origin = request.headers.origin
-    if (origin) {
-      let matches = false
-      try {
-        matches = new URL(origin).host === request.headers.host
-      } catch {
-        /* Invalid origins are rejected below. */
-      }
-      if (!matches) {
-        throw new ForbiddenError('Notes require the same origin as this server')
-      }
-    }
-  })
+  app.addHook('onRequest', createNotesOriginHook({ loopbackBind }))
   app.post<{ Body: { file: MultipartFile } }>(
     '/api/notes/assets',
     {

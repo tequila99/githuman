@@ -91,26 +91,6 @@ export function applyMigrations(db: DatabaseSync): void {
       ON review_files(review_id);
   `)
 
-  const issueColumns = db.prepare('PRAGMA table_info(note_issues)').all() as {
-    name: string
-  }[]
-  if (!issueColumns.some(column => column.name === 'note_id')) {
-    db.exec(`
-      SAVEPOINT notes_issues_migration;
-      ALTER TABLE note_issues RENAME TO note_issues_legacy;
-      CREATE TABLE note_issues (
-        storage_id TEXT NOT NULL REFERENCES note_storages(id), id TEXT NOT NULL,
-        note_id TEXT, candidate_id TEXT, data TEXT NOT NULL,
-        PRIMARY KEY(storage_id,id),
-        FOREIGN KEY(storage_id,note_id) REFERENCES note_catalog(storage_id,id),
-        FOREIGN KEY(storage_id,candidate_id) REFERENCES note_catalog(storage_id,id)
-      );
-      INSERT INTO note_issues SELECT storage_id,id,json_extract(data,'$.noteId'),json_extract(data,'$.candidateId'),data FROM note_issues_legacy;
-      DROP TABLE note_issues_legacy;
-      RELEASE notes_issues_migration;
-    `)
-  }
-
   const commentColumns = db
     .prepare('PRAGMA table_info(comments)')
     .all() as Array<{ name: string }>

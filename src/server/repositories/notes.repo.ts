@@ -49,10 +49,10 @@ export class NotesRepository {
     if (!target.startsWith(this.root + sep)) {
       throw new BadRequestError('Path leaves the notes folder')
     }
-    // Reject links in every existing component, including the configured root.
-    let current = resolve(this.root).split(sep)[0] || sep
+    // Reject links inside the notes folder. The configured root and its parents may be links.
+    let current = this.root
     for (const part of target
-      .slice(current.length)
+      .slice(this.root.length)
       .split(sep)
       .filter(Boolean)) {
       current = join(current, part)
@@ -82,10 +82,15 @@ export class NotesRepository {
         if (bytes.byteLength > MAX_BYTES) {
           throw new BadRequestError('Note exceeds 1 MB')
         }
-        const text = new TextDecoder('utf-8', {
-          fatal: true,
-          ignoreBOM: true
-        }).decode(bytes)
+        let text: string
+        try {
+          text = new TextDecoder('utf-8', {
+            fatal: true,
+            ignoreBOM: true
+          }).decode(bytes)
+        } catch {
+          throw new BadRequestError('Note is not valid UTF-8')
+        }
         return { path, text, version: sha256Hex(text) }
       } finally {
         await file.close()
@@ -108,6 +113,7 @@ export class NotesRepository {
         entry =>
           !entry.name.startsWith('.') &&
           !entry.isSymbolicLink() &&
+          entry.name !== 'node_modules' &&
           (prefix || entry.name !== 'assets')
       )
       for (const entry of entries.filter(item => item.isDirectory())) {
@@ -177,7 +183,9 @@ export class NotesRepository {
         await mkdir(backups, { recursive: true })
         if (
           (await lstat(backups)).isSymbolicLink() ||
-          !(await realpath(backups)).startsWith(this.root + sep)
+          !(await realpath(backups)).startsWith(
+            (await realpath(this.root)) + sep
+          )
         ) {
           throw new BadRequestError('Invalid backup folder')
         }
@@ -227,7 +235,7 @@ export class NotesRepository {
     bytes: Buffer,
     extension: NoteAssetExtension
   ): Promise<string> {
-    const id = sha256Hex(bytes.toString('base64')) + '.' + extension
+    const id = sha256Hex(bytes) + '.' + extension
     const target = await this.path('assets/' + id, false)
     await mkdir(dirname(target), { recursive: true })
     await this.path('assets/' + id, false)
