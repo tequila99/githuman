@@ -60,8 +60,9 @@ watch(
     resetting = false
     measure()
     await nextTick()
-    if (active && version === resetVersion)
+    if (active && version === resetVersion) {
       syncScroll(viewport.value, bar.value)
+    }
   }
 )
 

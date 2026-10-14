@@ -85,6 +85,8 @@ export default defineConfig({
     // `.toSorted()` isn't usable as the replacement: this toolchain's
     // type-aware checker doesn't see the ES2023 lib target it needs.
     'unicorn/no-array-sort': 'off',
+    // Multiline control-flow bodies require braces; single-line guards stay concise.
+    curly: ['error', 'multi-line'],
     // An if with an else gets braces on every branch (lint-rules/).
     'local/curly-if-else': 'error',
     // Module-level UPPER_SNAKE constants precede functions and runtime calls (lint-rules/).

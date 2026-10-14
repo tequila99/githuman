@@ -74,14 +74,15 @@ test(
         socket.on('message', data => {
           assert.ok(Buffer.isBuffer(data))
           const message = JSON.parse(data.toString('utf8'))
-          if (message.type === 'created')
+          if (message.type === 'created') {
             socket.send(
               JSON.stringify({
                 type: 'subscribe',
                 terminalId: message.terminalId
               })
             )
-          if (message.type === 'snapshot')
+          }
+          if (message.type === 'snapshot') {
             socket.send(
               JSON.stringify({
                 type: 'input',
@@ -89,6 +90,7 @@ test(
                 data: 'printf "SHELL_PID=%s\\n" $$; /usr/bin/sleep 60 & printf "CHILD_PID=%s\\n" $!; wait\r'
               })
             )
+          }
           if (message.type === 'output') {
             output += message.data
             socket.send(
@@ -100,11 +102,12 @@ test(
             )
             const match = /SHELL_PID=(\d+)/.exec(output)
             const childMatch = /CHILD_PID=(\d+)/.exec(output)
-            if (match && childMatch)
+            if (match && childMatch) {
               resolvePid({
                 shell: Number(match[1]),
                 child: Number(childMatch[1])
               })
+            }
           }
         })
       }

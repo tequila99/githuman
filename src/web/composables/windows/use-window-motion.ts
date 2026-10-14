@@ -75,8 +75,9 @@ export function useWindowMotion(
         isReduced() ||
         !anchor ||
         (!visible && !wasVisible)
-      )
+      ) {
         return
+      }
       const original = target.value
       const initialRect =
         wasVisible && original

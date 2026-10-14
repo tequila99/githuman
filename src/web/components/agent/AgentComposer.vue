@@ -99,8 +99,13 @@ useEventListener(
     store.panelOpen = true
     voiceShortcutHeld.value = true
     await nextTick()
-    if (!voiceShortcutHeld.value || !props.active || status.value === 'closed')
+    if (
+      !voiceShortcutHeld.value ||
+      !props.active ||
+      status.value === 'closed'
+    ) {
       return
+    }
     if (!voice.value?.press()) {
       voiceShortcutHeld.value = false
       return

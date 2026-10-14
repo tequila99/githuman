@@ -14,6 +14,8 @@ interface PreviewScrollOptions {
   target: MaybeRefOrGetter<HTMLElement | null>
   tab: MaybeRefOrGetter<PreviewTab>
   remember: () => void
+  anchor?: MaybeRefOrGetter<string | undefined>
+  clearAnchor?: () => void
 }
 
 export function usePreviewScroll(options: PreviewScrollOptions) {
@@ -47,6 +49,20 @@ export function usePreviewScroll(options: PreviewScrollOptions) {
         const tab = toValue(options.tab)
         target.scrollLeft = tab.scroll.x
         target.scrollTop = tab.scroll.y
+        const anchor = toValue(options.anchor)
+        if (anchor) {
+          const heading = [
+            ...target.querySelectorAll<HTMLElement>('[id]')
+          ].find(element => element.id === anchor)
+          if (heading) {
+            target.scrollTop +=
+              heading.getBoundingClientRect().top -
+              target.getBoundingClientRect().top
+            tab.scroll.y = target.scrollTop
+            options.remember()
+          }
+          options.clearAnchor?.()
+        }
       }
       registerAnimationFrame(() => {
         restoring = false

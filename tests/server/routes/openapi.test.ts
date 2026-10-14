@@ -9,6 +9,32 @@ interface Operation {
   responses: Record<string, { description?: string; content?: unknown }>
 }
 
+test('image uploads advertise a required binary file in multipart/form-data', async t => {
+  const { spec } = await setup(t)
+  const operation = spec.paths['/api/notes/assets']?.post
+  assert.deepEqual(operation?.requestBody, {
+    description: 'Multipart image attachment upload.',
+    required: true,
+    content: {
+      'multipart/form-data': {
+        schema: {
+          type: 'object',
+          properties: {
+            file: {
+              type: 'string',
+              format: 'binary',
+              description: 'Raster image file, at most 10 MB.'
+            }
+          },
+          required: ['file'],
+          additionalProperties: false,
+          description: 'Multipart image attachment upload.'
+        }
+      }
+    }
+  })
+})
+
 /** Builds the app and records each route that the spec must show. */
 async function setup(t: TestContext, options: BuildAppOptions = {}) {
   const routes: { method: string; url: string }[] = []

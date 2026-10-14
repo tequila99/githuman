@@ -11,7 +11,8 @@ export function localPreviewKind(
   if (
     file.type.startsWith('image/') ||
     /\.(png|jpe?g|gif|webp|svg|bmp|avif|ico)$/i.test(file.name)
-  )
+  ) {
     return 'image'
+  }
   return null
 }

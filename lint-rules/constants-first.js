@@ -78,8 +78,9 @@ const constantsFirst = {
             continue
           }
           if (declaration.type !== 'VariableDeclaration') {
-            if (containsCall(declaration, visitorKeys))
+            if (containsCall(declaration, visitorKeys)) {
               seenInitialization = true
+            }
             continue
           }
           for (const declarator of declaration.declarations) {

@@ -30,8 +30,9 @@ export function useMermaidBlocks(
         !root ||
         (!markup.includes('language-mermaid') &&
           !root.querySelector('.agent-mermaid'))
-      )
+      ) {
         return
+      }
       registerTimeout(() => {
         void enhanceMermaidBlocks(
           root,

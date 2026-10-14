@@ -69,8 +69,9 @@ test('visible jobs go first, and a job can become visible later', () => {
 
 test('many visible jobs stay inside the visible budget of a frame', () => {
   const ran: number[] = []
-  for (let i = 0; i < 8; i++)
+  for (let i = 0; i < 8; i++) {
     queueMount(VISIBLE_ROW_BUDGET / 4, () => ran.push(i), true)
+  }
 
   frame()
   assert.deepEqual(ran, [0, 1, 2, 3])

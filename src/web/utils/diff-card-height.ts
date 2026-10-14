@@ -22,11 +22,12 @@ export function commentHeightEstimate(
   comments: readonly Comment[],
   mode: 'diff' | 'full'
 ): number {
-  if (mode === 'full')
+  if (mode === 'full') {
     return (
       commentsByLine(comments.filter(c => c.lineType === null)).size *
       THREAD_HEIGHT_ESTIMATE
     )
+  }
   const threads = diffCommentThreads(comments.filter(c => c.lineType !== null))
   return (threads.old.size + threads.new.size) * THREAD_HEIGHT_ESTIMATE
 }

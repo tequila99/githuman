@@ -4,6 +4,8 @@ export interface ServeOptions {
   port: number
   host: string
   open: boolean
+  /** Alternate notes directory, resolved from the launch directory. */
+  notesDir?: string
   /** Optional so programmatic callers (tests, embedders) can omit it and get
    *  the same flag/env/default resolution `resolveReviewsDbPath` applies. */
   dbPrefix?: string
@@ -73,6 +75,7 @@ export function parseServeArgs(argv: string[]): ServeOptions {
       host: { type: 'string' },
       open: { type: 'boolean', default: true },
       'no-open': { type: 'boolean', default: false },
+      'notes-dir': { type: 'string' },
       'db-prefix': { type: 'string' },
       'api-docs': { type: 'boolean', default: false }
     },
@@ -92,5 +95,16 @@ export function parseServeArgs(argv: string[]): ServeOptions {
 
   const apiDocs = values['api-docs'] === true
 
-  return { port, host, open, dbPrefix, apiDocs }
+  return {
+    port,
+    host,
+    open,
+    dbPrefix,
+    apiDocs,
+    ...(typeof values['notes-dir'] === 'string'
+      ? { notesDir: values['notes-dir'] }
+      : process.env.GITHUMAN_NOTES_DIR
+        ? { notesDir: process.env.GITHUMAN_NOTES_DIR }
+        : {})
+  }
 }

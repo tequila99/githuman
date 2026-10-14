@@ -70,7 +70,9 @@ function notifyBusy(): false {
 defineExpose({ press, release: speech.release })
 
 function onPointerdown(event: PointerEvent): void {
-  if (event.button !== 0) return
+  if (event.button !== 0) {
+    return
+  }
   // Capture keeps the `pointerup` even when the pointer leaves the button.
   ;(event.currentTarget as Element | null)?.setPointerCapture(event.pointerId)
   press()
@@ -82,8 +84,9 @@ function onKeydown(event: KeyboardEvent): void {
     event.ctrlKey ||
     event.metaKey ||
     event.altKey
-  )
+  ) {
     return
+  }
   keyHeld = true
   if (!event.repeat) press()
 }

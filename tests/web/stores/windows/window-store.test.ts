@@ -46,8 +46,9 @@ test('invalid preferences and unavailable storage do not block windows', () => {
   const store = useWindowStore()
   assert.doesNotThrow(() => store.focus('preview'))
   assert.equal(store.dock.edge, 'bottom')
-  for (const id of ['', '__proto__', 'constructor', 'prototype'])
+  for (const id of ['', '__proto__', 'constructor', 'prototype']) {
     assert.throws(() => store.ensure(id), /Invalid window id/)
+  }
 })
 
 test('default positions belong to individual windows', () => {

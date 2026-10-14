@@ -126,8 +126,9 @@ export class TerminalSession {
         end < data.length &&
         data.charCodeAt(end - 1) >= HIGH_SURROGATE_FIRST &&
         data.charCodeAt(end - 1) <= HIGH_SURROGATE_LAST
-      )
+      ) {
         end--
+      }
       const part = data.slice(offset, end)
       offset = end
       const bytes = Buffer.byteLength(part)
@@ -157,8 +158,9 @@ export class TerminalSession {
         .catch(() => this.onExit())
         .finally(() => {
           this.pendingBytes -= bytes
-          if (!this.stopped && this.pendingBytes < QUEUE_RESUME_BYTES)
+          if (!this.stopped && this.pendingBytes < QUEUE_RESUME_BYTES) {
             this.updateFlow()
+          }
         })
     }
   }
@@ -194,8 +196,9 @@ export class TerminalSession {
         scrollback = Math.floor(scrollback / 2)
         data = this.serializer.serialize({ scrollback }) + this.tail.tail
       }
-      if (Buffer.byteLength(data) > TERMINAL_SNAPSHOT_BYTES)
+      if (Buffer.byteLength(data) > TERMINAL_SNAPSHOT_BYTES) {
         throw new TerminalError('Terminal snapshot exceeds its limit.')
+      }
       send({
         type: 'snapshot',
         terminalId: this.id,
@@ -214,8 +217,9 @@ export class TerminalSession {
     if (!this.stopped) this.backend.write(data)
   }
   line(data: string): void {
-    if (this.backend.mode !== 'pipe')
+    if (this.backend.mode !== 'pipe') {
       throw new TerminalError('Line input requires limited mode.')
+    }
     this.output(data.replace(/\n/g, '\r\n') + '\r\n')
     this.backend.write(data + '\n')
   }
@@ -230,8 +234,9 @@ export class TerminalSession {
     this.flush()
     this.queue = this.queue
       .then(() => {
-        if (this.stopped || (cols === this.cols && rows === this.rows))
+        if (this.stopped || (cols === this.cols && rows === this.rows)) {
           return undefined
+        }
         this.backend.resize(cols, rows)
         this.terminal.resize(cols, rows)
         this.cols = cols

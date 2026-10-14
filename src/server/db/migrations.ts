@@ -2,6 +2,61 @@ import type { DatabaseSync } from 'node:sqlite'
 
 export function applyMigrations(db: DatabaseSync): void {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS note_storages (
+      id TEXT PRIMARY KEY,
+      root TEXT NOT NULL UNIQUE
+    );
+    CREATE TABLE IF NOT EXISTS note_catalog (
+      storage_id TEXT NOT NULL REFERENCES note_storages(id),
+      id TEXT NOT NULL,
+      path TEXT NOT NULL,
+      presence TEXT NOT NULL,
+      version TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      path_changed_at TEXT NOT NULL,
+      redirect_id TEXT,
+      PRIMARY KEY(storage_id, id)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS note_current_path ON note_catalog(storage_id, path) WHERE presence = 'present' AND redirect_id IS NULL;
+    CREATE TABLE IF NOT EXISTS note_path_history (
+      storage_id TEXT NOT NULL,
+      note_id TEXT NOT NULL,
+      old_path TEXT NOT NULL,
+      new_path TEXT NOT NULL,
+      changed_at TEXT NOT NULL,
+      operation_id TEXT NOT NULL,
+      FOREIGN KEY(storage_id, note_id) REFERENCES note_catalog(storage_id, id)
+    );
+    CREATE TABLE IF NOT EXISTS note_links (
+      storage_id TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      ordinal INTEGER NOT NULL,
+      target_id TEXT,
+      data TEXT NOT NULL,
+      FOREIGN KEY(storage_id, source_id) REFERENCES note_catalog(storage_id, id),
+      FOREIGN KEY(storage_id, target_id) REFERENCES note_catalog(storage_id, id),
+      PRIMARY KEY(storage_id, source_id, ordinal)
+    );
+    CREATE INDEX IF NOT EXISTS note_link_target ON note_links(storage_id, target_id);
+    CREATE TABLE IF NOT EXISTS note_issues (
+      storage_id TEXT NOT NULL REFERENCES note_storages(id),
+      id TEXT NOT NULL,
+      note_id TEXT,
+      candidate_id TEXT,
+      data TEXT NOT NULL,
+      PRIMARY KEY(storage_id, id),
+      FOREIGN KEY(storage_id,note_id) REFERENCES note_catalog(storage_id,id),
+      FOREIGN KEY(storage_id,candidate_id) REFERENCES note_catalog(storage_id,id)
+    );
+    CREATE TABLE IF NOT EXISTS note_issue_decisions (storage_id TEXT NOT NULL REFERENCES note_storages(id), id TEXT NOT NULL, PRIMARY KEY(storage_id,id));
+    CREATE TABLE IF NOT EXISTS note_operations (
+      storage_id TEXT NOT NULL REFERENCES note_storages(id),
+      id TEXT NOT NULL,
+      data TEXT NOT NULL,
+      PRIMARY KEY(storage_id, id)
+    );
+
     CREATE TABLE IF NOT EXISTS reviews (
       id TEXT PRIMARY KEY,
       repository_path TEXT NOT NULL,

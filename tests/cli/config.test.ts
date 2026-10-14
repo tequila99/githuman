@@ -110,3 +110,18 @@ test('parseServeArgs throws on non-numeric port', () => {
 test('parseServeArgs throws on out-of-range port', () => {
   assert.throws(() => parseServeArgs(['--port', '70000']), /port/i)
 })
+
+test('notes directory flag overrides environment and remains relative until server startup', () => {
+  const previous = process.env.GITHUMAN_NOTES_DIR
+  process.env.GITHUMAN_NOTES_DIR = 'from-env'
+  try {
+    assert.equal(parseServeArgs([]).notesDir, 'from-env')
+    assert.equal(parseServeArgs(['--notes-dir', './notes']).notesDir, './notes')
+  } finally {
+    if (previous === undefined) {
+      delete process.env.GITHUMAN_NOTES_DIR
+    } else {
+      process.env.GITHUMAN_NOTES_DIR = previous
+    }
+  }
+})

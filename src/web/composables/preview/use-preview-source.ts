@@ -40,8 +40,9 @@ export function usePreviewSource(
         toValue(visible) &&
         (entry.value.stale || !entry.value.loaded) &&
         (!entry.value.loading || entry.value.stale)
-      )
+      ) {
         void preview.load(toValue(tab).id)
+      }
     },
     { immediate: true }
   )

@@ -16,6 +16,7 @@ test('terminal protocol accepts input and rejects shell configuration and dimens
     { type: 'resize', terminalId: 'session', cols: 301, rows: 24 },
     { type: 'create', requestId: '1', cols: 0, rows: 24 },
     { type: 'input', terminalId: 'session', data: 'x'.repeat(65537) }
-  ])
+  ]) {
     assert.equal(Value.Check(TerminalClientMessageSchema, message), false)
+  }
 })

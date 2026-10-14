@@ -1,6 +1,7 @@
+import { isMissingPathError } from '../utils/system-error.ts'
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
-import { readFile } from 'node:fs/promises'
+import { readFile, realpath } from 'node:fs/promises'
 import { basename, posix, resolve, sep } from 'node:path'
 import { simpleGit } from 'simple-git'
 import type { DiffFileStatus } from '../../shared/diff/types.ts'
@@ -67,16 +68,6 @@ function objectSpecFor(ref: string, path: string): string {
   return ref === 'INDEX' ? `:${path}` : `${ref}:${path}`
 }
 
-/** `ENOENT` and `ENOTDIR` both mean that the file does not exist. */
-function isMissingPathError(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    'code' in error &&
-    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
-  )
-}
-
 /**
  * Checks one path with `ls-tree` instead of listing the whole tree. A failing
  * `ls-tree` means the ref is invalid, so the path is reported as present and
@@ -119,15 +110,24 @@ export async function getFileAtRef(
   if (ref === 'WORKTREE') {
     try {
       const absolutePath = resolveWithinRepo(repoPath, path)
-      const buffer = await readFile(absolutePath)
+      let target = absolutePath
+      if (strict) {
+        const [root, file] = await Promise.all([
+          realpath(repoPath),
+          realpath(absolutePath)
+        ])
+        target = resolveWithinRepo(root, file)
+      }
+      const buffer = await readFile(target)
       const isBinary = isBinaryBuffer(buffer)
       return { content: isBinary ? '' : buffer.toString('utf-8'), isBinary }
     } catch (error) {
       if (strict) {
-        if (isMissingPathError(error))
+        if (isMissingPathError(error)) {
           throw new GitFileNotFoundError('File was deleted or moved', {
             cause: error
           })
+        }
         throw error
       }
       return { content: '', isBinary: false }
@@ -151,10 +151,11 @@ export async function getFileAtRef(
     }
   } catch (error) {
     if (strict) {
-      if (!(await pathExistsAtRef(repoPath, ref, path)))
+      if (!(await pathExistsAtRef(repoPath, ref, path))) {
         throw new GitFileNotFoundError('File was deleted or moved', {
           cause: error
         })
+      }
       throw error
     }
     return { content: '', isBinary: false }

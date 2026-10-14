@@ -94,9 +94,12 @@ export async function startServer(
   const app = buildApp({
     staticRoot: resolveStaticRoot(),
     repositoryPath,
+    projectPath: process.cwd(),
+    notesDir: options.notesDir,
     db,
     watchFiles: true,
     apiDocs: options.apiDocs === true,
+    loopbackBind: isLoopbackHost(options.host),
     terminalEnabled: isLoopbackHost(options.host),
     // Agents can run commands, so they are only offered on a loopback bind.
     ...(isLoopbackHost(options.host)

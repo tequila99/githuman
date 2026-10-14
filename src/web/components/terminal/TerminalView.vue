@@ -126,8 +126,11 @@ function resize(): void {
   const rows = between(dimensions.rows, TERMINAL_MIN_ROWS, TERMINAL_MAX_ROWS)
   const key = `${cols}:${rows}`
   if (lastSize === key) return
-  if (store.send({ type: 'resize', terminalId: props.session.id, cols, rows }))
+  if (
+    store.send({ type: 'resize', terminalId: props.session.id, cols, rows })
+  ) {
     lastSize = key
+  }
 }
 
 // A tab that becomes visible changes its size from zero, so this also fits a newly active tab.
@@ -152,8 +155,9 @@ onMounted(async () => {
   ignoreTerminalQueries(terminal)
   terminal.open(host.value)
   terminal.onData(data => {
-    if (store.state === 'connected')
+    if (store.state === 'connected') {
       store.send({ type: 'input', terminalId: props.session.id, data })
+    }
   })
   if (!document.hidden) attachOutput()
   await document.fonts.ready

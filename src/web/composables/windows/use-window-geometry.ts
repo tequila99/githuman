@@ -87,8 +87,9 @@ export function useWindowGeometry(
       state.maximized ||
       event.button !== 0 ||
       !(event.currentTarget instanceof Element)
-    )
+    ) {
       return
+    }
     event.preventDefault()
     store.focus(id)
     event.currentTarget.setPointerCapture(event.pointerId)

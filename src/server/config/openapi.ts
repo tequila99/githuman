@@ -20,6 +20,10 @@ export function openApiOptions(): SwaggerOptions {
         { name: 'git', description: 'Repository facts, files and index.' },
         { name: 'reviews', description: 'Reviews and their export.' },
         { name: 'comments', description: 'Comments of reviews.' },
+        {
+          name: 'notes',
+          description: 'Project Markdown notes, folders and conditional saves.'
+        },
         { name: 'events', description: 'Server-sent change events.' },
         { name: 'app', description: 'Server version and health.' },
         {

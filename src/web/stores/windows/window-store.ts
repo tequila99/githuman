@@ -36,8 +36,9 @@ function parseWindow(value: unknown): WindowState | null {
     !isRecord(value.position) ||
     !isFiniteNumber(value.position.x) ||
     !isFiniteNumber(value.position.y)
-  )
+  ) {
     return null
+  }
   const size = value.windowSize
   return createWindowState({
     position: { x: value.position.x, y: value.position.y },
@@ -77,11 +78,12 @@ export const useWindowStore = defineStore('windows', () => {
           if (state) windows.value[id] = state
         }
       }
-      if (Array.isArray(saved.order))
+      if (Array.isArray(saved.order)) {
         order.value = saved.order.filter(
           (id): id is string =>
             typeof id === 'string' && Object.hasOwn(windows.value, id)
         )
+      }
       const panel = saved.dock
       if (isRecord(panel)) {
         const edge = DOCK_EDGES.find(candidate => candidate === panel.edge)
@@ -90,8 +92,9 @@ export const useWindowStore = defineStore('windows', () => {
           isRecord(panel.position) &&
           isFiniteNumber(panel.position.x) &&
           isFiniteNumber(panel.position.y)
-        )
+        ) {
           dock.value.position = { x: panel.position.x, y: panel.position.y }
+        }
       }
     }
   } catch {

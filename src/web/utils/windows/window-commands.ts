@@ -40,8 +40,9 @@ export function dispatchWindowCommand(
     return true
   }
   const id = target.activeId
-  if (!id)
+  if (!id) {
     return shortcut === 'Ctrl+Meta+ArrowUp' && target.restoreLastMinimized()
+  }
   switch (shortcut) {
     case 'Ctrl+Meta+ArrowLeft':
       target.toggleMode(id, 'left')
