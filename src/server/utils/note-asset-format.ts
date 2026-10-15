@@ -20,7 +20,7 @@ export async function detectNoteAssetFormat(bytes: Uint8Array) {
         candidate.aliases.some(alias => alias === detected.ext)
     )
   if (!format) {
-    throw new BadRequestError('Supported images: ' + SUPPORTED_NOTE_ASSETS)
+    throw new BadRequestError('Supported attachments: ' + SUPPORTED_NOTE_ASSETS)
   }
   return format
 }

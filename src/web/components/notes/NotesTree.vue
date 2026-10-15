@@ -2,6 +2,7 @@
 import { watch, nextTick, useTemplateRef, computed } from 'vue'
 import type { QTree } from 'quasar'
 import NoteContextMenu from './NoteContextMenu.vue'
+import { useNoteDragDrop } from '@/composables/notes/use-note-drag-drop'
 import { useNotesTree } from '@/composables/notes/use-notes-tree'
 import { useI18n } from 'vue-i18n'
 import { useAppTheme } from '@/composables/use-app-theme'
@@ -18,6 +19,7 @@ const emit = defineEmits<{
   rename: [path: string, folder: boolean]
 }>()
 const { t } = useI18n()
+const drag = useNoteDragDrop()
 const { isDark } = useAppTheme()
 const {
   query,
@@ -57,7 +59,14 @@ function select(path: string | null) {
 <template>
   <aside class="notes-tree q-pa-md column no-wrap">
     <div class="notes-tree-toolbar row items-center q-mb-sm">
-      <NotesRootButton @click="emit('folder', '')" />
+      <span
+        class="note-drop-zone"
+        :class="{ 'note-drop-active': drag.hovered.value === '' }"
+        @dragover="drag.over($event, '')"
+        @dragleave="drag.leave"
+        @drop="drag.drop($event, '')"
+        ><NotesRootButton @click="emit('folder', '')"
+      /></span>
       <q-space />
       <NewNoteButton @click="emit('create', false)" />
       <NewNoteFolderButton @click="emit('create', true)" />
@@ -86,7 +95,18 @@ function select(path: string | null) {
       @update:selected="select"
     >
       <template #default-header="{ node, expanded }">
-        <div class="notes-tree-header row items-center no-wrap q-gutter-x-xs">
+        <div
+          class="notes-tree-header row items-center no-wrap q-gutter-x-xs note-drop-zone"
+          :class="{
+            'note-drop-active': node.folder && drag.hovered.value === node.id
+          }"
+          :draggable="!node.folder"
+          @dragstart="drag.start($event, node.id)"
+          @dragend="drag.end"
+          @dragover="node.folder && drag.over($event, node.id)"
+          @dragleave="node.folder && drag.leave($event)"
+          @drop="node.folder && drag.drop($event, node.id)"
+        >
           <q-icon
             :name="
               node.folder
@@ -118,10 +138,9 @@ function select(path: string | null) {
 <style scoped>
 .notes-tree {
   font-family: var(--font-agent);
-  flex-shrink: 0;
+  flex: 1;
   min-height: 0;
-  width: 280px;
-  min-width: 220px;
+  min-width: 0;
   border-right: 1px solid rgba(128, 128, 128, 0.25);
 }
 .notes-tree-list {
@@ -146,13 +165,5 @@ function select(path: string | null) {
 .notes-tree :deep(.q-tree__node-header:focus-visible) {
   outline: 2px solid var(--q-primary);
   outline-offset: -2px;
-}
-@media (max-width: 700px) {
-  .notes-tree {
-    width: 100%;
-    height: 35vh;
-    max-height: 35vh;
-    border-bottom: 1px solid rgba(128, 128, 128, 0.25);
-  }
 }
 </style>

@@ -289,3 +289,143 @@ test('external folder rename with unique YAML IDs repairs links together', async
     '[B](B.md)'
   )
 })
+
+test('deletion renames the file with a UUID suffix, keeps its bytes and stays hidden across scans and service restart', async t => {
+  const { service, root, db } = await setup(t)
+  const note = await service.save(
+    'folder/hidden.md',
+    '---\ntags: [hidden]\n---\n# Keep me'
+  )
+  assert.ok(note.id)
+  assert.ok(note.storageId)
+  const source = await service.save('source.md', '[hidden](folder/hidden.md)')
+  const bytes = await readFile(join(root, note.path))
+  await service.delete(note.id, note.storageId)
+  await service.delete(note.id, note.storageId)
+  const deletedPath = service.identity.catalog.get(note.id)?.path ?? ''
+  assert.match(deletedPath, /^folder\/hidden_deleted_[0-9a-f-]{36}\.md$/)
+  assert.deepEqual(await readFile(join(root, deletedPath)), bytes)
+  assert.equal(await service.identity.files.exists(note.path), false)
+  for (let i = 0; i < 3; i++) {
+    const index = await service.index()
+    assert.ok(!index.entries.some(entry => entry.path === deletedPath))
+    assert.ok(!index.issues?.some(issue => issue.noteId === note.id))
+  }
+  assert.equal(
+    (await service.identity.descriptor(note.id, note.storageId)).note.presence,
+    'deleted'
+  )
+  await assert.rejects(service.read(note.path), { statusCode: 404 })
+  await assert.rejects(service.identity.readId(note.id, note.storageId), {
+    statusCode: 404
+  })
+  await assert.rejects(
+    service.save(note.path, 'Overwrite', note.version, note.id, note.storageId),
+    { statusCode: 404 }
+  )
+  const replacement = await service.save(note.path, 'Replacement')
+  assert.notEqual(replacement.id, note.id)
+  const graph = await service.identity.graph()
+  assert.ok(!graph.nodes.some(node => node.id === note.id))
+  assert.ok(!graph.edges.some(edge => edge.targetId === note.id))
+  assert.ok(source.id)
+  const resolution = await service.identity.resolve(
+    source.id,
+    note.storageId,
+    source.text,
+    'folder/hidden.md'
+  )
+  assert.equal(resolution.id, note.id)
+  await service.identity.close()
+  const restarted = new NotesService(root, root, false, createEventBus(), db)
+  t.after(() => restarted.identity.close())
+  assert.ok(
+    !(await restarted.index()).entries.some(entry => entry.id === note.id)
+  )
+  await rename(join(root, deletedPath), join(root, 'moved-hidden.md'))
+  assert.ok(
+    !(await restarted.index()).entries.some(
+      entry => entry.path === 'moved-hidden.md'
+    )
+  )
+  assert.equal(
+    restarted.identity.catalog.get(note.id)?.deletedAt !== null,
+    true
+  )
+})
+
+test('soft deletion of imported Markdown without YAML does not register a new visible identity', async t => {
+  const { service, root } = await setup(t)
+  await writeFile(join(root, 'plain.md'), '# Plain')
+  const note = await service.read('plain.md')
+  assert.ok(note.id)
+  assert.ok(note.storageId)
+  await assert.rejects(service.delete(note.id, 'wrong-storage'), {
+    statusCode: 400
+  })
+  await service.delete(note.id, note.storageId)
+  const deletedPath = service.identity.catalog.get(note.id)?.path ?? ''
+  assert.match(deletedPath, /^plain_deleted_[0-9a-f-]{36}\.md$/)
+  assert.equal(await readFile(join(root, deletedPath), 'utf8'), '# Plain')
+  assert.deepEqual((await service.index()).entries, [])
+  await writeFile(join(root, deletedPath), '# External edit')
+  assert.deepEqual((await service.index()).entries, [])
+  await rm(join(root, deletedPath))
+  const now = Date.now()
+  const clock = mock.method(Date, 'now', () => now)
+  await service.index()
+  clock.mock.restore()
+  const later = mock.method(Date, 'now', () => now + 3000)
+  await service.index()
+  later.mock.restore()
+  await writeFile(join(root, deletedPath), '# Returned')
+  assert.deepEqual((await service.index()).entries, [])
+  assert.equal(service.identity.catalog.all().length, 1)
+  assert.equal(await readFile(join(root, deletedPath), 'utf8'), '# Returned')
+})
+
+test('folder moves retain the deletion marker for hidden children and free the original name', async t => {
+  const { service, root } = await setup(t)
+  const hidden = await service.save('folder/hidden.md', 'Keep')
+  await service.save('visible.md', 'Visible')
+  assert.ok(hidden.id)
+  assert.ok(hidden.storageId)
+  await service.delete(hidden.id, hidden.storageId)
+  await service.rename('folder', 'moved', true)
+  const record = service.identity.catalog.get(hidden.id)
+  assert.match(record?.path ?? '', /^moved\/hidden_deleted_[0-9a-f-]{36}\.md$/)
+  assert.ok(record?.deletedAt)
+  assert.ok(
+    (await readFile(join(root, record?.path ?? ''), 'utf8')).includes('Keep')
+  )
+  assert.ok(!(await service.index()).entries.some(e => e.id === hidden.id))
+  await service.rename('visible.md', 'hidden.md', false, 'moved/hidden.md')
+  assert.ok((await service.read('moved/hidden.md')).text.includes('Visible'))
+})
+
+test('deleting a missing note releases its path for a new note', async t => {
+  const { service, root } = await setup(t)
+  const note = await service.save('a.md', '# A')
+  assert.ok(note.id)
+  assert.ok(note.storageId)
+  await rm(join(root, 'a.md'))
+  const now = Date.now()
+  const first = mock.method(Date, 'now', () => now)
+  await service.index()
+  first.mock.restore()
+  const later = mock.method(Date, 'now', () => now + 3000)
+  await service.index()
+  later.mock.restore()
+  assert.equal(
+    (await service.identity.descriptor(note.id, note.storageId)).note.presence,
+    'missing'
+  )
+  await service.delete(note.id, note.storageId)
+  assert.match(
+    service.identity.catalog.get(note.id)?.path ?? '',
+    /^a_deleted_[0-9a-f-]{36}\.md$/
+  )
+  const created = await service.save('a.md', '# New')
+  assert.notEqual(created.id, note.id)
+  assert.equal((await service.read('a.md')).text.includes('# New'), true)
+})

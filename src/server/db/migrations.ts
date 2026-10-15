@@ -91,6 +91,13 @@ export function applyMigrations(db: DatabaseSync): void {
       ON review_files(review_id);
   `)
 
+  const noteColumns = db
+    .prepare('PRAGMA table_info(note_catalog)')
+    .all() as Array<{ name: string }>
+  if (!noteColumns.some(column => column.name === 'deleted_at')) {
+    db.exec('ALTER TABLE note_catalog ADD COLUMN deleted_at TEXT')
+  }
+
   const commentColumns = db
     .prepare('PRAGMA table_info(comments)')
     .all() as Array<{ name: string }>

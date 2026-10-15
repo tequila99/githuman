@@ -3,6 +3,49 @@
 
 export default {
   notes: {
+    externalAssets: {
+      title: 'Download external attachments',
+      empty: 'Document contains no external attachments',
+      unknownSize: 'Size unknown',
+      size: '{size} MB',
+      occurrences: '{count} occurrences',
+      limits:
+        'Images: up to 10 MB. PDFs: up to 50 MB, or 100 MB with confirmation. Up to 200 MB per operation.',
+      selectAll: 'Select all',
+      selectNone: 'Deselect all',
+      download: 'Download selected',
+      close: 'Close',
+      stop: 'Stop and keep completed downloads',
+      restore: 'Restore external links',
+      result: 'Replaced {count} links',
+      largeWarning: 'This PDF exceeds 50 MB. Download it with a 100 MB limit?',
+      confirmLarge: 'Download large PDF',
+      skip: 'Skip',
+      previewFailed:
+        'Preview is unavailable. It loads again when you scroll back.',
+      states: {
+        pending: 'Ready',
+        loading: 'Downloading…',
+        confirmation: 'Confirmation required',
+        stored: 'Downloaded',
+        done: 'Link replaced',
+        error: 'Failed',
+        skipped: 'Skipped'
+      },
+      errors: {
+        'operation-limit': 'The operation exceeds its 200 MB budget.',
+        'file-too-large': 'The file exceeds its size limit.'
+      }
+    },
+    delete: 'Delete',
+    deleteFailed: 'Could not delete the note',
+    moveFailed: 'Could not move the note',
+    parentFolder: 'Parent folder',
+    noteNameHint:
+      'Create in {folder}. Enter a file name; .md is added automatically.',
+    folderNameHint: 'Create in {folder}. Enter a folder name without a path.',
+
+    addToAgent: 'Add to agent',
     back: 'Back',
     forward: 'Forward',
     absentNote: 'The file is missing. It may have been deleted or moved.',
@@ -183,6 +226,10 @@ export default {
     deletedPlural: 'deleted',
     renamed: 'renamed',
     expandAll: 'Expand all',
+    expandAllHint:
+      'Double-click to expand all files. Keyboard: Enter or Space.',
+    collapseAllHint:
+      'Double-click to collapse all files. Keyboard: Enter or Space.',
     collapseAll: 'Collapse all',
     binaryFile: 'Binary file not shown',
     fullFileDeleted: 'The file no longer exists on disk',

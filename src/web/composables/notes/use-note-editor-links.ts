@@ -27,6 +27,12 @@ export function useNoteEditorLinks(
       event.target instanceof Element ? event.target.closest('a') : null
     const href = anchor?.getAttribute('href')
     if (!href) return
+    if (href.startsWith('/api/notes/assets/')) {
+      event.preventDefault()
+      event.stopPropagation()
+      openExternal(href)
+      return
+    }
     if (/^https?:\/\//i.test(href) || href.startsWith('//')) {
       event.preventDefault()
       event.stopPropagation()

@@ -17,7 +17,7 @@ export interface NoteReference {
 }
 
 // The AST excludes code and HTML; this scanner locates only a parsed destination.
-function destinationRange(
+export function destinationRange(
   source: string,
   definition: boolean
 ): [number, number] | null {

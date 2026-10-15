@@ -178,3 +178,18 @@ test('a config event replaces the whole option set', () => {
     ['fast']
   )
 })
+
+test('note context deduplicates by storage and UUID after rename', async () => {
+  const { mergeContext } = await import('@/utils/agent-chat')
+  const note = {
+    kind: 'note' as const,
+    noteId: 'id',
+    storageId: 'storage',
+    name: 'old.md'
+  }
+  assert.equal(mergeContext([note], [{ ...note, name: 'new.md' }]).length, 1)
+  assert.equal(
+    mergeContext([note], [{ ...note, storageId: 'other' }]).length,
+    2
+  )
+})

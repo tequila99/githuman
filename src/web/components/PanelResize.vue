@@ -4,14 +4,21 @@ import { clampWidth, readStoredWidth } from '@/composables/use-panel-width'
 import { isFiniteNumber } from '@/utils/guards'
 import { safeStorage } from '@/utils/safe-storage'
 
-/** Where the file list width is remembered between page loads. */
-const STORAGE_KEY = 'githuman.fileListWidth'
-const DEFAULT_WIDTH = 260
+/** Narrowest and widest panel the user can drag to, in pixels. */
 const MIN_WIDTH = 220
 const MAX_WIDTH = 600
 
+const props = withDefaults(
+  defineProps<{
+    /** Where the width is remembered between page loads. */
+    storageKey?: string
+    defaultWidth?: number
+  }>(),
+  { storageKey: 'githuman.fileListWidth', defaultWidth: 260 }
+)
+
 const width = ref(
-  readStoredWidth(STORAGE_KEY, MIN_WIDTH, MAX_WIDTH) ?? DEFAULT_WIDTH
+  readStoredWidth(props.storageKey, MIN_WIDTH, MAX_WIDTH) ?? props.defaultWidth
 )
 const limits = computed(() => [MIN_WIDTH, MAX_WIDTH])
 
@@ -22,7 +29,7 @@ const limits = computed(() => [MIN_WIDTH, MAX_WIDTH])
 function onWidth(next: number | undefined) {
   if (!isFiniteNumber(next)) return
   width.value = clampWidth(next, MIN_WIDTH, MAX_WIDTH)
-  safeStorage.set(STORAGE_KEY, String(width.value))
+  safeStorage.set(props.storageKey, String(width.value))
 }
 </script>
 

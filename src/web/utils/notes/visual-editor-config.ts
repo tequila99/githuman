@@ -1,8 +1,9 @@
-import type { Editor } from '@milkdown/kit/core'
+import { remarkStringifyOptionsCtx, type Editor } from '@milkdown/kit/core'
 import { linkSchema, paragraphSchema } from '@milkdown/kit/preset/commonmark'
 import { uploadConfig } from '@milkdown/kit/plugin/upload'
 import { notesApi } from '@/api/notes'
 import { errorMessage } from '@/utils/error-message'
+import { startsLikeListMarker } from '@/utils/markdown'
 
 export function configureNoteVisualEditor(
   editor: Editor,
@@ -12,6 +13,21 @@ export function configureNoteVisualEditor(
   }
 ) {
   editor.config(ctx => {
+    // The default text handler skips escaping for plain text that ends in
+    // whitespace, so "1. " before bold text would become a list.
+    ctx.update(remarkStringifyOptionsCtx, previous => {
+      const text = previous.handlers?.text
+      return {
+        ...previous,
+        handlers: {
+          ...previous.handlers,
+          text: (node, parent, state, info) =>
+            text && !startsLikeListMarker(node.value)
+              ? text(node, parent, state, info)
+              : state.safe(node.value, { ...info, encode: [] })
+        }
+      }
+    })
     ctx.update(uploadConfig.key, previous => ({
       ...previous,
       uploader: async (files, schema) => {

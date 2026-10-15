@@ -160,6 +160,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
 
   if (options.agentPresets) {
     app.register(agentRoutes, {
+      notes,
       registry: createSessionRegistry({
         presets: options.agentPresets,
         repositoryPath

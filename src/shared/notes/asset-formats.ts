@@ -1,8 +1,11 @@
+import { MAX_NOTE_ASSET_BYTES, MAX_NOTE_PDF_BYTES } from './constants.ts'
+
 export interface NoteAssetFormat {
   extension: string
   mime: string
   label: string
   display: 'image' | 'link'
+  maxBytes: number
   aliases: readonly string[]
 }
 
@@ -14,6 +17,7 @@ export const NOTE_ASSET_FORMATS = [
     mime: 'image/png',
     label: 'PNG',
     display: 'image',
+    maxBytes: MAX_NOTE_ASSET_BYTES,
     aliases: ['apng']
   },
   {
@@ -21,13 +25,15 @@ export const NOTE_ASSET_FORMATS = [
     mime: 'image/jpeg',
     label: 'JPEG',
     display: 'image',
-    aliases: []
+    maxBytes: MAX_NOTE_ASSET_BYTES,
+    aliases: ['jpeg']
   },
   {
     extension: 'gif',
     mime: 'image/gif',
     label: 'GIF',
     display: 'image',
+    maxBytes: MAX_NOTE_ASSET_BYTES,
     aliases: []
   },
   {
@@ -35,6 +41,15 @@ export const NOTE_ASSET_FORMATS = [
     mime: 'image/webp',
     label: 'WebP',
     display: 'image',
+    maxBytes: MAX_NOTE_ASSET_BYTES,
+    aliases: []
+  },
+  {
+    extension: 'pdf',
+    mime: 'application/pdf',
+    label: 'PDF',
+    display: 'link',
+    maxBytes: MAX_NOTE_PDF_BYTES,
     aliases: []
   }
 ] as const satisfies readonly NoteAssetFormat[]
@@ -47,9 +62,19 @@ export const SUPPORTED_NOTE_ASSETS = NOTE_ASSET_FORMATS.map(
   format => format.label
 ).join(', ')
 
+// Extensions that identify an image attachment, including accepted aliases.
+export const NOTE_IMAGE_EXTENSIONS: readonly string[] =
+  NOTE_ASSET_FORMATS.filter(format => format.display === 'image').flatMap(
+    format => [format.extension, ...format.aliases]
+  )
+
 export type NoteAssetExtension =
   (typeof NOTE_ASSET_FORMATS)[number]['extension']
 
 export function noteAssetFormat(extension: string | undefined) {
   return NOTE_ASSET_FORMATS.find(format => format.extension === extension)
+}
+
+export function maxNoteAssetBytes(kind: 'image' | 'pdf') {
+  return kind === 'pdf' ? MAX_NOTE_PDF_BYTES : MAX_NOTE_ASSET_BYTES
 }

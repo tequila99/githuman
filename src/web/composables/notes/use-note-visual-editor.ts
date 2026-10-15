@@ -11,7 +11,7 @@ import { $prose } from '@milkdown/kit/utils'
 import { Plugin } from '@milkdown/kit/prose/state'
 import type { EditorView } from '@milkdown/kit/prose/view'
 import {
-  hasMarkdownImages,
+  hasUnsupportedMarkdownImages,
   sameMarkdownContent,
   normalizeNoteEmptyParagraphs
 } from '@/utils/markdown'
@@ -51,7 +51,7 @@ export function useNoteVisualEditor(
     const element = toValue(root)
     if (!element) return
     const initialText = toValue(text)
-    if (hasMarkdownImages(initialText)) {
+    if (hasUnsupportedMarkdownImages(initialText)) {
       options.unsupported()
       return
     }

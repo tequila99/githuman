@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useAgentStore } from '@/stores/agent-store'
+import { ADD_TO_CHAT_ICON } from '@/utils/agent-icon'
 import { useI18n } from 'vue-i18n'
+import { useAddNoteToAgent } from '@/composables/notes/use-add-note-to-agent'
 import type { NoteDraft } from '@/stores/notes-store'
 import type { NoteEditorMode } from '@/composables/notes/use-note-editor'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
@@ -11,8 +14,10 @@ const props = defineProps<{
   visualDisabled: boolean
 }>()
 const mode = defineModel<NoteEditorMode>({ required: true })
-const emit = defineEmits<{ insertLink: [] }>()
+const emit = defineEmits<{ insertLink: []; downloadAssets: [] }>()
 const { t } = useI18n()
+const addToAgent = useAddNoteToAgent()
+const agent = useAgentStore()
 const modes = computed(() => [
   {
     value: 'visual' as const,
@@ -40,6 +45,33 @@ const modes = computed(() => [
       "
       >{{ t('notes.status.' + status) }}</span
     >
+    <q-btn
+      v-if="agent.enabled"
+      flat
+      round
+      dense
+      color="grey-7"
+      :icon="ADD_TO_CHAT_ICON"
+      :aria-label="t('notes.addToAgent')"
+      @click="addToAgent(path)"
+    >
+      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
+        t('notes.addToAgent')
+      }}</q-tooltip>
+    </q-btn>
+    <q-btn
+      flat
+      round
+      dense
+      icon="download"
+      :disable="status === 'conflict'"
+      :aria-label="t('notes.externalAssets.title')"
+      @click="emit('downloadAssets')"
+    >
+      <q-tooltip :delay="TOOLTIP_DELAY_MS"
+        >{{ t('notes.externalAssets.title') }} (Ctrl+Shift+D)</q-tooltip
+      >
+    </q-btn>
     <div
       class="note-modes row no-wrap"
       role="group"

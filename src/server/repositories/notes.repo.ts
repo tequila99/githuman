@@ -1,5 +1,6 @@
+import { noteChildPath, noteParentPath } from '../../shared/notes/note-path.ts'
 import { constants } from 'node:fs'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   lstat,
   link,
@@ -17,8 +18,10 @@ import { isSystemError } from '../utils/system-error.ts'
 import { sha256Hex } from '../utils/hash.ts'
 import { NoteConflictError, NoteExistsError } from '../errors/notes.ts'
 import type { Note } from '../../shared/notes/types.ts'
-import { MAX_NOTE_ASSET_BYTES } from '../../shared/notes/constants.ts'
-import type { NoteAssetExtension } from '../../shared/notes/asset-formats.ts'
+import {
+  noteAssetFormat,
+  type NoteAssetExtension
+} from '../../shared/notes/asset-formats.ts'
 
 // Bound file reads before allocating document buffers.
 const MAX_BYTES = 1000000
@@ -235,45 +238,94 @@ export class NotesRepository {
     bytes: Buffer,
     extension: NoteAssetExtension
   ): Promise<string> {
-    const id = sha256Hex(bytes) + '.' + extension
-    const target = await this.path('assets/' + id, false)
-    await mkdir(dirname(target), { recursive: true })
-    await this.path('assets/' + id, false)
-    const temporary = join(dirname(target), '.asset-' + randomUUID())
+    const staged = await this.stageAsset(
+      (async function* () {
+        yield bytes
+      })(),
+      extension,
+      new AbortController().signal
+    )
     try {
-      const file = await open(temporary, 'wx', 0o600)
-      try {
-        await file.writeFile(bytes)
-        await file.sync()
-      } finally {
-        await file.close()
-      }
-      await this.path('assets/' + id, false)
-      try {
-        await link(temporary, target)
-      } catch (error) {
-        if (!isSystemError(error, 'EEXIST')) throw error
-      }
+      return await staged.commit()
     } finally {
+      await staged.dispose()
+    }
+  }
+
+  async stageAsset(
+    chunks: AsyncIterable<Buffer>,
+    extension: string,
+    signal: AbortSignal
+  ) {
+    const format = noteAssetFormat(extension)
+    if (!format) throw new BadRequestError('Unsupported attachment format')
+    const probe = await this.path('assets/probe.png', false)
+    await mkdir(dirname(probe), { recursive: true })
+    await this.path('assets/probe.png', false)
+    const temporary = join(dirname(probe), '.asset-' + randomUUID())
+    const dispose = async () => {
       await unlink(temporary).catch(error => {
         if (!isSystemError(error, 'ENOENT')) throw error
       })
     }
-    return id
+    try {
+      const file = await open(temporary, 'wx', 0o600)
+      const hash = createHash('sha256')
+      let bytes = 0
+      try {
+        for await (const chunk of chunks) {
+          signal.throwIfAborted()
+          bytes += chunk.length
+          if (bytes > format.maxBytes) {
+            throw new BadRequestError('Attachment exceeds its size limit')
+          }
+          hash.update(chunk)
+          await file.writeFile(chunk)
+        }
+        if (!bytes) throw new BadRequestError('Empty attachment')
+        await file.sync()
+      } finally {
+        await file.close()
+      }
+      const id = hash.digest('hex') + '.' + extension
+      return {
+        dispose,
+        commit: async () => {
+          signal.throwIfAborted()
+          const target = await this.path('assets/' + id, false)
+          try {
+            await link(temporary, target)
+          } catch (error) {
+            if (!isSystemError(error, 'EEXIST')) throw error
+          }
+          return id
+        }
+      }
+    } catch (error) {
+      await dispose()
+      throw error
+    }
   }
 
-  async readAsset(id: string): Promise<Buffer> {
+  async readAsset(id: string) {
     const target = await this.path('assets/' + id, false)
     try {
       const file = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW)
       try {
         const stat = await file.stat()
-        if (!stat.isFile() || stat.size > MAX_NOTE_ASSET_BYTES) {
-          throw new BadRequestError('Invalid image attachment')
+        const format = noteAssetFormat(id.split('.').at(-1))
+        if (
+          !format ||
+          !stat.isFile() ||
+          !stat.size ||
+          stat.size > format.maxBytes
+        ) {
+          throw new BadRequestError('Invalid attachment')
         }
-        return await file.readFile()
-      } finally {
+        return file.createReadStream({ autoClose: true, end: stat.size - 1 })
+      } catch (error) {
         await file.close()
+        throw error
       }
     } catch (error) {
       if (isSystemError(error, 'ENOENT')) {
@@ -358,7 +410,7 @@ export class NotesRepository {
       if (path.split('/')[0] === 'assets') {
         throw new BadRequestError('Cannot rename attachments')
       }
-      const targetPath = [...path.split('/').slice(0, -1), name].join('/')
+      const targetPath = noteChildPath(noteParentPath(path), name)
       if (targetPath.split('/')[0] === 'assets') {
         throw new BadRequestError('Reserved folder name')
       }

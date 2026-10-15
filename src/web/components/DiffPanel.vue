@@ -58,7 +58,7 @@ useFileScroll({
 })
 
 // Quasar measures rows once and resets only when the list length changes.
-// Expand all, Collapse all and a switch of the source change heights at the same length.
+// Toggling all cards or switching the source changes heights at the same list length.
 watch(
   () => explorer.layoutVersion,
   async () => {
@@ -97,8 +97,8 @@ watch(diffFiles, async (files, previous) => {
     <q-separator v-if="activeReview" />
     <DiffStatusBar
       :files="diffFiles"
-      @expand-all="explorer.expandAllFiles"
-      @collapse-all="explorer.collapseAllFiles"
+      :any-expanded="explorer.hasExpandedFiles"
+      @toggle-all="explorer.toggleAllFiles"
     />
     <q-separator />
     <q-scroll-area

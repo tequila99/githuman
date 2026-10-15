@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { noteTitle } from '../../../shared/notes/note-path.ts'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppTheme } from '@/composables/use-app-theme'
@@ -35,9 +36,7 @@ const matches = computed(() =>
           clickable
           @click="select(path)"
           ><q-item-section
-            ><q-item-label class="ellipsis">{{
-              path.split('/').at(-1)?.replace(/\.md$/i, '')
-            }}</q-item-label
+            ><q-item-label class="ellipsis">{{ noteTitle(path) }}</q-item-label
             ><q-item-label caption class="ellipsis">{{
               path
             }}</q-item-label></q-item-section

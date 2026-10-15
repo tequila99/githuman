@@ -1,3 +1,4 @@
+import type { NotesService } from '../services/notes.service.ts'
 import { NotFoundError } from '../errors/http.ts'
 import { Type } from '@sinclair/typebox'
 import {
@@ -52,6 +53,7 @@ const AGENT_ERROR_RESPONSES = {
 }
 
 export interface AgentRoutesOptions {
+  notes?: NotesService
   registry: AgentSessionRegistry
   db: DatabaseSync
   repositoryPath: string
@@ -199,6 +201,7 @@ export async function agentRoutes(
 
       session.assertCanPrompt()
       const blocks = await buildPromptBlocks(request.body, {
+        notes: opts.notes,
         db,
         repositoryPath,
         embeddedContext: session.supportsEmbeddedContext,

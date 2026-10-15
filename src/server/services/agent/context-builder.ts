@@ -1,3 +1,4 @@
+import type { NotesService } from '../notes.service.ts'
 import { MAX_ATTACHMENT_BYTES } from '../../../shared/agents/constants.ts'
 import { AgentContextError } from '../../errors/agents.ts'
 import { errorMessage } from '../../../shared/utils/error-message.ts'
@@ -25,6 +26,7 @@ export const MAX_EMBEDDED_CHARS = 200_000
 
 export interface ContextBuilderDeps {
   db: DatabaseSync
+  notes?: NotesService
   repositoryPath: string
   /** Agent advertised `promptCapabilities.embeddedContext`. */
   embeddedContext: boolean
@@ -254,10 +256,30 @@ async function buildAttachmentItem(
   }
 }
 
+async function buildNoteItem(
+  item: Extract<AgentContextItem, { kind: 'note' }>,
+  deps: ContextBuilderDeps
+): Promise<ContentBlock> {
+  try {
+    if (!deps.notes) throw new AgentContextError('Notes are unavailable')
+    const note = await deps.notes.identity.readId(item.noteId, item.storageId)
+    return embed(
+      deps,
+      `githuman://note/${encodeURIComponent(item.storageId)}/${encodeURIComponent(item.noteId)}`,
+      `Note ${note.path}:`,
+      'text/markdown',
+      `Note: ${note.path}\n\n${note.text}`
+    )
+  } catch (error) {
+    throw asContextError(error)
+  }
+}
+
 function buildItem(
   item: AgentContextItem,
   deps: ContextBuilderDeps
 ): Promise<ContentBlock> {
+  if (item.kind === 'note') return buildNoteItem(item, deps)
   if (item.kind === 'diff') {
     return buildDiffItem(item, deps)
   }
