@@ -196,3 +196,63 @@ test('text that looks like a list marker is detected for escaping', () => {
   assert.equal(startsLikeListMarker('v1. '), false)
   assert.equal(startsLikeListMarker('1.5 liters'), false)
 })
+
+test('visual link and emphasis nesting normalization preserves clipped article content', () => {
+  const url =
+    'https://github.com/moleculerjs/moleculer-examples/tree/master/03-typescript'
+  assert.equal(
+    sameMarkdownContent(
+      `[*moleculer-examples repository*](${url})*.*`,
+      `*[moleculer-examples repository](${url}).*`
+    ),
+    true
+  )
+  assert.equal(
+    sameMarkdownContent(
+      '[**example**](https://a.test)',
+      '**[example](https://a.test)**'
+    ),
+    true
+  )
+  assert.equal(sameMarkdownContent('***example***', '**_example_**'), true)
+  assert.equal(
+    sameMarkdownContent(
+      '[*example*](https://a.test)',
+      '[example](https://a.test)'
+    ),
+    false
+  )
+  assert.equal(
+    sameMarkdownContent(
+      '[*example*](https://a.test)',
+      '*[example](https://b.test)*'
+    ),
+    false
+  )
+  assert.equal(
+    sameMarkdownContent(
+      '[*example*](https://a.test "Title")',
+      '*[example](https://a.test)*'
+    ),
+    false
+  )
+  assert.equal(
+    sameMarkdownContent('[*example*](https://a.test)', '*example*'),
+    false
+  )
+  assert.equal(sameMarkdownContent('*example* text', '*example text*'), false)
+})
+
+test('the clipped Moleculer article footer survives visual serialization', () => {
+  const prefix =
+    '*Code in this article was compiled with TypeScript 7.0 (*`*strict: true*`*) and run on Moleculer 0.15.2, Node.js 22 and NATS 2. The full example, including a* `*run.sh*` *that exercises both the dev and the production path, is in the* '
+  const url =
+    'https://github.com/moleculerjs/moleculer-examples/tree/master/03-typescript'
+  assert.equal(
+    sameMarkdownContent(
+      prefix + `[*moleculer-examples repository*](${url})*.*`,
+      prefix + `*[moleculer-examples repository](${url}).*\n`
+    ),
+    true
+  )
+})

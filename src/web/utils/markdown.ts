@@ -128,6 +128,7 @@ interface SignatureItem {
   attrs: [string, string | number][]
   content?: string | undefined
   children?: SignatureItem[] | undefined
+  marks?: string[] | undefined
 }
 
 /**
@@ -146,21 +147,42 @@ function isSelfLink(open: Token, text: Token | undefined): boolean {
 
 function markdownSignature(tokens: Token[]): SignatureItem[] {
   const items: SignatureItem[] = []
+  const marks: string[] = []
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index]!
     const text = tokens[index + 1]
-    if (isSelfLink(token, text) && tokens[index + 2]?.type === 'link_close') {
+    const selfLink =
+      isSelfLink(token, text) && tokens[index + 2]?.type === 'link_close'
+    // Compare formatting on content, independent of link and emphasis nesting order.
+    if (/^(em|strong|s|link)_open$/.test(token.type) && !selfLink) {
+      marks.push(
+        JSON.stringify({
+          type: token.type,
+          attrs: [...(token.attrs ?? [])].sort(([a], [b]) => a.localeCompare(b))
+        })
+      )
+      continue
+    }
+    if (/^(em|strong|s|link)_close$/.test(token.type)) {
+      marks.pop()
+      continue
+    }
+    if (token.type === 'text' && !token.content) continue
+    const activeMarks = marks.length ? [...marks].sort() : undefined
+    if (selfLink) {
       items.push({
         type: 'text',
         tag: '',
         info: '',
         attrs: [],
-        content: text!.content
+        content: text!.content,
+        marks: activeMarks
       })
       index += 2
       continue
     }
     items.push({
+      marks: activeMarks,
       type: token.type,
       tag: token.tag,
       info: token.info,
@@ -171,7 +193,11 @@ function markdownSignature(tokens: Token[]): SignatureItem[] {
   }
   return items.reduce<SignatureItem[]>((merged, item) => {
     const last = merged.at(-1)
-    if (last?.type === 'text' && item.type === 'text') {
+    if (
+      last?.type === 'text' &&
+      item.type === 'text' &&
+      JSON.stringify(last.marks) === JSON.stringify(item.marks)
+    ) {
       last.content = (last.content ?? '') + (item.content ?? '')
     } else {
       merged.push(item)
