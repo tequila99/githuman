@@ -241,13 +241,106 @@ export const NoteAssetParams = Type.Object(
   {
     id: Type.String({
       pattern: NOTE_ASSET_ID_PATTERN,
-      description: 'Content hash and image extension.'
+      description: 'Content hash and attachment extension.'
     })
   },
   { description: 'Stored attachment identifier.' }
 )
 
 export const NoteAssetContentSchema = Type.String({
-  description: 'Raster image bytes.',
+  description: 'Image or PDF attachment bytes.',
   format: 'binary'
 })
+
+// External resources use bounded URLs and a fixed format class.
+const ExternalAssetUrl = Type.String({
+  minLength: 1,
+  maxLength: 8192,
+  description: 'Public HTTP or HTTPS resource URL.'
+})
+const ExternalAssetKind = Type.Union(
+  [Type.Literal('image'), Type.Literal('pdf')],
+  { description: 'Expected attachment class.' }
+)
+export const InspectExternalAssetBody = Type.Object(
+  { url: ExternalAssetUrl, kind: ExternalAssetKind },
+  {
+    additionalProperties: false,
+    description: 'Inspect a remote attachment without downloading its body.'
+  }
+)
+export const PreviewExternalAssetBody = Type.Object(
+  { url: ExternalAssetUrl },
+  {
+    additionalProperties: false,
+    description: 'Read a bounded remote image preview.'
+  }
+)
+export const ExternalAssetInspectionSchema = Type.Object(
+  {
+    size: Nullable(
+      Type.Integer({
+        minimum: 0,
+        description: 'Size reported by the source, or null when unknown.'
+      })
+    )
+  },
+  { description: 'Optional remote size information.' }
+)
+export const ImportExternalAssetBody = Type.Object(
+  {
+    url: ExternalAssetUrl,
+    kind: ExternalAssetKind,
+    allowLargePdf: Type.Boolean({
+      description: 'User confirmed this PDF may exceed 50 MB.'
+    }),
+    remainingBytes: Type.Integer({
+      minimum: 1,
+      maximum: 200000000,
+      description: 'Remaining useful bytes in the current operation.'
+    })
+  },
+  {
+    additionalProperties: false,
+    description: 'Import one selected external attachment.'
+  }
+)
+export const ExternalAssetResultSchema = Type.Union(
+  [
+    Type.Object(
+      {
+        status: Type.Literal('stored', {
+          description: 'Resource stored successfully.'
+        }),
+        url: Type.String({ description: 'Permanent internal attachment URL.' }),
+        bytes: Type.Integer({ description: 'Actual stored byte count.' }),
+        format: Type.String({ description: 'Detected storage extension.' })
+      },
+      { description: 'Successful attachment import.' }
+    ),
+    Type.Object(
+      {
+        status: Type.Literal('confirmation-required', {
+          description: 'User must confirm a large PDF.'
+        }),
+        size: Nullable(
+          Type.Integer({ description: 'Advertised size, or null.' })
+        )
+      },
+      { description: 'Import paused for a large PDF confirmation.' }
+    ),
+    Type.Object(
+      {
+        status: Type.Literal('rejected', {
+          description: 'Resource exceeded a limit.'
+        }),
+        reason: Type.Union(
+          [Type.Literal('operation-limit'), Type.Literal('file-too-large')],
+          { description: 'The limit that prevented this download.' }
+        )
+      },
+      { description: 'Import rejected without storing a file.' }
+    )
+  ],
+  { description: 'Outcome of importing one external attachment.' }
+)

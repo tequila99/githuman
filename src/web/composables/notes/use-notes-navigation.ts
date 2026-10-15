@@ -1,3 +1,4 @@
+import { noteParentPath } from '../../../shared/notes/note-path.ts'
 import {
   computed,
   nextTick,
@@ -24,7 +25,7 @@ export function useNotesNavigation(
   const activeFolder = shallowRef<string | null>(null)
   let navigation = 0
   const creationFolder = computed(
-    () => activeFolder.value ?? store.selected.split('/').slice(0, -1).join('/')
+    () => activeFolder.value ?? noteParentPath(store.selected)
   )
   const paths = computed(() =>
     store.index.entries.filter(entry => !entry.folder).map(entry => entry.path)

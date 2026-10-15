@@ -1,29 +1,15 @@
 <script setup lang="ts">
-import {
-  computed,
-  defineAsyncComponent,
-  useTemplateRef,
-  watch,
-  nextTick,
-  onMounted
-} from 'vue'
+import { onMounted, shallowRef, useTemplateRef } from 'vue'
 import type { NoteDraft } from '@/stores/notes-store'
-import { useNoteEditor } from '@/composables/notes/use-note-editor'
-import {
-  useNoteEditorLinks,
-  type NoteLinkEditor
-} from '@/composables/notes/use-note-editor-links'
-import NoteSourceEditor from './NoteSourceEditor.vue'
-import NoteProperties from './NoteProperties.vue'
-import NoteLinkPicker from './NoteLinkPicker.vue'
+import type { NoteEditorMode } from '@/composables/notes/use-note-editor'
+import type { NoteViewState } from '@/composables/notes/use-notes-history-state'
+import NoteEditorBody from './NoteEditorBody.vue'
+import NoteExternalAssetsController from './NoteExternalAssetsController.vue'
 import NoteToolbar from './NoteToolbar.vue'
 import NoteStateBanners from './NoteStateBanners.vue'
 
-const NoteVisualEditor = defineAsyncComponent(
-  () => import('./NoteVisualEditor.vue')
-)
-const props = defineProps<{
-  viewState?: { scroll: number; sourceScroll: number; mode: string } | null
+defineProps<{
+  viewState?: NoteViewState | null
   draft: NoteDraft
   paths: string[]
   tags: string[]
@@ -36,108 +22,58 @@ const emit = defineEmits<{
   copy: []
   link: [href: string, occurrence?: number]
 }>()
-const {
-  mode,
-  metadata,
-  parts,
-  editorError,
-  visualUnsupported,
-  unsupported,
-  visualReady,
-  changeBody
-} = useNoteEditor(
-  () => props.draft.text,
-  text => emit('change', text)
-)
-const visual = useTemplateRef<NoteLinkEditor>('visual')
-const source = useTemplateRef<NoteLinkEditor>('source')
-const activeEditor = computed(() =>
-  mode.value === 'visual' ? visual.value : source.value
-)
-const { linkOpen, prepareLink, insertLink, follow } = useNoteEditorLinks(
-  activeEditor,
-  (href, occurrence) => emit('link', href, occurrence)
-)
-function restoreMode() {
-  if (props.viewState?.mode === 'source' || metadata.value.error) {
-    mode.value = 'source'
-  } else if (props.viewState?.mode === 'visual') {
-    mode.value = 'visual'
-  }
-}
-function ready() {
-  visualReady()
-  emit('ready')
-}
-watch(() => props.viewState, restoreMode, { immediate: true })
-watch(mode, async () => {
-  await nextTick()
-  emit('ready')
+const editorState = shallowRef({
+  editorError: '',
+  visualUnsupported: false,
+  metadataError: false
 })
+const mode = shallowRef<NoteEditorMode>('visual')
+const pane = useTemplateRef<HTMLElement>('pane')
+const editor = useTemplateRef('editor')
+const assets = useTemplateRef('assets')
 onMounted(() => emit('ready'))
 </script>
 <template>
-  <section class="note-pane col column no-wrap">
+  <section ref="pane" class="note-pane col column no-wrap">
     <NoteToolbar
       v-model="mode"
       :path="draft.path"
       :status="draft.status"
-      :visual-disabled="!!metadata.error"
-      @insert-link="prepareLink"
+      :visual-disabled="editorState.metadataError"
+      @insert-link="editor?.prepareLink()"
+      @download-assets="assets?.open()"
     />
     <NoteStateBanners
       :draft="draft"
-      :editor-error="editorError"
-      :visual-unsupported="visualUnsupported"
+      :editor-error="editorState.editorError"
+      :visual-unsupported="editorState.visualUnsupported"
       @save="emit('save')"
       @reload="emit('reload')"
       @copy="emit('copy')"
     />
-    <div
-      class="note-body col column no-wrap q-pa-md"
-      :data-note-mode="mode"
-      :class="{ scroll: mode === 'visual' }"
-      @click.capture="follow"
-      @auxclick.capture="follow"
-    >
-      <NoteProperties
-        v-if="mode === 'visual' && !metadata.error"
-        :text="draft.text"
-        :path="draft.path"
-        :paths="paths"
-        :tags="props.tags"
-        @change="emit('change', $event)"
-      />
-      <NoteSourceEditor
-        v-if="mode === 'source'"
-        ref="source"
-        :text="draft.text"
-        :path="draft.path"
-        :paths="paths"
-        @change="emit('change', $event)"
-      />
-      <NoteVisualEditor
-        v-else
-        ref="visual"
-        :key="draft.revision"
-        :text="parts.body"
-        :path="draft.path"
-        :paths="paths"
-        @link="linkOpen = true"
-        @change="changeBody"
-        @unsupported="unsupported"
-        @ready="ready"
-      />
-    </div>
-    <NoteLinkPicker v-model="linkOpen" :paths="paths" @select="insertLink" />
+    <NoteEditorBody
+      ref="editor"
+      v-model="mode"
+      :draft="draft"
+      :paths="paths"
+      :tags="tags"
+      :view-state="viewState ?? null"
+      @state="editorState = $event"
+      @change="emit('change', $event)"
+      @ready="emit('ready')"
+      @link="(href, occurrence) => emit('link', href, occurrence)"
+    />
+    <NoteExternalAssetsController
+      ref="assets"
+      :draft="draft"
+      :pane="pane"
+      @apply="(text, edits) => editor?.apply(text, edits)"
+    />
   </section>
 </template>
 <style scoped>
 .note-pane {
   min-width: 0;
-  min-height: 0;
-}
-.note-body {
   min-height: 0;
 }
 </style>

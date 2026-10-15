@@ -1,3 +1,11 @@
+import { NotesExternalAssetsService } from '../services/notes-external-assets.service.ts'
+import {
+  InspectExternalAssetBody,
+  PreviewExternalAssetBody,
+  ImportExternalAssetBody,
+  ExternalAssetInspectionSchema,
+  ExternalAssetResultSchema
+} from '../../shared/notes/schemas.ts'
 import type { FastifyInstance } from 'fastify'
 import multipart, { type MultipartFile } from '@fastify/multipart'
 import { MAX_NOTE_ASSET_BYTES } from '../../shared/notes/constants.ts'
@@ -27,14 +35,20 @@ import {
 import { ERROR_RESPONSES, NoContentSchema } from '../../shared/http/schemas.ts'
 import type { NotesService } from '../services/notes.service.ts'
 import { BadRequestError } from '../errors/http.ts'
+import { withRequestSignal } from '../utils/request-abort.ts'
 import { createNotesOriginHook } from '../hooks/notes/same-origin.ts'
 
 export async function notesRoutes(
   app: FastifyInstance,
   {
     service,
-    loopbackBind = false
-  }: { service: NotesService; loopbackBind?: boolean }
+    loopbackBind = false,
+    externalAssets = new NotesExternalAssetsService()
+  }: {
+    service: NotesService
+    loopbackBind?: boolean
+    externalAssets?: NotesExternalAssetsService
+  }
 ) {
   await app.register(multipart, {
     attachFieldsToBody: true,
@@ -67,12 +81,69 @@ export async function notesRoutes(
       return asset
     }
   )
+  typed.post(
+    '/api/notes/assets/inspect',
+    {
+      schema: {
+        tags: ['notes'],
+        summary: 'Inspect an external attachment',
+        body: InspectExternalAssetBody,
+        response: { 200: ExternalAssetInspectionSchema, ...ERROR_RESPONSES }
+      }
+    },
+    (request, reply) =>
+      withRequestSignal(reply, signal =>
+        externalAssets.inspect(request.body.url, signal)
+      )
+  )
+  typed.post(
+    '/api/notes/assets/import',
+    {
+      schema: {
+        tags: ['notes'],
+        summary: 'Import an external attachment',
+        body: ImportExternalAssetBody,
+        response: { 200: ExternalAssetResultSchema, ...ERROR_RESPONSES }
+      }
+    },
+    (request, reply) =>
+      withRequestSignal(reply, signal =>
+        externalAssets.importAsset(
+          request.body,
+          signal,
+          (chunks, extension, saveSignal) =>
+            service.importAsset(chunks, extension, saveSignal)
+        )
+      )
+  )
+  // The typed provider rejects a binary payload for the content schema.
+  app.post<{ Body: { url: string } }>(
+    '/api/notes/assets/preview',
+    {
+      schema: {
+        tags: ['notes'],
+        summary: 'Preview an external image',
+        body: PreviewExternalAssetBody,
+        response: { 200: NoteAssetContentSchema, ...ERROR_RESPONSES }
+      }
+    },
+    async (request, reply) => {
+      const preview = await withRequestSignal(reply, signal =>
+        externalAssets.preview(request.body.url, signal)
+      )
+      reply
+        .header('Cache-Control', 'no-store')
+        .header('X-Content-Type-Options', 'nosniff')
+        .type(preview.mime)
+      return reply.send(preview.body)
+    }
+  )
   app.get<{ Params: { id: string } }>(
     '/api/notes/assets/:id',
     {
       schema: {
         tags: ['notes'],
-        summary: 'Read a stored note image',
+        summary: 'Read a stored note attachment',
         params: NoteAssetParams,
         response: { 200: NoteAssetContentSchema, ...ERROR_RESPONSES }
       }
@@ -245,6 +316,21 @@ export async function notesRoutes(
         request.body.id,
         request.body.storageId
       )
+  )
+  typed.post(
+    '/api/notes/delete',
+    {
+      schema: {
+        tags: ['notes'],
+        summary: 'Hide a note without removing its file',
+        body: NoteIdQuery,
+        response: { 204: NoContentSchema, ...ERROR_RESPONSES }
+      }
+    },
+    async (request, reply) => {
+      await service.delete(request.body.id, request.body.storageId)
+      reply.code(204).send(null)
+    }
   )
   typed.post(
     '/api/notes/rename',

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import {
   renderMarkdown,
   sameMarkdownContent,
-  hasMarkdownImages,
+  startsLikeListMarker,
+  hasUnsupportedMarkdownImages,
   normalizeNoteEmptyParagraphs
 } from '@/utils/markdown'
 
@@ -94,12 +95,21 @@ test('visual normalization keeps Markdown meaning but unsupported content loss i
   assert.equal(sameMarkdownContent('[link](../a.md)', '[link](../b.md)'), false)
 })
 
-test('images use source mode while image-like code and escaped text stay editable', () => {
-  assert.equal(hasMarkdownImages('![diagram](https://example.com/a.png)'), true)
-  assert.equal(hasMarkdownImages('![diagram][pic]\n\n[pic]: ./a.png'), true)
-  assert.equal(hasMarkdownImages('```md\n![diagram](./a.png)\n```'), false)
-  assert.equal(hasMarkdownImages('`![diagram](./a.png)`'), false)
-  assert.equal(hasMarkdownImages('\\![diagram](./a.png)'), false)
+test('remote images stay editable while unresolved local images use source mode', () => {
+  assert.equal(
+    hasUnsupportedMarkdownImages('![diagram](https://example.com/a.png)'),
+    false
+  )
+  assert.equal(
+    hasUnsupportedMarkdownImages('![diagram][pic]\n\n[pic]: ./a.png'),
+    true
+  )
+  assert.equal(
+    hasUnsupportedMarkdownImages('```md\n![diagram](./a.png)\n```'),
+    false
+  )
+  assert.equal(hasUnsupportedMarkdownImages('`![diagram](./a.png)`'), false)
+  assert.equal(hasUnsupportedMarkdownImages('\\![diagram](./a.png)'), false)
 })
 
 test('note empty-paragraph placeholders become blank lines while code and inline HTML stay intact', () => {
@@ -115,10 +125,74 @@ test('permanent local note attachments render and stay editable after reload', (
   const url = '/api/notes/assets/' + 'a'.repeat(64) + '.png'
   const source = `![image](${url})`
   assert.match(renderMarkdown(source), /<img src="\/api\/notes\/assets\//)
-  assert.equal(hasMarkdownImages(source), false)
+  assert.equal(hasUnsupportedMarkdownImages(source), false)
   assert.equal(sameMarkdownContent(source, 'image'), false)
   assert.doesNotMatch(
     renderMarkdown('![x](https://example.com/pixel.png)'),
     /<img/
   )
+})
+
+test('clipped article images preserve URLs, empty alt text and titles', () => {
+  const source =
+    '![](https://miro.medium.com/v2/resize:fit:1400/format:webp/1*A--hC5DgK7-jKIY4JQwcYw.png)'
+  assert.equal(hasUnsupportedMarkdownImages(source), false)
+  assert.equal(
+    hasUnsupportedMarkdownImages(
+      '![chart][image]\n\n[image]: https://example.com/chart.png "Chart"'
+    ),
+    false
+  )
+  assert.equal(
+    hasUnsupportedMarkdownImages('![chart](HTTP://example.com/chart.png)'),
+    false
+  )
+  assert.equal(sameMarkdownContent(source, source + '\n'), true)
+  assert.equal(sameMarkdownContent(source, ''), false)
+  assert.equal(
+    sameMarkdownContent(source, source.replace('1400', '700')),
+    false
+  )
+  assert.equal(
+    hasUnsupportedMarkdownImages('![x](//example.com/chart.png)'),
+    true
+  )
+  assert.equal(
+    hasUnsupportedMarkdownImages('![x](data:image/png;base64,AAAA)'),
+    true
+  )
+})
+
+test('an autolink for a bare URL keeps the same content, other link changes do not', () => {
+  assert.equal(
+    sameMarkdownContent(
+      'CLIENT_URL=http://localhost:5173\n\nproxy_pass http://localhost:5000;\n',
+      'CLIENT_URL=<http://localhost:5173>\n\nproxy_pass <http://localhost:5000>;\n'
+    ),
+    true
+  )
+  assert.equal(
+    sameMarkdownContent('[http://a.test](http://a.test)', '<http://a.test>'),
+    true
+  )
+  assert.equal(
+    sameMarkdownContent('[a](http://a.test)', '<http://a.test>'),
+    false
+  )
+  assert.equal(
+    sameMarkdownContent('see http://a.test', 'see <http://b.test>'),
+    false
+  )
+  assert.equal(
+    sameMarkdownContent('see http://a.test', 'see [x](http://a.test)'),
+    false
+  )
+  assert.equal(sameMarkdownContent('see http://a.test', 'see'), false)
+})
+
+test('text that looks like a list marker is detected for escaping', () => {
+  assert.equal(startsLikeListMarker('1. '), true)
+  assert.equal(startsLikeListMarker('12) item'), true)
+  assert.equal(startsLikeListMarker('v1. '), false)
+  assert.equal(startsLikeListMarker('1.5 liters'), false)
 })

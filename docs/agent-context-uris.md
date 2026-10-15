@@ -1,6 +1,6 @@
 # Контекст запроса к агенту: URI и блоки
 
-Как элементы контекста чата (`diff`, `file`, `directory`, `review`, `attachment`) превращаются в блоки запроса ACP.
+Как элементы контекста чата (`diff`, `file`, `directory`, `review`, `note`, `attachment`) превращаются в блоки запроса ACP.
 Код — `src/server/services/agent/context-builder.ts`, схема элементов — `src/shared/agents/schemas.ts`
 (`ContextItem`). Термины — в [глоссарии](GLOSSARY.md).
 
@@ -13,6 +13,7 @@
 | Вид | URI | Источник | Кодирование |
 |---|---|---|---|
 | `diff` | `githuman://diff/<source>/<path>` | `source` — `staged` или `unstaged`; `path` — путь файла в diff, может отсутствовать | `path` не кодируется. Без пути URI заканчивается на `/` |
+| `note` | `githuman://note/<storageId>/<noteId>` | текущий Markdown заметки по UUID и хранилищу | `encodeURIComponent` для обоих идентификаторов |
 | `review` | `githuman://review/<id>` | `id` ревью | не кодируется |
 | `attachment` | `githuman://attachment/<имя>` | имя файла, которое прислал клиент (только текстовые вложения) | `encodeURIComponent` |
 
@@ -23,6 +24,7 @@
 | Элемент | Блок ACP | Условия |
 |---|---|---|
 | `diff` (текст изменений) | `resource` с `githuman://diff/…`, тип `text/x-diff` | агент объявил `embeddedContext`; иначе — обычный текстовый блок с кодовой оградой, URI **отбрасывается** |
+| `note` (заметка с YAML-свойствами, название и путь) | `resource` с `githuman://note/…`, тип `text/markdown` | `embeddedContext`; иначе — текст с кодовой оградой. Сервер читает актуальную сохранённую версию по UUID; связанные заметки и изображения не включаются |
 | `review` (ревью с комментариями, markdown) | `resource` с `githuman://review/…`, тип `text/markdown` | то же |
 | `attachment`, текст в UTF-8 | `resource` с `githuman://attachment/…` | то же |
 | `file` (файл репозитория) | `resource_link` с `file://` | агент читает файл сам, в том же `cwd` |

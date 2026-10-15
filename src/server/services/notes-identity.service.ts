@@ -1,3 +1,9 @@
+import PQueue from 'p-queue'
+import {
+  noteBasename,
+  noteChildPath,
+  noteParentPath
+} from '../../shared/notes/note-path.ts'
 import { lstat } from 'node:fs/promises'
 import { isSystemError } from '../utils/system-error.ts'
 import { randomUUID } from 'node:crypto'
@@ -29,6 +35,8 @@ import { safeDecodeURIComponent } from '../../shared/utils/safe-decode.ts'
 
 // A second complete scan confirms absence, instead of treating an atomic save as deletion.
 const ABSENCE_GRACE_MS = 2500
+// Longest file name that common file systems accept, in bytes.
+const MAX_FILENAME_BYTES = 255
 
 function newRecord(id: string, path: string, version: string): CatalogNote {
   const now = new Date().toISOString()
@@ -39,6 +47,7 @@ function newRecord(id: string, path: string, version: string): CatalogNote {
     presence: 'present',
     createdAt: now,
     updatedAt: now,
+    deletedAt: null,
     redirectId: null
   }
 }
@@ -57,11 +66,27 @@ function portablePath(path: string) {
   }
 }
 
+/**
+ * Path a deleted note moves to. The suffix frees the original name for a new
+ * note. The stem is cut by bytes so the name fits the file system limit.
+ */
+function deletedNotePath(path: string, uuid: string): string {
+  const suffix = `_deleted_${uuid}.md`
+  const stem = noteBasename(path).replace(/\.md$/i, '')
+  const room = MAX_FILENAME_BYTES - Buffer.byteLength(suffix)
+  let cut = stem
+  while (Buffer.byteLength(cut) > room) {
+    cut = cut.slice(0, -1)
+  }
+  return noteChildPath(noteParentPath(path), cut + suffix)
+}
+
 export class NotesIdentityService {
   readonly catalog: NotesCatalogRepository
   readonly writer: NotesWriter
   readonly operations: NotesOperationsService
-  private queue: Promise<unknown> = Promise.resolve()
+  // One action at a time: catalog and file changes must not interleave.
+  private readonly queue = new PQueue({ concurrency: 1 })
   private readonly cache = new Map<
     string,
     {
@@ -102,18 +127,14 @@ export class NotesIdentityService {
     })
   }
   run<T>(action: () => Promise<T>): Promise<T> {
-    const next = this.queue
-      .catch(() => {})
-      .then(async () => {
-        if (this.closed) throw new BadRequestError('Notes storage is closing.')
-        return action()
-      })
-    this.queue = next
-    return next
+    return this.queue.add(async () => {
+      if (this.closed) throw new BadRequestError('Notes storage is closing.')
+      return action()
+    })
   }
   async close() {
     this.closed = true
-    await this.queue.catch(() => {})
+    await this.queue.onIdle()
     await this.writer.close()
   }
   private record(id: string): CatalogNote {
@@ -209,7 +230,11 @@ export class NotesIdentityService {
     const byId = new Map(records.map(record => [record.id, record]))
     const presentByPath = new Map(
       records
-        .filter(record => record.presence === 'present' && !record.redirectId)
+        .filter(
+          record =>
+            (record.presence === 'present' || record.deletedAt) &&
+            !record.redirectId
+        )
         .map(record => [record.path, record])
     )
     const livePaths = new Set(documents.map(doc => doc.path))
@@ -293,7 +318,7 @@ export class NotesIdentityService {
           (identity.id && identity.id !== record.id
             ? 'The YAML ID conflicts with this note or is duplicated. The catalog identity is retained.'
             : null)
-        if (warning) {
+        if (warning && !record.deletedAt) {
           this.issue(
             'metadata:' + record.id,
             warning,
@@ -332,7 +357,7 @@ export class NotesIdentityService {
       byVersion.set(candidate.version, group)
     }
     for (const old of current.filter(
-      note => note.presence === 'missing' && !note.redirectId
+      note => note.presence === 'missing' && !note.redirectId && !note.deletedAt
     )) {
       const samePath = currentByPath.get(old.path)
       const matches = (byVersion.get(old.version) ?? []).filter(
@@ -351,7 +376,7 @@ export class NotesIdentityService {
     }
     for (const doc of documents) {
       const record = currentByPath.get(doc.path)
-      if (!record || !changed.has(record.id)) continue
+      if (!record || record.deletedAt || !changed.has(record.id)) continue
       const references = changes.length
         ? noteReferences((await this.files.read(doc.path)).text)
         : (doc.references ?? [])
@@ -361,8 +386,13 @@ export class NotesIdentityService {
       if (!livePaths.has(path)) this.cache.delete(path)
     }
     // Unreadable files stay visible through their issue, not as openable entries.
+    const hiddenPaths = new Set(
+      current.filter(note => note.deletedAt).map(note => note.path)
+    )
     return entries.filter(
-      entry => this.unreadable.get(entry.path) !== entry.signature
+      entry =>
+        !hiddenPaths.has(entry.path) &&
+        this.unreadable.get(entry.path) !== entry.signature
     )
   }
   private indexLinks(id: string, text: string, snapshot?: CatalogNote[]) {
@@ -465,7 +495,13 @@ export class NotesIdentityService {
         entries,
         this.catalog
           .all()
-          .map(note => [note.id, note.path, note.version, note.presence])
+          .map(note => [
+            note.id,
+            note.path,
+            note.version,
+            note.presence,
+            note.deletedAt
+          ])
       ])
     )
   }
@@ -482,7 +518,11 @@ export class NotesIdentityService {
         storage: this.files.root,
         storageId: this.catalog.storageId,
         revision: this.revision(entries),
-        issues: this.catalog.issues(),
+        issues: this.catalog
+          .issues()
+          .filter(
+            issue => !issue.noteId || !this.record(issue.noteId).deletedAt
+          ),
         entries: entries.map(entry => {
           const record = recordsByPath.get(entry.path)
           const metadata = entry.folder
@@ -506,9 +546,10 @@ export class NotesIdentityService {
       this.assertStorage(storageId)
       await this.synchronize()
       const registered = this.record(id)
-      const note =
-        registered.presence === 'present' &&
-        !(await this.files.exists(registered.path))
+      const note = registered.deletedAt
+        ? { ...registered, presence: 'deleted' as const }
+        : registered.presence === 'present' &&
+            !(await this.files.exists(registered.path))
           ? { ...registered, presence: 'missing' as const }
           : registered
       const backlinks = this.catalog
@@ -516,6 +557,7 @@ export class NotesIdentityService {
         .filter(
           source =>
             source.presence === 'present' &&
+            !source.deletedAt &&
             this.catalog
               .links(source.id)
               .some(
@@ -542,7 +584,10 @@ export class NotesIdentityService {
           'This path belongs to more than one note over time. Open a stable UUID link instead.'
         )
       }
-      return this.record([...candidates][0])
+      const record = this.record([...candidates][0])
+      return record.deletedAt
+        ? { ...record, presence: 'deleted' as const }
+        : record
     })
   }
   assertStorage(id: string) {
@@ -557,7 +602,7 @@ export class NotesIdentityService {
       this.assertStorage(storageId)
       await this.synchronize()
       const record = this.record(id)
-      if (record.presence !== 'present') {
+      if (record.presence !== 'present' || record.deletedAt) {
         throw new NotFoundError('The note file is missing or deleted.')
       }
       return {
@@ -578,7 +623,9 @@ export class NotesIdentityService {
             note.presence === 'present' &&
             !note.redirectId
         )
-      if (!record) throw new NotFoundError('Note not found.')
+      if (!record || record.deletedAt) {
+        throw new NotFoundError('Note not found.')
+      }
       return {
         ...(await this.files.read(path)),
         id: record.id,
@@ -598,7 +645,13 @@ export class NotesIdentityService {
       await this.files.path(path)
       await this.writer.acquire(true)
       await this.synchronize()
-      if (id) path = this.record(id).path
+      if (id) {
+        const identified = this.record(id)
+        if (identified.deletedAt) {
+          throw new NotFoundError('This note was deleted.')
+        }
+        path = identified.path
+      }
       let record = this.catalog
         .all()
         .find(
@@ -607,6 +660,11 @@ export class NotesIdentityService {
             note.presence === 'present' &&
             !note.redirectId
         )
+      if (
+        this.catalog.all().some(note => note.path === path && note.deletedAt)
+      ) {
+        throw new NoteExistsError()
+      }
       if (version === undefined) {
         portablePath(path)
         if (record) throw new NoteExistsError()
@@ -653,6 +711,12 @@ export class NotesIdentityService {
       }
       if (id && this.record(id).path !== path) throw new NoteConflictError()
       if (
+        !folder &&
+        this.catalog.all().some(note => note.path === path && note.deletedAt)
+      ) {
+        throw new NotFoundError('This note was deleted.')
+      }
+      if (
         !target &&
         (name !== name.trim() ||
           name.includes('/') ||
@@ -669,12 +733,18 @@ export class NotesIdentityService {
       if (folder ? !sourceStat.isDirectory() : !sourceStat.isFile()) {
         throw new BadRequestError('Entry type changed.')
       }
-      const destination =
-        target ?? [...path.split('/').slice(0, -1), name].join('/')
+      const destination = target ?? noteChildPath(noteParentPath(path), name)
       portablePath(destination)
       await this.files.path(destination, !folder)
       if (destination === path) {
         return { operationId: randomUUID(), complete: true }
+      }
+      if (
+        this.catalog
+          .all()
+          .some(note => note.deletedAt && note.path === destination)
+      ) {
+        throw new NoteExistsError()
       }
       if (await this.files.exists(destination)) {
         const caseOnly =
@@ -720,6 +790,42 @@ export class NotesIdentityService {
         throw error
       }
       return { operationId: operation.id, complete }
+    })
+  }
+  deleteId(id: string, storageId: string) {
+    return this.run(async () => {
+      this.assertStorage(storageId)
+      await this.synchronize()
+      const note = this.record(id)
+      if (note.deletedAt) return
+      await this.writer.acquire(true)
+      await this.writer.assertOwner()
+      if (
+        this.catalog
+          .operations()
+          .some(
+            operation =>
+              operation.moves.some(move => move.id === note.id) ||
+              operation.writes.some(
+                write => write.id === note.id && !write.done
+              )
+          )
+      ) {
+        throw new NoteConflictError()
+      }
+      // A present file leaves its name, so a new note can use it. The catalog keeps the identity.
+      let path = note.path
+      if (note.presence === 'present' && !note.redirectId) {
+        path = deletedNotePath(note.path, randomUUID())
+        await this.files.moveEntry(note.path, path, false)
+      }
+      this.catalog.put({
+        ...note,
+        path,
+        deletedAt: new Date().toISOString()
+      })
+      this.catalog.dismiss('missing:' + note.id, true)
+      this.catalog.dismiss('metadata:' + note.id)
     })
   }
   retry() {
@@ -794,9 +900,13 @@ export class NotesIdentityService {
       this.assertStorage(storageId)
       await this.synchronize()
       const source = this.record(sourceId)
+      if (source.deletedAt) throw new NotFoundError('This note was deleted.')
       const paths = this.catalog
         .all()
-        .filter(note => note.presence === 'present' && !note.redirectId)
+        .filter(
+          note =>
+            note.presence === 'present' && !note.redirectId && !note.deletedAt
+        )
         .map(note => note.path)
       const refs = noteReferences(text)
         .flatMap(ref =>
@@ -886,12 +996,14 @@ export class NotesIdentityService {
   graph() {
     return this.run(async () => {
       await this.synchronize()
-      const nodes = this.catalog.all().filter(note => !note.redirectId)
+      const nodes = this.catalog
+        .all()
+        .filter(note => !note.redirectId && !note.deletedAt)
       const edges = nodes
         .filter(note => note.presence === 'present')
         .flatMap(note =>
           this.catalog.links(note.id).flatMap(link =>
-            link.targetId
+            link.targetId && !this.record(link.targetId).deletedAt
               ? [
                   {
                     sourceId: note.id,

@@ -1,4 +1,9 @@
-import { apiGet, apiPatch, apiPost, apiPostForm } from './client'
+import type {
+  ImportExternalAsset,
+  ExternalAssetResult,
+  ExternalAssetInspection
+} from '../../shared/notes/types.ts'
+import { apiGet, apiPatch, apiPost, apiPostForm, apiPostBlob } from './client'
 import { MAX_NOTE_ASSET_BYTES } from '../../shared/notes/constants.ts'
 import type {
   Note,
@@ -10,6 +15,22 @@ import type {
   NoteRecord
 } from '../../shared/notes/types.ts'
 export const notesApi = {
+  inspectExternalAsset: (
+    url: string,
+    kind: 'image' | 'pdf',
+    signal?: AbortSignal
+  ) =>
+    apiPost<ExternalAssetInspection>(
+      '/api/notes/assets/inspect',
+      { url, kind },
+      signal
+    ),
+  importExternalAsset: (body: ImportExternalAsset, signal?: AbortSignal) =>
+    apiPost<ExternalAssetResult>('/api/notes/assets/import', body, signal),
+  previewExternalAsset: (url: string, signal?: AbortSignal) =>
+    apiPostBlob('/api/notes/assets/preview', { url }, signal),
+  delete: (id: string, storageId: string) =>
+    apiPost<void>('/api/notes/delete', { id, storageId }),
   uploadAsset: async (file: File) => {
     if (file.size > MAX_NOTE_ASSET_BYTES) {
       throw new Error('Image must be under 10 MB')

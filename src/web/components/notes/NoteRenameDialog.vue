@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import {
+  noteBasename,
+  noteParentPath
+} from '../../../shared/notes/note-path.ts'
+import { validNoteEntryName } from '@/utils/notes/entry-name'
 import { computed, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useNotesStore } from '@/stores/notes-store'
@@ -9,19 +14,14 @@ const emit = defineEmits<{
 }>()
 const store = useNotesStore()
 const { t } = useI18n()
-const basename = props.path.split('/').at(-1)!
+const basename = noteBasename(props.path)
 const name = shallowRef(
   props.folder ? basename : basename.replace(/\.md$/i, '')
 )
-const parent = shallowRef(props.path.split('/').slice(0, -1).join('/'))
+const parent = shallowRef(noteParentPath(props.path))
 const busy = shallowRef(false)
 const error = shallowRef('')
-const valid = computed(
-  () =>
-    !!name.value.trim() &&
-    !/[/\\\0]/.test(name.value.trim()) &&
-    !name.value.trim().startsWith('.')
-)
+const valid = computed(() => validNoteEntryName(name.value))
 async function submit() {
   if (!valid.value || busy.value) return
   busy.value = true

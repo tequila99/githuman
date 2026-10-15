@@ -6,7 +6,9 @@
  */
 export function createWeightedLru<K, V>(
   maxWeight: number,
-  weigh: (value: V) => number
+  weigh: (value: V) => number,
+  // Called for every entry that leaves the cache, so callers can free resources.
+  onEvict?: (key: K, value: V) => void
 ) {
   const entries = new Map<K, { value: V; weight: number }>()
   let total = 0
@@ -29,6 +31,7 @@ export function createWeightedLru<K, V>(
       if (total <= maxWeight || entries.size <= 1) break
       entries.delete(oldest)
       total -= entry.weight
+      onEvict?.(oldest, entry.value)
     }
   }
 
@@ -37,7 +40,12 @@ export function createWeightedLru<K, V>(
     if (!entry) return
     entries.delete(key)
     total -= entry.weight
+    onEvict?.(key, entry.value)
   }
 
-  return { get, set, remove, size: () => entries.size }
+  function clear() {
+    for (const key of entries.keys()) remove(key)
+  }
+
+  return { get, set, remove, clear, size: () => entries.size }
 }

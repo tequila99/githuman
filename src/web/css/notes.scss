@@ -208,3 +208,9 @@
     min-height: 40px;
   }
 }
+
+.note-drop-active {
+  outline: 2px dashed var(--q-primary);
+  outline-offset: -2px;
+  background: rgba(128, 128, 128, 0.12);
+}

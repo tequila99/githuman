@@ -39,7 +39,6 @@ test('unknown, unsupported and truncated attachments return a client error', asy
     Buffer.alloc(0),
     Buffer.from('plain text'),
     Buffer.from('<svg></svg>'),
-    Buffer.from('%PDF-1.7\n'),
     png.subarray(0, 8),
     await readFile(
       new URL('../fixtures/note-assets/sample.bmp', import.meta.url)
@@ -50,4 +49,11 @@ test('unknown, unsupported and truncated attachments return a client error', asy
       error => error instanceof BadRequestError && error.statusCode === 400
     )
   }
+})
+
+test('PDF imports are stored as links with the PDF MIME type', async () => {
+  const format = await detectNoteAssetFormat(Buffer.from('%PDF-1.7\n'))
+  assert.equal(format.extension, 'pdf')
+  assert.equal(format.display, 'link')
+  assert.equal(format.mime, 'application/pdf')
 })

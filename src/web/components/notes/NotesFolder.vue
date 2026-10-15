@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { noteParentPath } from '../../../shared/notes/note-path.ts'
 import NoteContextMenu from './NoteContextMenu.vue'
+import { useNoteDragDrop } from '@/composables/notes/use-note-drag-drop'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { mdiFolderPlusOutline } from '@mdi/js'
@@ -18,19 +20,53 @@ const emit = defineEmits<{
   rename: [path: string, folder: boolean]
 }>()
 const { t } = useI18n()
+const drag = useNoteDragDrop()
+const parent = computed(() => noteParentPath(props.folder))
 const children = computed(() => noteFolderChildren(props.entries, props.folder))
 </script>
 
 <template>
-  <section class="notes-folder col column no-wrap">
-    <div class="notes-folder-path q-pa-lg">{{ folder || t('notes.root') }}</div>
+  <section
+    class="notes-folder col column no-wrap note-drop-zone"
+    :class="{ 'note-drop-active': drag.hovered.value === folder }"
+    @dragover="drag.over($event, folder)"
+    @dragleave="drag.leave"
+    @drop="drag.drop($event, folder)"
+  >
+    <div class="notes-folder-path q-pa-lg row items-center q-gutter-sm">
+      <q-btn
+        v-if="folder"
+        flat
+        round
+        dense
+        color="grey-7"
+        icon="arrow_upward"
+        class="note-drop-zone"
+        :class="{ 'note-drop-active': drag.hovered.value === parent }"
+        :aria-label="t('notes.parentFolder')"
+        @click="emit('folder', parent)"
+        @dragover="drag.over($event, parent)"
+        @dragleave="drag.leave"
+        @drop="drag.drop($event, parent)"
+      />
+      <span>{{ folder || t('notes.root') }}</span>
+    </div>
     <NotesFolderContent v-if="children.length">
       <q-btn
         v-for="child in children"
         :key="child.path"
         flat
         no-caps
-        class="notes-folder-item"
+        class="notes-folder-item note-drop-zone"
+        :class="{
+          'note-drop-active': child.folder && drag.hovered.value === child.path
+        }"
+        :draggable="!child.folder"
+        @dragstart="drag.start($event, child.path)"
+        @dragend="drag.end"
+        @dragover="child.folder && drag.over($event, child.path)"
+        @dragleave="child.folder && drag.leave($event)"
+        @drop="child.folder && drag.drop($event, child.path)"
         @click="
           child.folder ? emit('folder', child.path) : emit('select', child.path)
         "

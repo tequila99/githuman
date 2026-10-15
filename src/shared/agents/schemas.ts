@@ -55,6 +55,24 @@ export const ContextItem = Type.Union(
   [
     Type.Object(
       {
+        kind: Type.Literal('note', { description: 'A project note.' }),
+        noteId: Type.String({ minLength: 1, description: 'Stable note UUID.' }),
+        storageId: Type.String({
+          minLength: 1,
+          description: 'Notes storage identity.'
+        }),
+        name: Type.String({
+          minLength: 1,
+          description: 'Display name when attached.'
+        })
+      },
+      {
+        description:
+          'The current Markdown of a note, including YAML properties.'
+      }
+    ),
+    Type.Object(
+      {
         kind: Type.Literal('diff', { description: 'Live working-tree diff.' }),
         source: DiffSourceNameSchema,
         path: Type.Optional(

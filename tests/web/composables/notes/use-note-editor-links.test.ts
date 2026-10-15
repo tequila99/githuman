@@ -105,6 +105,10 @@ test('ordinary and modified note clicks stay in the app; external links target a
     assert.deepEqual(external, ['https://example.com'])
     assert.equal(prevented, 4)
     assert.equal(visited.length, 3)
+    anchor.attrs.href = '/api/notes/assets/' + 'a'.repeat(64) + '.pdf#page=3'
+    links.follow(event as unknown as MouseEvent)
+    assert.equal(external[1], anchor.attrs.href)
+    assert.equal(visited.length, 3)
   } finally {
     if (descriptor) {
       Object.defineProperty(globalThis, 'Element', descriptor)

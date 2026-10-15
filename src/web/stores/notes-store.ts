@@ -1,3 +1,4 @@
+import { noteChildPath, noteParentPath } from '../../shared/notes/note-path.ts'
 import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { notesApi } from '@/api/notes'
@@ -23,6 +24,7 @@ export interface NoteDraft {
   error: string
   disk: Note | null
   revision: number
+  deleted?: boolean
 }
 
 function readDraft(draft: NoteDraft) {
@@ -74,7 +76,7 @@ export const useNotesStore = defineStore('notes', () => {
   }
   async function write(path: string): Promise<boolean> {
     const draft = drafts[path]
-    if (!draft) return true
+    if (!draft || draft.deleted) return true
     while (draft.text !== draft.saved) {
       if (draft.status === 'conflict') return false
       const metadata = noteMetadata(draft.text)
@@ -185,6 +187,10 @@ export const useNotesStore = defineStore('notes', () => {
           descriptor.value.note.id,
           index.value.storageId
         )
+        const selectedDraft = drafts[descriptor.value.note.id]
+        if (descriptor.value.note.presence === 'deleted' && selectedDraft) {
+          selectedDraft.deleted = true
+        }
       }
       error.value = ''
     } catch (err) {
@@ -227,7 +233,8 @@ export const useNotesStore = defineStore('notes', () => {
     path: string,
     name: string,
     isFolder: boolean,
-    destination?: string
+    destination?: string,
+    expectedId?: string
   ): Promise<boolean> {
     const affected = (value: string) =>
       value === path || (isFolder && value.startsWith(path + '/'))
@@ -242,6 +249,9 @@ export const useNotesStore = defineStore('notes', () => {
       const noteId = index.value.entries.find(
         entry => entry.path === path && !entry.folder
       )?.id
+      if (expectedId && noteId !== expectedId) {
+        throw new Error('The note moved or changed. Try again.')
+      }
       await notesApi.rename(
         path,
         name,
@@ -250,8 +260,7 @@ export const useNotesStore = defineStore('notes', () => {
         noteId,
         index.value.revision
       )
-      const target =
-        destination ?? [...path.split('/').slice(0, -1), name].join('/')
+      const target = destination ?? noteChildPath(noteParentPath(path), name)
       const remap = (value: string) => target + value.slice(path.length)
       for (const key of Object.keys(drafts)) {
         if (!affected(drafts[key]!.path)) continue
@@ -265,6 +274,34 @@ export const useNotesStore = defineStore('notes', () => {
         }
       }
 
+      await refresh()
+      return true
+    } catch (err) {
+      error.value = errorMessage(err)
+      return false
+    }
+  }
+  async function remove(path: string): Promise<boolean> {
+    const entry = index.value.entries.find(
+      note => note.path === path && !note.folder
+    )
+    const storageId = index.value.storageId
+    if (!entry?.id || !storageId) {
+      error.value = 'The note is no longer available.'
+      return false
+    }
+    if (!(await save(path))) {
+      error.value =
+        drafts[draftKey(path)]?.error || 'Save the note before deleting.'
+      return false
+    }
+    try {
+      await notesApi.delete(entry.id, storageId)
+      delete drafts[entry.id]
+      delete drafts[path]
+      if (selectedId.value === entry.id || selectedId.value === path) {
+        clearSelection()
+      }
       await refresh()
       return true
     } catch (err) {
@@ -385,6 +422,7 @@ export const useNotesStore = defineStore('notes', () => {
     folder,
     reloadDisk,
     saveCopy,
+    remove,
     rename
   }
 })

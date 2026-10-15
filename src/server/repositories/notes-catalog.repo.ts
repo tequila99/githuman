@@ -5,6 +5,7 @@ import type { NoteReference } from '../../shared/notes/references.ts'
 
 export interface CatalogNote extends NoteRecord {
   redirectId: string | null
+  deletedAt: string | null
 }
 export interface CatalogLink {
   reference: NoteReference
@@ -45,6 +46,7 @@ interface NoteRow {
   created_at: string
   updated_at: string
   redirect_id: string | null
+  deleted_at: string | null
 }
 function toNote(row: NoteRow): CatalogNote {
   return {
@@ -54,6 +56,7 @@ function toNote(row: NoteRow): CatalogNote {
     version: row.version,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
     redirectId: row.redirect_id
   }
 }
@@ -102,8 +105,8 @@ export class NotesCatalogRepository {
   }
   put(note: CatalogNote) {
     this.db
-      .prepare(`INSERT INTO note_catalog(storage_id,id,path,presence,version,created_at,updated_at,path_changed_at,redirect_id) VALUES(?,?,?,?,?,?,?,?,?)
-      ON CONFLICT(storage_id,id) DO UPDATE SET path=excluded.path,presence=excluded.presence,version=excluded.version,updated_at=excluded.updated_at,path_changed_at=CASE WHEN note_catalog.path != excluded.path THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE note_catalog.path_changed_at END,redirect_id=excluded.redirect_id`)
+      .prepare(`INSERT INTO note_catalog(storage_id,id,path,presence,version,created_at,updated_at,path_changed_at,redirect_id,deleted_at) VALUES(?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(storage_id,id) DO UPDATE SET path=excluded.path,presence=excluded.presence,version=excluded.version,updated_at=excluded.updated_at,path_changed_at=CASE WHEN note_catalog.path != excluded.path THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE note_catalog.path_changed_at END,redirect_id=excluded.redirect_id,deleted_at=excluded.deleted_at`)
       .run(
         this.storageId,
         note.id,
@@ -113,7 +116,8 @@ export class NotesCatalogRepository {
         note.createdAt,
         note.updatedAt,
         note.updatedAt,
-        note.redirectId
+        note.redirectId,
+        note.deletedAt
       )
   }
   links(id: string): CatalogLink[] {

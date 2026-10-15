@@ -1,3 +1,4 @@
+import { noteTitle } from '../../../shared/notes/note-path.ts'
 import { shallowRef, toValue, type MaybeRefOrGetter } from 'vue'
 import type { EditorView } from '@milkdown/kit/prose/view'
 import type { Selection } from '@milkdown/kit/prose/state'
@@ -64,7 +65,7 @@ export function useNoteVisualLinks(
     const label =
       !mention && from !== to
         ? view.state.doc.textBetween(from, to, ' ')
-        : path.split('/').at(-1)!.replace(/\.md$/i, '')
+        : noteTitle(path)
     const mark = view.state.schema.marks.link!.create({
       href: noteLink(toValue(pathInput), path)
     })

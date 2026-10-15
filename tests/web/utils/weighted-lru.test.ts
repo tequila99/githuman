@@ -45,3 +45,18 @@ test('replacing a key does not count its old weight twice', () => {
   assert.equal(cache.get('a'), 'xxx')
   assert.equal(cache.get('b'), 'x')
 })
+
+test('onEvict runs for evicted, removed and cleared entries', () => {
+  const evicted: string[] = []
+  const cache = createWeightedLru<string, string>(5, weigh, key =>
+    evicted.push(key)
+  )
+  cache.set('a', '123')
+  cache.set('b', '123')
+  assert.deepEqual(evicted, ['a'])
+  cache.set('c', '1')
+  cache.remove('c')
+  cache.clear()
+  assert.deepEqual(evicted, ['a', 'c', 'b'])
+  assert.equal(cache.size(), 0)
+})

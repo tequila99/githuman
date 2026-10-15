@@ -492,3 +492,28 @@ test('closed folders reset on a source change and drop out with their folder (#7
   await nextTick()
   assert.equal(explorer.collapsedDiffFolders.size, 0)
 })
+
+test('the summary toggle expands a collapsed list and collapses a mixed or expanded list', () => {
+  const explorer = useFileExplorerStore()
+  useDiffStore().unstagedFiles = ['a.ts', 'b.ts'].map(fileAt)
+  assert.equal(explorer.hasExpandedFiles, false)
+  const version = explorer.layoutVersion
+  explorer.toggleAllFiles()
+  assert.deepEqual([...explorer.expandedFiles], ['a.ts', 'b.ts'])
+  assert.equal(explorer.hasExpandedFiles, true)
+  explorer.toggleAllFiles()
+  assert.equal(explorer.expandedFiles.size, 0)
+  explorer.expandFile('a.ts')
+  explorer.toggleAllFiles()
+  assert.equal(explorer.expandedFiles.size, 0)
+  assert.equal(explorer.layoutVersion, version + 3)
+})
+
+test('the summary toggle ignores expanded paths outside the current diff', () => {
+  const explorer = useFileExplorerStore()
+  useDiffStore().unstagedFiles = ['a.ts'].map(fileAt)
+  explorer.expandedFiles.add('gone.ts')
+  assert.equal(explorer.hasExpandedFiles, false)
+  explorer.toggleAllFiles()
+  assert.deepEqual([...explorer.expandedFiles], ['a.ts'])
+})

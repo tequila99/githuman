@@ -223,6 +223,9 @@ export function parseSessionState(data: string): AgentSessionState | null {
 }
 
 export function contextKey(item: AgentContextItem): string {
+  if (item.kind === 'note') {
+    return JSON.stringify([item.kind, item.storageId, item.noteId])
+  }
   return JSON.stringify(item)
 }
 

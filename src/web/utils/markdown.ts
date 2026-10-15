@@ -121,15 +121,63 @@ export function extractDiagramSources(source: string): string[] {
     .map(token => token.content)
 }
 
-function markdownSignature(tokens: Token[]): unknown[] {
-  return tokens.map(token => ({
-    type: token.type,
-    tag: token.tag,
-    info: token.info,
-    attrs: [...(token.attrs ?? [])].sort(([a], [b]) => a.localeCompare(b)),
-    content: token.children ? undefined : token.content,
-    children: token.children ? markdownSignature(token.children) : undefined
-  }))
+interface SignatureItem {
+  type: string
+  tag: string
+  info: string
+  attrs: [string, string | number][]
+  content?: string | undefined
+  children?: SignatureItem[] | undefined
+}
+
+/**
+ * The editor writes a bare URL, and a link whose text equals its target, as
+ * `<url>`. Such a link has no other target or text, so it counts as plain text
+ * of that URL; no content is lost.
+ */
+function isSelfLink(open: Token, text: Token | undefined): boolean {
+  return (
+    open.type === 'link_open' &&
+    text?.type === 'text' &&
+    (open.markup === 'autolink' ||
+      (!open.attrGet('title') && text.content === open.attrGet('href')))
+  )
+}
+
+function markdownSignature(tokens: Token[]): SignatureItem[] {
+  const items: SignatureItem[] = []
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index]!
+    const text = tokens[index + 1]
+    if (isSelfLink(token, text) && tokens[index + 2]?.type === 'link_close') {
+      items.push({
+        type: 'text',
+        tag: '',
+        info: '',
+        attrs: [],
+        content: text!.content
+      })
+      index += 2
+      continue
+    }
+    items.push({
+      type: token.type,
+      tag: token.tag,
+      info: token.info,
+      attrs: [...(token.attrs ?? [])].sort(([a], [b]) => a.localeCompare(b)),
+      content: token.children ? undefined : token.content,
+      children: token.children ? markdownSignature(token.children) : undefined
+    })
+  }
+  return items.reduce<SignatureItem[]>((merged, item) => {
+    const last = merged.at(-1)
+    if (last?.type === 'text' && item.type === 'text') {
+      last.content = (last.content ?? '') + (item.content ?? '')
+    } else {
+      merged.push(item)
+    }
+    return merged
+  }, [])
 }
 
 /** Compare parsed content so visual-editor normalization cannot hide unsupported syntax loss. */
@@ -140,16 +188,25 @@ export function sameMarkdownContent(before: string, after: string): boolean {
   )
 }
 
-export function hasMarkdownImages(source: string): boolean {
+export function hasUnsupportedMarkdownImages(source: string): boolean {
   return imageParser
     .parse(source, {})
     .some(token =>
       token.children?.some(
         child =>
           child.type === 'image' &&
-          !NOTE_ASSET_URL.test(String(child.attrGet('src') ?? ''))
+          !NOTE_ASSET_URL.test(String(child.attrGet('src') ?? '')) &&
+          !/^https?:\/\//i.test(String(child.attrGet('src') ?? ''))
       )
     )
+}
+
+/**
+ * True when plain text starts like an ordered-list item. The editor must
+ * escape it, or the next parse turns the paragraph into a list.
+ */
+export function startsLikeListMarker(value: string): boolean {
+  return /^\s*\d+[.)]\s/.test(value)
 }
 
 /** Remove editor placeholders without changing code blocks or inline HTML. */

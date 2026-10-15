@@ -23,3 +23,13 @@ export type NoteMutation = Static<typeof NoteMutationSchema>
 export type NoteGraph = Static<typeof NoteGraphSchema>
 export type NoteDescriptor = Static<typeof NoteDescriptorSchema>
 export type NoteResolution = Static<typeof NoteResolutionSchema>
+
+export type ImportExternalAsset = Static<
+  typeof import('./schemas.ts').ImportExternalAssetBody
+>
+export type ExternalAssetResult = Static<
+  typeof import('./schemas.ts').ExternalAssetResultSchema
+>
+export type ExternalAssetInspection = Static<
+  typeof import('./schemas.ts').ExternalAssetInspectionSchema
+>
