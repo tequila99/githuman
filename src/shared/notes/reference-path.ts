@@ -1,3 +1,4 @@
+import { noteBasename } from './note-path.ts'
 export function localReference(
   from: string,
   href: string
@@ -49,7 +50,7 @@ export function wikiReference(
     from,
     target.split('/').map(encodeURIComponent).join('/')
   )?.path
-  const candidates = paths.filter(path => path.split('/').at(-1) === target)
+  const candidates = paths.filter(path => noteBasename(path) === target)
   const path =
     local && paths.includes(local)
       ? local

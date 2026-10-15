@@ -1,3 +1,4 @@
+import { useNotesStore } from '@/stores/notes-store'
 import { computed, onScopeDispose, ref } from 'vue'
 import { defineStore, acceptHMRUpdate } from 'pinia'
 import { debounce } from 'quasar'
@@ -387,6 +388,18 @@ export const useAgentStore = defineStore('agent', () => {
     const context = mergeContext(entry.pendingContext, extraContext)
     const body: AgentPromptRequest = { text: trimmed, context }
     try {
+      const notes = useNotesStore()
+      for (const item of context) {
+        if (item.kind !== 'note') continue
+        const draft = notes.drafts[item.noteId]
+        if (
+          draft &&
+          draft.storageId === item.storageId &&
+          !(await notes.save(item.noteId))
+        ) {
+          throw new Error(draft.error || 'Could not save the note')
+        }
+      }
       await apiPost<void>(`/api/agent/sessions/${entry.info.id}/prompt`, body)
       // Context added while the request was running belongs to the next message.
       const sent = new Set(context.map(contextKey))

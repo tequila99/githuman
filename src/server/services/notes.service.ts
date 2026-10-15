@@ -14,6 +14,9 @@ import { errorMessage } from '../../shared/utils/error-message.ts'
 import { MAX_NOTE_ASSET_BYTES } from '../../shared/notes/constants.ts'
 import { detectNoteAssetFormat } from '../utils/note-asset-format.ts'
 
+// Git error text depends on the locale. The "not a git repository" check below needs English.
+const GIT_ENV = { ...process.env, LC_ALL: 'C' }
+
 const execFileAsync = promisify(execFile)
 
 export class NotesService {
@@ -47,14 +50,14 @@ export class NotesService {
       const { stdout: gitRoot } = await execFileAsync(
         'git',
         ['rev-parse', '--show-toplevel'],
-        { cwd: this.projectPath }
+        { cwd: this.projectPath, env: GIT_ENV }
       )
       const path = relative(gitRoot.trim(), this.root).replaceAll('\\', '/')
       if (path.startsWith('../')) return
       const { stdout: tracked } = await execFileAsync(
         'git',
         ['ls-files', '--', path + '/'],
-        { cwd: gitRoot.trim() }
+        { cwd: gitRoot.trim(), env: GIT_ENV }
       )
       if (tracked && this.local) {
         this.warning =
@@ -64,7 +67,7 @@ export class NotesService {
       const { stdout: exclude } = await execFileAsync(
         'git',
         ['rev-parse', '--git-path', 'info/exclude'],
-        { cwd: this.projectPath }
+        { cwd: this.projectPath, env: GIT_ENV }
       )
       const target = resolve(this.projectPath, exclude.trim())
       const rule = '/' + path.replace(/[*?[\]#! ]/g, char => '\\' + char) + '/'
@@ -93,7 +96,7 @@ export class NotesService {
       index,
       this.identity.catalog
         .all()
-        .map(note => [note.id, note.version, note.presence]),
+        .map(note => [note.id, note.version, note.presence, note.deletedAt]),
       this.warning
     ])
     return { ...index, warning: this.warning }
@@ -124,11 +127,18 @@ export class NotesService {
     this.bus.publish({ type: 'notes:changed' })
     return note
   }
+  async delete(id: string, storageId: string) {
+    await this.identity.deleteId(id, storageId)
+    this.bus.publish({ type: 'notes:changed' })
+  }
   async uploadAsset(bytes: Buffer) {
     if (!bytes.length || bytes.length > MAX_NOTE_ASSET_BYTES) {
       throw new BadRequestError('Image must be under 10 MB')
     }
     const format = await detectNoteAssetFormat(bytes)
+    if (format.display !== 'image') {
+      throw new BadRequestError('Only image uploads are supported')
+    }
     this.exclusion ??= this.visibility(true)
     await this.exclusion
     const id = await this.identity.run(async () => {
@@ -138,6 +148,25 @@ export class NotesService {
       return this.repository.saveAsset(bytes, format.extension)
     })
     return { url: '/api/notes/assets/' + id }
+  }
+  async importAsset(
+    chunks: AsyncIterable<Buffer>,
+    extension: string,
+    signal: AbortSignal
+  ) {
+    this.exclusion ??= this.visibility(true)
+    await this.exclusion
+    const staged = await this.repository.stageAsset(chunks, extension, signal)
+    try {
+      const id = await this.identity.run(async () => {
+        await this.identity.writer.acquire(true)
+        await this.identity.writer.assertOwner()
+        return staged.commit()
+      })
+      return '/api/notes/assets/' + id
+    } finally {
+      await staged.dispose()
+    }
   }
   readAsset(id: string) {
     return this.repository.readAsset(id)

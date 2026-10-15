@@ -242,3 +242,128 @@ test('UUID drafts survive path changes and saves address the identity rather tha
   ])
   assert.equal(store.current?.text, 'edited')
 })
+
+test('soft deletion saves the draft, sends its stable identity and removes it from local state', async () => {
+  const identified = { ...note, id: 'note-id', storageId: 'storage' }
+  mock.method(notesApi, 'read', async () => identified)
+  const store = useNotesStore()
+  await store.select('a.md')
+  store.index = {
+    entries: [
+      { path: 'a.md', id: 'note-id', folder: false, tags: [], error: null }
+    ],
+    storage: '/notes',
+    storageId: 'storage',
+    warning: null
+  }
+  store.edit('a.md', 'latest')
+  const saved = mock.method(notesApi, 'save', async () => ({
+    ...identified,
+    text: 'latest',
+    version: 'v2'
+  }))
+  const removed = mock.method(notesApi, 'delete', async () => {
+    assert.equal(saved.mock.callCount(), 1)
+    assert.equal(store.current?.saved, 'latest')
+  })
+  mock.method(notesApi, 'index', async () => ({
+    entries: [],
+    storage: '/notes',
+    storageId: 'storage',
+    warning: null
+  }))
+  assert.equal(await store.remove('a.md'), true)
+  assert.deepEqual(removed.mock.calls[0]?.arguments, ['note-id', 'storage'])
+  assert.equal(store.current, undefined)
+  assert.equal(store.selectedId, '')
+  assert.deepEqual(store.drafts, {})
+})
+
+test('a failed deletion retains the draft and exposes the error', async () => {
+  mock.method(notesApi, 'read', async () => ({
+    ...note,
+    id: 'note-id',
+    storageId: 'storage'
+  }))
+  const store = useNotesStore()
+  await store.select('a.md')
+  store.index = {
+    entries: [
+      { path: 'a.md', id: 'note-id', folder: false, tags: [], error: null }
+    ],
+    storage: '/notes',
+    storageId: 'storage',
+    warning: null
+  }
+  mock.method(notesApi, 'delete', async () => {
+    throw new Error('Unavailable')
+  })
+  assert.equal(await store.remove('a.md'), false)
+  assert.equal(store.current?.text, note.text)
+  assert.equal(store.error, 'Unavailable')
+})
+
+test('deletion in another tab retains an unsaved draft without trapping navigation or writing it back', async () => {
+  const identified = { ...note, id: 'note-id', storageId: 'storage' }
+  const deleted = {
+    id: 'note-id',
+    path: 'a.md',
+    presence: 'deleted' as const,
+    version: 'v1',
+    createdAt: '',
+    updatedAt: ''
+  }
+  mock.method(notesApi, 'readId', async () => identified)
+  const descriptor = mock.method(notesApi, 'descriptor', async () => ({
+    note: { ...deleted, presence: 'present' },
+    backlinks: []
+  }))
+  const store = useNotesStore()
+  await store.selectId('note-id', 'storage')
+  store.edit('a.md', 'Unsaved draft')
+  mock.method(notesApi, 'index', async () => ({
+    entries: [],
+    storage: '/notes',
+    storageId: 'storage',
+    warning: null
+  }))
+  mock.method(notesApi, 'readId', async () => {
+    throw new ApiRequestError('Deleted', 404)
+  })
+  descriptor.mock.restore()
+  mock.method(notesApi, 'descriptor', async () => ({
+    note: deleted,
+    backlinks: []
+  }))
+  const save = mock.method(notesApi, 'save', async () => identified)
+  await store.refresh()
+  assert.equal(store.descriptor?.note.presence, 'deleted')
+  assert.equal(store.current?.text, 'Unsaved draft')
+  assert.equal(await store.save(), true)
+  assert.equal(save.mock.callCount(), 0)
+  store.clearSelection()
+  assert.equal(await store.save('note-id'), true)
+  assert.equal(save.mock.callCount(), 0)
+})
+
+test('drag move refuses a different identity at the original path after refresh', async () => {
+  const store = useNotesStore()
+  mock.method(notesApi, 'index', async () => ({
+    entries: [
+      { path: 'a.md', id: 'replacement', folder: false, tags: [], error: null }
+    ],
+    storage: '/notes',
+    storageId: 'storage',
+    warning: null
+  }))
+  const rename = mock.method(notesApi, 'rename', async () => ({
+    operationId: 'operation',
+    complete: true
+  }))
+  assert.equal(
+    await store.rename('a.md', 'a.md', false, 'folder/a.md', 'original'),
+    false
+  )
+  assert.equal(rename.mock.callCount(), 0)
+  assert.match(store.error, /moved or changed/)
+})

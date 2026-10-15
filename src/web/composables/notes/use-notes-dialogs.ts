@@ -1,3 +1,4 @@
+import { noteCreationPath, validNoteEntryName } from '@/utils/notes/entry-name'
 import { toValue, type MaybeRefOrGetter } from 'vue'
 import { useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
@@ -24,15 +25,15 @@ export function useNotesDialogs(
       title: t(
         folder ? 'notes.newFolder' : copy ? 'notes.saveCopy' : 'notes.newNote'
       ),
-      message: t('notes.pathHint'),
-      prompt: { model: parent ? parent + '/' : '', type: 'text' },
+      message: t(folder ? 'notes.folderNameHint' : 'notes.noteNameHint', {
+        folder: parent || t('notes.root')
+      }),
+      prompt: { model: '', type: 'text', isValid: validNoteEntryName },
       cancel: true,
       persistent: true
-    }).onOk(async (path: string) => {
-      const name = path.trim()
-      if (!name) return
-      const target =
-        folder || name.toLowerCase().endsWith('.md') ? name : name + '.md'
+    }).onOk(async (name: string) => {
+      if (!validNoteEntryName(name)) return
+      const target = noteCreationPath(parent, name, folder)
       if (folder) {
         await store.folder(target)
         if (

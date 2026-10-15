@@ -1,13 +1,13 @@
 <script setup lang="ts">
+import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { DiffFile } from '@/api/types'
 
-const props = defineProps<{ files: DiffFile[] }>()
+const props = defineProps<{ files: DiffFile[]; anyExpanded: boolean }>()
 
 const emit = defineEmits<{
-  (e: 'expand-all'): void
-  (e: 'collapse-all'): void
+  (e: 'toggle-all'): void
 }>()
 
 const { t } = useI18n()
@@ -33,7 +33,14 @@ const stats = computed(() => {
 
 <template>
   <div
-    class="diff-status-bar row items-center q-gutter-x-md q-pa-sm text-body2"
+    class="diff-status-bar row items-center q-gutter-x-md q-pa-sm text-body2 non-selectable"
+    role="button"
+    tabindex="0"
+    :aria-label="t(anyExpanded ? 'changes.collapseAll' : 'changes.expandAll')"
+    :aria-expanded="anyExpanded"
+    @dblclick="emit('toggle-all')"
+    @keydown.enter.prevent="!$event.repeat && emit('toggle-all')"
+    @keydown.space.prevent="!$event.repeat && emit('toggle-all')"
   >
     <span class="text-weight-medium">
       {{ t('changes.filesChanged', { count: stats.total }) }}
@@ -57,25 +64,21 @@ const stats = computed(() => {
       {{ stats.renamed }} {{ t('changes.renamed') }}
     </span>
 
-    <q-space />
-
-    <q-btn
-      dense
-      flat
-      no-caps
-      size="sm"
-      icon="unfold_more"
-      :label="t('changes.expandAll')"
-      @click="emit('expand-all')"
-    />
-    <q-btn
-      dense
-      flat
-      no-caps
-      size="sm"
-      icon="unfold_less"
-      :label="t('changes.collapseAll')"
-      @click="emit('collapse-all')"
-    />
+    <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
+      t(anyExpanded ? 'changes.collapseAllHint' : 'changes.expandAllHint')
+    }}</q-tooltip>
   </div>
 </template>
+
+<style scoped>
+.diff-status-bar {
+  cursor: pointer;
+}
+.diff-status-bar:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: -2px;
+}
+.diff-status-bar > span {
+  white-space: nowrap;
+}
+</style>

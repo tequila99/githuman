@@ -1,3 +1,4 @@
+import { noteChildPath, noteParentPath } from '../../shared/notes/note-path.ts'
 import { randomUUID } from 'node:crypto'
 import { lstat } from 'node:fs/promises'
 import type { NotesRepository } from '../repositories/notes.repo.ts'
@@ -76,7 +77,7 @@ export class NotesOperationsService {
     }
     if (restore) operation.restore = restore
     const records = (preview ?? this.catalog.all()).filter(
-      note => note.presence === 'present' && !note.redirectId
+      note => note.presence === 'present' && !note.redirectId && !note.deletedAt
     )
     const oldPath = (note: CatalogNote) =>
       moves.find(move => move.id === note.id)?.from ?? note.path
@@ -154,10 +155,10 @@ export class NotesOperationsService {
         operation.source !== operation.target &&
         operation.source.toLowerCase() === operation.target.toLowerCase()
       if (caseOnly && !operation.temporary) {
-        operation.temporary = [
-          ...operation.source.split('/').slice(0, -1),
+        operation.temporary = noteChildPath(
+          noteParentPath(operation.source),
           '__ght-case-' + operation.id + (operation.folder ? '' : '.md')
-        ].join('/')
+        )
         this.catalog.operation(operation)
       }
       let fromPath = operation.source

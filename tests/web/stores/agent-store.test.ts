@@ -1,3 +1,4 @@
+import { useNotesStore } from '@/stores/notes-store'
 import { test, beforeEach, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import { setActivePinia, createPinia } from 'pinia'
@@ -722,4 +723,48 @@ test('addContext discards a delayed upload to a removed chat without opening a d
     'missing'
   )
   assert.equal(store.newChatDialog.open, false)
+})
+
+test('note drafts are saved before prompting; conflicts preserve pending context', async () => {
+  const store = await storeWith(session('s1'))
+  const notes = useNotesStore()
+  notes.drafts.note = {
+    id: 'note',
+    storageId: 'storage',
+    path: 'a.md',
+    text: 'Changed',
+    saved: 'Old',
+    version: 'v1',
+    status: 'conflict',
+    error: 'Disk conflict',
+    disk: null,
+    revision: 1
+  }
+  store.addContext({
+    kind: 'note',
+    noteId: 'note',
+    storageId: 'storage',
+    name: 'a.md'
+  })
+  await assert.rejects(store.send('read'), /Disk conflict/)
+  assert.equal(
+    requests.some(r => r.url.endsWith('/prompt')),
+    false
+  )
+  assert.equal(store.chats.s1?.pendingContext.length, 1)
+  notes.drafts.note.status = 'dirty'
+  routes['PATCH /api/notes/document'] = () =>
+    json({
+      id: 'note',
+      storageId: 'storage',
+      path: 'a.md',
+      text: 'Changed',
+      version: 'v2'
+    })
+  routes['POST /api/agent/sessions/s1/prompt'] = () => json(null, 204)
+  assert.equal(await store.send('read'), true)
+  const saveIndex = requests.findIndex(r => r.method === 'PATCH')
+  const promptIndex = requests.findIndex(r => r.url.endsWith('/prompt'))
+  assert.ok(saveIndex >= 0 && promptIndex > saveIndex)
+  assert.equal(notes.drafts.note.saved, 'Changed')
 })

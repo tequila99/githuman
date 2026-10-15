@@ -12,13 +12,13 @@ test('the asset identifier allowlist preserves existing URLs and rejects other e
     assert.equal(noteAssetFormat(extension)?.display, 'image')
   }
   for (const id of [
-    'a'.repeat(64) + '.pdf',
     'a'.repeat(64) + '.apng',
     '../' + 'a'.repeat(64) + '.png',
     'short.png'
   ]) {
     assert.equal(pattern.test(id), false)
   }
-  assert.equal(noteAssetFormat('pdf'), undefined)
+  assert.equal(pattern.test('a'.repeat(64) + '.pdf'), true)
+  assert.equal(noteAssetFormat('pdf')?.display, 'link')
   assert.equal(noteAssetFormat(undefined), undefined)
 })

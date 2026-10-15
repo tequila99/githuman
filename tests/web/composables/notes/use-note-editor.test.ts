@@ -60,3 +60,36 @@ test('unsupported visual content falls back to source until the visual editor is
   editor.visualReady()
   assert.equal(editor.visualUnsupported.value, false)
 })
+
+test('document paste replaces the complete source and refreshes the visual editor only after success', () => {
+  const id = 'c7e6104c-3fae-4b06-aa88-fbe86f20abee'
+  const text = shallowRef(`---\ngithuman_id: ${id}\n---\n`)
+  const editor = useNoteEditor(text, value => {
+    text.value = value
+  })
+  assert.equal(
+    editor.importDocument(
+      '---\ntitle: Article\ntags: [clippings]\n---\n# Body\n',
+      id
+    ),
+    true
+  )
+  assert.deepEqual(editor.tags.value, ['clippings'])
+  assert.equal(editor.parts.value.body, '# Body\n')
+  assert.equal(editor.visualVersion.value, 1)
+  assert.ok(text.value.includes('githuman_id: ' + id))
+  const saved = text.value
+  assert.equal(
+    editor.importDocument('---\ntitle: [broken\n---\nBody', id),
+    false
+  )
+  assert.equal(text.value, saved)
+  assert.ok(editor.editorError.value)
+  assert.equal(editor.visualVersion.value, 1)
+  assert.equal(
+    editor.importDocument('---\ntitle: Repaired\n---\nNew body', id),
+    true
+  )
+  assert.equal(editor.editorError.value, '')
+  assert.equal(editor.visualVersion.value, 2)
+})

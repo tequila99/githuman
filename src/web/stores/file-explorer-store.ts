@@ -116,6 +116,10 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     return [...ordered, ...files.filter(file => !placed.has(file))]
   })
 
+  const hasExpandedFiles = computed(() =>
+    diffFiles.value.some(file => expandedFiles.value.has(pathOf(file)))
+  )
+
   /** True while the filter has text: the tree then shows every folder open. */
   const filtering = computed(() => (filter.value ?? '').trim() !== '')
 
@@ -286,6 +290,15 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     layoutVersion.value++
   }
 
+  function toggleAllFiles() {
+    if (!diffFiles.value.length) return
+    if (hasExpandedFiles.value) {
+      collapseAllFiles()
+    } else {
+      expandAllFiles()
+    }
+  }
+
   function selectFile(path: string) {
     selectedPath.value = path
     if (browseMode.value) return
@@ -378,6 +391,7 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     browseFileLoading,
     browseFileError,
     diffFiles,
+    hasExpandedFiles,
     filtering,
     filteredDiffFiles,
     diffTreeRows,
@@ -390,6 +404,7 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     expandFile,
     expandAllFiles,
     collapseAllFiles,
+    toggleAllFiles,
     selectFile,
     refresh,
     refreshFromServerEvent

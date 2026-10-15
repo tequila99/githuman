@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hasNoteFrontmatter } from '@/utils/notes/document-paste'
 import { useTemplateRef } from 'vue'
 import type { EditorView } from '@milkdown/kit/prose/view'
 import { useNoteVisualEditor } from '@/composables/notes/use-note-visual-editor'
@@ -8,6 +9,7 @@ import NoteLinkSuggestions from './NoteLinkSuggestions.vue'
 const props = defineProps<{ text: string; path: string; paths: string[] }>()
 const emit = defineEmits<{
   change: [text: string]
+  document: [text: string]
   unsupported: []
   ready: []
   link: []
@@ -32,10 +34,27 @@ const { error, getView } = useNoteVisualEditor(root, () => props.text, {
   keydown: links.handleKeyDown
 })
 currentView = getView
+function pasteDocument(event: ClipboardEvent) {
+  const view = getView()
+  const text = event.clipboardData?.getData('text/plain')
+  if (!view || !text || !hasNoteFrontmatter(text)) return
+  const { doc, selection } = view.state
+  if (selection.$from.parent.type.spec.code) return
+  const empty =
+    doc.childCount === 1 &&
+    doc.firstChild?.type.name === 'paragraph' &&
+    doc.firstChild.content.size === 0
+  const all = selection.from <= 1 && selection.to >= doc.content.size - 1
+  if (!empty && !all) return
+  // Keep the original YAML before Milkdown treats it as body Markdown or clipboard HTML.
+  event.preventDefault()
+  event.stopPropagation()
+  emit('document', text)
+}
 defineExpose({ prepareLink, insertLink })
 </script>
 <template>
-  <div class="note-visual">
+  <div class="note-visual" @paste.capture="pasteDocument">
     <q-banner dense v-if="error" class="note-banner text-negative">{{
       error
     }}</q-banner>

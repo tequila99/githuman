@@ -192,3 +192,53 @@ test('applyMigrations is safe to call twice on the same database', () => {
 
   db.close()
 })
+
+test('existing note catalogs gain a deletion marker without losing identities and migrations remain repeatable', () => {
+  const db = createTestDatabase()
+  try {
+    db.exec('ALTER TABLE note_catalog DROP COLUMN deleted_at')
+    db.prepare('INSERT INTO note_storages(id, root) VALUES(?, ?)').run(
+      'storage',
+      '/notes'
+    )
+    db.prepare(
+      'INSERT INTO note_catalog(storage_id,id,path,presence,version,created_at,updated_at,path_changed_at) VALUES(?,?,?,?,?,?,?,?)'
+    ).run(
+      'storage',
+      'note',
+      'keep.md',
+      'present',
+      'v1',
+      'created',
+      'updated',
+      'changed'
+    )
+    applyMigrations(db)
+    applyMigrations(db)
+    const note = db
+      .prepare('SELECT id,path,presence,version,deleted_at FROM note_catalog')
+      .get()
+    assert.deepEqual(
+      { ...note },
+      {
+        id: 'note',
+        path: 'keep.md',
+        presence: 'present',
+        version: 'v1',
+        deleted_at: null
+      }
+    )
+    db.prepare('UPDATE note_catalog SET deleted_at = ? WHERE id = ?').run(
+      'deleted',
+      'note'
+    )
+    applyMigrations(db)
+    assert.equal(
+      db.prepare('SELECT deleted_at FROM note_catalog WHERE id = ?').get('note')
+        ?.deleted_at,
+      'deleted'
+    )
+  } finally {
+    db.close()
+  }
+})

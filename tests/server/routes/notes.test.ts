@@ -646,3 +646,51 @@ test('loopback binds reject rebound hosts, other binds accept any matching origi
     403
   )
 })
+
+test('delete hides a note by identity without removing its file and rejects foreign storage', async t => {
+  const project = await mkdtemp(join(tmpdir(), 'notes-delete-api-'))
+  t.after(() => rm(project, { recursive: true, force: true }))
+  const app = buildApp({ projectPath: project })
+  t.after(() => app.close())
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/notes/document',
+    payload: { path: 'keep.md', text: '# Keep' }
+  })
+  assert.equal(created.statusCode, 201, created.body)
+  const note = created.json<Note>()
+  const before = await readFile(join(project, '.githuman/notes/keep.md'))
+  const rejected = await app.inject({
+    method: 'POST',
+    url: '/api/notes/delete',
+    payload: { id: note.id, storageId: '00000000-0000-4000-8000-000000000000' }
+  })
+  assert.equal(rejected.statusCode, 400, rejected.body)
+  const removed = await app.inject({
+    method: 'POST',
+    url: '/api/notes/delete',
+    payload: { id: note.id, storageId: note.storageId }
+  })
+  assert.equal(removed.statusCode, 204, removed.body)
+  assert.equal(removed.body, '')
+  const index = (await app.inject('/api/notes')).json<NotesIndex>()
+  assert.deepEqual(index.entries, [])
+  const files = await readdir(join(project, '.githuman/notes'))
+  const renamed = files.find(file =>
+    /^keep_deleted_[0-9a-f-]{36}\.md$/.test(file)
+  )
+  assert.ok(renamed, files.join())
+  assert.ok(!files.includes('keep.md'))
+  assert.deepEqual(
+    await readFile(join(project, '.githuman/notes', renamed)),
+    before
+  )
+  assert.equal(
+    (
+      await app.inject(
+        '/api/notes/by-id?id=' + note.id + '&storageId=' + note.storageId
+      )
+    ).statusCode,
+    404
+  )
+})

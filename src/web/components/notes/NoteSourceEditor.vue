@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { noteTitle } from '../../../shared/notes/note-path.ts'
 import { nextTick, shallowRef, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppTheme } from '@/composables/use-app-theme'
@@ -59,7 +60,7 @@ async function insertLink(path: string, mention = false) {
   const label =
     range.start !== range.end && !mention
       ? props.text.slice(range.start, range.end)
-      : path.split('/').at(-1)!.replace(/\.md$/i, '')
+      : noteTitle(path)
   const markdown = `[${label.replace(/[\\[\]]/g, char => '\\' + char)}](${noteLink(props.path, path)})`
   emit(
     'change',

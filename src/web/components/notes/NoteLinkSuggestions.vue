@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { noteTitle } from '../../../shared/notes/note-path.ts'
 import { useI18n } from 'vue-i18n'
 
 defineProps<{ paths: string[]; active: number }>()
@@ -24,9 +25,7 @@ const { t } = useI18n()
       @click="emit('select', path)"
     >
       <q-item-section>
-        <q-item-label class="ellipsis">{{
-          path.split('/').at(-1)?.replace(/\.md$/i, '')
-        }}</q-item-label>
+        <q-item-label class="ellipsis">{{ noteTitle(path) }}</q-item-label>
         <q-item-label caption class="ellipsis">{{ path }}</q-item-label>
       </q-item-section>
     </q-item>

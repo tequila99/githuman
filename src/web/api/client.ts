@@ -14,7 +14,10 @@ export class ApiRequestError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function checkedFetch(
+  path: string,
+  init?: RequestInit
+): Promise<Response> {
   const response = await fetch(path, init)
 
   if (!response.ok) {
@@ -34,6 +37,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       response.status
     )
   }
+
+  return response
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await checkedFetch(path, init)
 
   // Not only 204: a 202 Accepted (agent prompt) is sent without a body too.
   const text = await response.text()
@@ -59,8 +68,28 @@ function withJsonBody(method: string, body: unknown): RequestInit {
   }
 }
 
-export function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  return request<T>(path, withJsonBody('POST', body))
+export function apiPost<T>(
+  path: string,
+  body?: unknown,
+  signal?: AbortSignal
+): Promise<T> {
+  return request<T>(path, {
+    ...withJsonBody('POST', body),
+    signal: signal ?? null
+  })
+}
+
+export async function apiPostBlob(
+  path: string,
+  body: unknown,
+  signal?: AbortSignal
+): Promise<Blob> {
+  return (
+    await checkedFetch(path, {
+      ...withJsonBody('POST', body),
+      signal: signal ?? null
+    })
+  ).blob()
 }
 
 export function apiPostForm<T>(path: string, body: FormData): Promise<T> {
