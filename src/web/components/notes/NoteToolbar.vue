@@ -69,7 +69,7 @@ const modes = computed(() => [
       @click="emit('downloadAssets')"
     >
       <q-tooltip :delay="TOOLTIP_DELAY_MS"
-        >{{ t('notes.externalAssets.title') }} (Ctrl+Win+D)</q-tooltip
+        >{{ t('notes.externalAssets.title') }} (Ctrl+Shift+D)</q-tooltip
       >
     </q-btn>
     <div

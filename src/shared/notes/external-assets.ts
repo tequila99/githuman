@@ -203,8 +203,8 @@ export function isNoteAssetShortcut(
   return (
     event.code === 'KeyD' &&
     event.ctrlKey &&
-    event.metaKey &&
-    !event.shiftKey &&
+    event.shiftKey &&
+    !event.metaKey &&
     !event.altKey &&
     !event.repeat &&
     !event.isComposing

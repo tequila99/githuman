@@ -68,9 +68,9 @@ test('keyboard command uses the physical key and excludes repeat, IME and other 
   const event = {
     code: 'KeyD',
     ctrlKey: true,
-    shiftKey: false,
+    shiftKey: true,
     altKey: false,
-    metaKey: true,
+    metaKey: false,
     repeat: false,
     isComposing: false
   }
@@ -78,9 +78,9 @@ test('keyboard command uses the physical key and excludes repeat, IME and other 
   for (const change of [
     { code: 'KeyA' },
     { ctrlKey: false },
-    { shiftKey: true },
+    { shiftKey: false },
     { altKey: true },
-    { metaKey: false },
+    { metaKey: true },
     { repeat: true },
     { isComposing: true }
   ]) {
