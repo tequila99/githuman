@@ -15,14 +15,10 @@ import type {
   NoteRecord
 } from '../../shared/notes/types.ts'
 export const notesApi = {
-  inspectExternalAsset: (
-    url: string,
-    kind: 'image' | 'pdf',
-    signal?: AbortSignal
-  ) =>
+  inspectExternalAsset: (url: string, signal?: AbortSignal) =>
     apiPost<ExternalAssetInspection>(
       '/api/notes/assets/inspect',
-      { url, kind },
+      { url },
       signal
     ),
   importExternalAsset: (body: ImportExternalAsset, signal?: AbortSignal) =>

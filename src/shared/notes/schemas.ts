@@ -263,7 +263,7 @@ const ExternalAssetKind = Type.Union(
   { description: 'Expected attachment class.' }
 )
 export const InspectExternalAssetBody = Type.Object(
-  { url: ExternalAssetUrl, kind: ExternalAssetKind },
+  { url: ExternalAssetUrl },
   {
     additionalProperties: false,
     description: 'Inspect a remote attachment without downloading its body.'

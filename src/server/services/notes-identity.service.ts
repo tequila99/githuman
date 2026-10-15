@@ -813,10 +813,10 @@ export class NotesIdentityService {
       ) {
         throw new NoteConflictError()
       }
-      // A present file leaves its name, so a new note can use it. The catalog keeps the identity.
-      let path = note.path
+      // The note leaves its name, so a new note can use it. The catalog keeps the identity.
+      // Only a present file exists on disk and needs the move.
+      const path = deletedNotePath(note.path, randomUUID())
       if (note.presence === 'present' && !note.redirectId) {
-        path = deletedNotePath(note.path, randomUUID())
         await this.files.moveEntry(note.path, path, false)
       }
       this.catalog.put({

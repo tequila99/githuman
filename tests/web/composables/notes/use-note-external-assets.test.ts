@@ -10,7 +10,6 @@ import type {
 type PreviewApi = {
   inspectExternalAsset?: (
     url: string,
-    kind: 'image' | 'pdf',
     signal?: AbortSignal
   ) => Promise<{ size: number | null }>
   previewExternalAsset?: (url: string, signal?: AbortSignal) => Promise<Blob>

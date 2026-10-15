@@ -174,7 +174,7 @@ export function useNoteExternalAssets(
     const signal = controller.signal
     try {
       const value = await requests.add(
-        () => api.inspectExternalAsset(row.url, row.kind, signal),
+        () => api.inspectExternalAsset(row.url, signal),
         { signal }
       )
       if (current === generation) row.size = value.size

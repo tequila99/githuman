@@ -82,7 +82,7 @@ test('external attachment routes store detected PDF, expose complete results and
   const inspect = await app.inject({
     method: 'POST',
     url: '/api/notes/assets/inspect',
-    payload: { url: 'https://example.com/a.pdf', kind: 'pdf' }
+    payload: { url: 'https://example.com/a.pdf' }
   })
   assert.deepEqual(inspect.json(), { size: pdf.length })
   const preview = await app.inject({

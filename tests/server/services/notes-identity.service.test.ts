@@ -402,3 +402,30 @@ test('folder moves retain the deletion marker for hidden children and free the o
   await service.rename('visible.md', 'hidden.md', false, 'moved/hidden.md')
   assert.ok((await service.read('moved/hidden.md')).text.includes('Visible'))
 })
+
+test('deleting a missing note releases its path for a new note', async t => {
+  const { service, root } = await setup(t)
+  const note = await service.save('a.md', '# A')
+  assert.ok(note.id)
+  assert.ok(note.storageId)
+  await rm(join(root, 'a.md'))
+  const now = Date.now()
+  const first = mock.method(Date, 'now', () => now)
+  await service.index()
+  first.mock.restore()
+  const later = mock.method(Date, 'now', () => now + 3000)
+  await service.index()
+  later.mock.restore()
+  assert.equal(
+    (await service.identity.descriptor(note.id, note.storageId)).note.presence,
+    'missing'
+  )
+  await service.delete(note.id, note.storageId)
+  assert.match(
+    service.identity.catalog.get(note.id)?.path ?? '',
+    /^a_deleted_[0-9a-f-]{36}\.md$/
+  )
+  const created = await service.save('a.md', '# New')
+  assert.notEqual(created.id, note.id)
+  assert.equal((await service.read('a.md')).text.includes('# New'), true)
+})

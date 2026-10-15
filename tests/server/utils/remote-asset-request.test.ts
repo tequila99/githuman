@@ -259,6 +259,14 @@ test('transport failures become client errors and other errors pass through', ()
     String(translateRemoteAssetError(coded('ENOTFOUND'))),
     /could not be reached/
   )
+  assert.match(
+    String(
+      translateRemoteAssetError(
+        new DOMException('The operation timed out', 'TimeoutError')
+      )
+    ),
+    /took too long/
+  )
   const other = coded('EOTHER')
   assert.equal(translateRemoteAssetError(other), other)
 })

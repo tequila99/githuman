@@ -228,6 +228,9 @@ export function translateRemoteAssetError(error: unknown): unknown {
     typeof error === 'object' && error !== null && 'code' in error
       ? error.code
       : undefined
+  if (error instanceof DOMException && error.name === 'TimeoutError') {
+    return new BadRequestError('Attachment download took too long')
+  }
   if (code === 'UND_ERR_CONNECT_TIMEOUT') {
     return new BadRequestError('Attachment connection timed out')
   }
