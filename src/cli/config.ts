@@ -1,4 +1,7 @@
+import { isIP } from 'node:net'
 import { parseArgs } from 'node:util'
+import { isLoopbackHost } from '../shared/network/loopback.ts'
+import { WILDCARD_HOSTS } from '../server/utils/lan-addresses.ts'
 
 export interface ServeOptions {
   port: number
@@ -11,10 +14,15 @@ export interface ServeOptions {
   dbPrefix?: string
   /** Serves Swagger UI at `/api/docs` (`--api-docs`). */
   apiDocs?: boolean
+  /** Extra exact host names that LAN requests may use (`--allowed-host`, ADR 0079). */
+  allowedHosts?: string[]
 }
 
 const DEFAULT_PORT = 3847
 const DEFAULT_HOST = 'localhost'
+// One DNS name: dot-separated labels of letters, digits and inner hyphens.
+const HOST_NAME_PATTERN =
+  /^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/
 
 /**
  * Default prefix for filenames written under `.githuman/` (e.g.
@@ -63,8 +71,41 @@ function resolvePort(explicit: string | undefined): number {
   return parsed
 }
 
+/**
+ * Only loopback or every interface (ADR 0079). With one LAN address there
+ * is no loopback listener, so no local tab can approve a device.
+ */
 function resolveHost(explicit: string | undefined): string {
-  return explicit !== undefined && explicit.length > 0 ? explicit : DEFAULT_HOST
+  if (explicit === undefined || explicit.length === 0) {
+    return DEFAULT_HOST
+  }
+  if (
+    WILDCARD_HOSTS.has(explicit) ||
+    (isLoopbackHost(explicit) && !explicit.startsWith('['))
+  ) {
+    return explicit
+  }
+  throw new Error(
+    `Invalid --host value "${explicit}": use localhost (default), or 0.0.0.0 or :: for access from the local network`
+  )
+}
+
+/** Exact host names only: no scheme, port, path, userinfo or wildcard. */
+function resolveAllowedHosts(values: unknown[]): string[] {
+  return values.map(value => {
+    const name = String(value).toLowerCase()
+    // A loopback name allows nothing: local requests are found by the socket.
+    const loopback =
+      name === 'localhost' ||
+      name.endsWith('.localhost') ||
+      name.startsWith('127.')
+    if (loopback || (!HOST_NAME_PATTERN.test(name) && isIP(name) !== 4)) {
+      throw new Error(
+        `Invalid --allowed-host value "${String(value)}": give an exact non-loopback host name or IPv4 address, for example machine.tailnet.ts.net. IPv6 literals are not accepted.`
+      )
+    }
+    return name
+  })
 }
 
 export function parseServeArgs(argv: string[]): ServeOptions {
@@ -77,7 +118,8 @@ export function parseServeArgs(argv: string[]): ServeOptions {
       'no-open': { type: 'boolean', default: false },
       'notes-dir': { type: 'string' },
       'db-prefix': { type: 'string' },
-      'api-docs': { type: 'boolean', default: false }
+      'api-docs': { type: 'boolean', default: false },
+      'allowed-host': { type: 'string', multiple: true }
     },
     strict: false
   })
@@ -94,6 +136,9 @@ export function parseServeArgs(argv: string[]): ServeOptions {
   )
 
   const apiDocs = values['api-docs'] === true
+  const allowedHosts = resolveAllowedHosts(
+    Array.isArray(values['allowed-host']) ? values['allowed-host'] : []
+  )
 
   return {
     port,
@@ -101,6 +146,7 @@ export function parseServeArgs(argv: string[]): ServeOptions {
     open,
     dbPrefix,
     apiDocs,
+    allowedHosts,
     ...(typeof values['notes-dir'] === 'string'
       ? { notesDir: values['notes-dir'] }
       : process.env.GITHUMAN_NOTES_DIR

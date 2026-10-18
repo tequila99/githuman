@@ -89,6 +89,25 @@ export function applyMigrations(db: DatabaseSync): void {
       ON review_files(file_path);
     CREATE INDEX IF NOT EXISTS review_files_review_id_idx
       ON review_files(review_id);
+
+    -- One row: the random id in the device cookie name (ADR 0079).
+    CREATE TABLE IF NOT EXISTS server_identity (
+      id TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS devices (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      secret_hash TEXT NOT NULL UNIQUE,
+      state TEXT NOT NULL,
+      code TEXT NOT NULL,
+      host TEXT NOT NULL,
+      address TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS devices_address_idx ON devices(address);
   `)
 
   const noteColumns = db

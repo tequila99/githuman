@@ -36,17 +36,15 @@ import { ERROR_RESPONSES, NoContentSchema } from '../../shared/http/schemas.ts'
 import type { NotesService } from '../services/notes.service.ts'
 import { BadRequestError } from '../errors/http.ts'
 import { withRequestSignal } from '../utils/request-abort.ts'
-import { createNotesOriginHook } from '../hooks/notes/same-origin.ts'
+import { requireNotesOrigin } from '../hooks/notes/same-origin.ts'
 
 export async function notesRoutes(
   app: FastifyInstance,
   {
     service,
-    loopbackBind = false,
     externalAssets = new NotesExternalAssetsService()
   }: {
     service: NotesService
-    loopbackBind?: boolean
     externalAssets?: NotesExternalAssetsService
   }
 ) {
@@ -55,7 +53,7 @@ export async function notesRoutes(
     limits: { fileSize: MAX_NOTE_ASSET_BYTES, files: 1, fields: 0, parts: 1 }
   })
   const typed = app.withTypeProvider<TypeBoxTypeProvider>()
-  app.addHook('onRequest', createNotesOriginHook({ loopbackBind }))
+  app.addHook('onRequest', requireNotesOrigin)
   app.post<{ Body: { file: MultipartFile } }>(
     '/api/notes/assets',
     {

@@ -14,8 +14,49 @@ test('parseServeArgs returns defaults when no flags given', () => {
     host: 'localhost',
     open: true,
     dbPrefix: DEFAULT_DB_PREFIX,
-    apiDocs: false
+    apiDocs: false,
+    allowedHosts: []
   })
+})
+
+test('parseServeArgs accepts only loopback or wildcard hosts', () => {
+  for (const host of ['localhost', '127.0.0.1', '::1', '0.0.0.0', '::']) {
+    assert.equal(parseServeArgs(['--host', host]).host, host)
+  }
+  for (const host of ['192.168.1.10', 'example.com', '[::1]', '127.0.0.2']) {
+    assert.throws(() => parseServeArgs(['--host', host]), /--host/, host)
+  }
+})
+
+test('parseServeArgs reads repeated --allowed-host as exact names', () => {
+  assert.deepEqual(
+    parseServeArgs([
+      '--allowed-host',
+      'Machine.tailnet.ts.net',
+      '--allowed-host',
+      '10.0.0.5'
+    ]).allowedHosts,
+    ['machine.tailnet.ts.net', '10.0.0.5']
+  )
+  for (const value of [
+    '*.ts.net',
+    'http://machine.ts.net',
+    'machine.ts.net:443',
+    'user@machine.ts.net',
+    'machine.ts.net/path',
+    '-bad.example',
+    '',
+    'localhost',
+    'app.localhost',
+    '127.0.0.1',
+    'fd00::5'
+  ]) {
+    assert.throws(
+      () => parseServeArgs(['--allowed-host', value]),
+      /--allowed-host/,
+      value
+    )
+  }
 })
 
 test('parseServeArgs reads --api-docs', () => {

@@ -5,6 +5,7 @@ import {
   type ServerHello
 } from '@/api/types'
 import { parseServerHello } from '@/utils/parse-server-hello'
+import { reportAccessProblem } from '@/utils/access-problem'
 
 type Subscriber = { eventTypes: Set<ServerEventType>; onChange: () => void }
 
@@ -67,6 +68,8 @@ function connect() {
     if (source !== es) return
     missedEvents = true
     if (es.readyState === EventSource.CLOSED) {
+      // An HTTP error can be 401: the device lost access (ADR 0079).
+      reportAccessProblem()
       reconnect()
     }
   })

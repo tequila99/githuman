@@ -153,10 +153,14 @@ export default defineConfig(ctx => {
         // changeOrigin: true, which rewrites Host to :3847 while the browser's
         // Origin stays the dev server's — the agent routes' Host/Origin check
         // (ADR 0023) would then reject every request with 403.
+        // `xfwd` adds the client address to X-Forwarded-For. The proxy
+        // connects from loopback and keeps the client Host, so without the
+        // header a LAN client with `Host: localhost` passes as local (ADR 0079).
         '/api': {
           target: process.env.GITHUMAN_DEV_API ?? 'http://localhost:3847',
           changeOrigin: false,
-          ws: true
+          ws: true,
+          xfwd: true
         }
       }
     },

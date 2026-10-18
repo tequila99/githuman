@@ -29,6 +29,7 @@ import {
   type AgentChatEntry
 } from '@/utils/agent-chat'
 import { errorMessage } from '@/utils/error-message'
+import { reportAccessProblem } from '@/utils/access-problem'
 import { isRecord } from '@/utils/guards'
 import { safeStorage } from '@/utils/safe-storage'
 import { singleFlight } from '@/utils/single-flight'
@@ -289,6 +290,8 @@ export const useAgentStore = defineStore('agent', () => {
       // retries itself, resuming from Last-Event-ID.
       if (es.readyState === EventSource.CLOSED) {
         stream = null
+        // An HTTP error can be 401: the device lost access (ADR 0079).
+        reportAccessProblem()
         scheduleReconnect()
       }
     })
