@@ -141,16 +141,10 @@ test('a trusted browser gets its device back instead of a new request', () => {
   assert.equal(ctx.service.list().length, 1)
 })
 
-test('requests are limited per address, per minute and by pending count', () => {
+test('requests are limited per address and per minute', () => {
   const ctx = setup()
   ctx.request('10.0.0.1')
   assert.throws(() => ctx.request('10.0.0.1'), { statusCode: 429 })
-
-  const counted = setup()
-  for (let index = 0; index < MAX_PENDING_REQUESTS; index++) {
-    counted.request(`10.0.1.${index}`)
-  }
-  assert.throws(() => counted.request('10.0.2.1'), { statusCode: 429 })
 
   const burst = setup()
   for (let index = 0; index < MAX_PAIRING_REQUESTS_PER_MINUTE; index++) {
@@ -161,6 +155,22 @@ test('requests are limited per address, per minute and by pending count', () => 
   assert.throws(() => burst.request('10.0.4.1'), { statusCode: 429 })
   burst.clock.now += 60 * 1000
   assert.equal(burst.request('10.0.4.1').device.state, 'pending')
+})
+
+test('a full pending list drops the oldest request for a new one', () => {
+  const ctx = setup()
+  const first = ctx.request('10.0.1.0').device
+  for (let index = 1; index < MAX_PENDING_REQUESTS; index++) {
+    ctx.clock.now += 1
+    ctx.request(`10.0.1.${index}`)
+  }
+  ctx.clock.now += 1
+  const fresh = ctx.request('10.0.2.1').device
+  const ids = ctx.service.list().map(device => device.id)
+  assert.equal(ids.length, MAX_PENDING_REQUESTS)
+  assert.ok(!ids.includes(first.id))
+  assert.ok(ids.includes(fresh.id))
+  assert.deepEqual(ctx.removed, [first.id])
 })
 
 test('IPv6 addresses of one /64 share the request limit and replace each other', () => {

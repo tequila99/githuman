@@ -8,6 +8,7 @@ import { useAccessStore } from '@/stores/access-store'
 import { useCountdown } from '@/composables/use-countdown'
 import { useAppTheme } from '@/composables/use-app-theme'
 import { errorMessage } from '@/utils/error-message'
+import { singleFlight } from '@/utils/single-flight'
 
 // The device asks the server this often while it waits for the operator.
 const POLL_MS = 2000
@@ -30,11 +31,11 @@ const waiting = shallowRef(false)
 
 const pending = computed(() => status.value === 'pending')
 
-/** Checks the access; with access the app starts after a reload. */
-async function check() {
+// The poll must not overlap: an old answer could overwrite a newer status.
+const check = singleFlight(async () => {
   await access.check()
   if (mode.value === 'app') window.location.reload()
-}
+})
 
 async function requestAccess() {
   if (busy.value) return

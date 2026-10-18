@@ -254,7 +254,9 @@ export default {
         'A trusted device can use the terminal and the agents of this computer. The connection uses plain HTTP.',
       approve: 'Approve',
       reject: 'Reject',
-      failed: 'Could not answer the request'
+      failed: 'Could not answer the request',
+      postponed: 'The request from {name} waits for an answer.',
+      answer: 'Answer'
     }
   },
   changes: {

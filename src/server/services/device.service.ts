@@ -118,10 +118,14 @@ export class DeviceService {
         this.remove(device.id)
       }
     }
-    if (countPendingDevices(this.db) >= MAX_PENDING_REQUESTS) {
-      throw new PairingRateLimitError(
-        'Too many pairing requests wait for approval. Try again later.'
+    // A full list drops the oldest request: otherwise a few addresses could
+    // keep every slot and lock the real device out.
+    while (countPendingDevices(this.db) >= MAX_PENDING_REQUESTS) {
+      const oldest = listDevices(this.db).find(
+        device => device.state === 'pending'
       )
+      if (!oldest) break
+      this.remove(oldest.id)
     }
 
     const now = this.now()

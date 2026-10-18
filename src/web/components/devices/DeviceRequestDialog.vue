@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, shallowRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { PAIRING_CODE_LENGTH } from '@/api/types'
 import { useDevicesStore } from '@/stores/devices-store'
 import { useCountdown } from '@/composables/use-countdown'
 import { errorMessage } from '@/utils/error-message'
 
+const $q = useQuasar()
 const { t } = useI18n()
 const store = useDevicesStore()
 const { pending } = storeToRefs(store)
@@ -15,8 +17,14 @@ const busy = shallowRef(false)
 const typedCode = shallowRef('')
 const answerError = shallowRef('')
 
+// Closing the dialog postpones a request: it stays pending on the server and
+// returns through the notification. A closed request must not reopen at once.
+const postponed = shallowRef<ReadonlySet<string>>(new Set())
+
 // The oldest request first; the next one shows after an answer.
-const request = computed(() => pending.value[0])
+const request = computed(() =>
+  pending.value.find(device => !postponed.value.has(device.id))
+)
 const countdown = useCountdown(() => request.value?.expiresAt)
 
 const codeComplete = computed(
@@ -36,6 +44,42 @@ watch(
 watch(countdown.expired, expired => {
   if (expired && request.value) void store.refresh()
 })
+
+function setPostponed(id: string, value: boolean) {
+  const next = new Set(postponed.value)
+  if (value) {
+    next.add(id)
+  } else {
+    next.delete(id)
+  }
+  postponed.value = next
+}
+
+// A request that left the list needs no mark any more.
+watch(pending, list => {
+  const ids = new Set(list.map(device => device.id))
+  const kept = [...postponed.value].filter(id => ids.has(id))
+  if (kept.length !== postponed.value.size) postponed.value = new Set(kept)
+})
+
+function postpone() {
+  const device = request.value
+  if (!device || busy.value) return
+  setPostponed(device.id, true)
+  $q.notify({
+    type: 'warning',
+    message: t('devices.request.postponed', { name: device.name }),
+    timeout: 0,
+    actions: [
+      {
+        label: t('devices.request.answer'),
+        color: 'white',
+        handler: () => setPostponed(device.id, false)
+      },
+      { icon: 'close', color: 'white', round: true, dense: true }
+    ]
+  })
+}
 
 async function answer(approve: boolean) {
   const device = request.value
@@ -61,7 +105,7 @@ async function answer(approve: boolean) {
 </script>
 
 <template>
-  <q-dialog :model-value="request !== undefined" persistent>
+  <q-dialog :model-value="request !== undefined" @update:model-value="postpone">
     <q-card v-if="request" style="width: 360px; max-width: 90vw">
       <q-form @submit="answer(true)">
         <q-card-section class="q-pb-none text-h6">
