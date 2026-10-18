@@ -103,6 +103,9 @@ onMounted(() => {
         <p class="text-caption">
           {{ t('access.expiresIn', { time: countdown.label.value }) }}
         </p>
+        <p v-if="error" role="alert" class="text-caption text-negative">
+          {{ t('access.unavailable') }}: {{ error }}
+        </p>
       </q-card-section>
 
       <q-card-section v-else>

@@ -43,7 +43,7 @@ export const useAccessStore = defineStore('access', () => {
       apply(await apiGet<Access>('/api/access'))
     } catch (err) {
       // The pairing stays: a short network loss must not hide the code.
-      status.value = null
+      if (status.value !== 'pending') status.value = null
       error.value = errorMessage(err)
     }
     return status.value

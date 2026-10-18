@@ -101,17 +101,6 @@ export function countPendingDevices(db: DatabaseSync): number {
   return row.count
 }
 
-/** Ids of pending requests from one client address. */
-export function pendingDeviceIdsByAddress(
-  db: DatabaseSync,
-  address: string
-): string[] {
-  const rows = db
-    .prepare("SELECT id FROM devices WHERE state = 'pending' AND address = ?")
-    .all(address) as Array<{ id: string }>
-  return rows.map(row => row.id)
-}
-
 /** Ids of records whose time is over. ISO times in UTC compare as text. */
 export function expiredDeviceIds(
   db: DatabaseSync,

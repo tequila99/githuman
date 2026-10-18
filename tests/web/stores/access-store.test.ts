@@ -104,6 +104,8 @@ test('the pairing deadline follows the device clock; a network error keeps the c
     throw new TypeError('Failed to fetch')
   }
   await store.check()
-  assert.equal(store.mode, 'unavailable')
+  assert.equal(store.mode, 'pairing')
+  assert.equal(store.status, 'pending')
   assert.equal(store.pairing?.code, '123456')
+  assert.ok(store.error)
 })

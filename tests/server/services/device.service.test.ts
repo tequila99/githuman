@@ -163,6 +163,24 @@ test('requests are limited per address, per minute and by pending count', () => 
   assert.equal(burst.request('10.0.4.1').device.state, 'pending')
 })
 
+test('IPv6 addresses of one /64 share the request limit and replace each other', () => {
+  const ctx = setup()
+  ctx.request('2001:db8:1:2::1')
+  assert.throws(() => ctx.request('2001:db8:1:2:aaaa:bbbb:cccc:dddd'), {
+    statusCode: 429
+  })
+  ctx.clock.now += PAIRING_REQUEST_INTERVAL_MS
+  ctx.request('2001:DB8:1:2::7')
+  assert.equal(ctx.service.list().length, 1)
+  ctx.request('2001:db8:1:3::1')
+  assert.equal(ctx.service.list().length, 2)
+  ctx.clock.now += PAIRING_REQUEST_INTERVAL_MS
+  ctx.request('::ffff:10.0.0.9')
+  ctx.clock.now += PAIRING_REQUEST_INTERVAL_MS
+  ctx.request('10.0.0.9')
+  assert.equal(ctx.service.list().length, 3)
+})
+
 test('activity renews a trusted device at most once per interval', () => {
   const ctx = setup()
   const { secret } = pair(ctx)

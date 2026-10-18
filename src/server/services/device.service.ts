@@ -27,11 +27,11 @@ import {
   findDeviceBySecretHash,
   insertDevice,
   listDevices,
-  pendingDeviceIdsByAddress,
   updateDevice,
   type DeviceRecord
 } from '../repositories/device.repo.ts'
 import { deviceNameFromUserAgent } from '../utils/device-name.ts'
+import { addressKey } from '../utils/address-key.ts'
 import { sha256Hex } from '../utils/hash.ts'
 
 // Random bytes in a device secret: 256 bits, 43 base64url characters.
@@ -108,12 +108,15 @@ export class DeviceService {
       return { device: current.device }
     }
     this.removeExpiredPending()
-    this.checkRate(input.address)
+    this.checkRate(addressKey(input.address))
     if (current.status === 'pending') {
       this.remove(current.device.id)
     }
-    for (const id of pendingDeviceIdsByAddress(this.db, input.address)) {
-      this.remove(id)
+    const key = addressKey(input.address)
+    for (const device of listDevices(this.db)) {
+      if (device.state === 'pending' && addressKey(device.address) === key) {
+        this.remove(device.id)
+      }
     }
     if (countPendingDevices(this.db) >= MAX_PENDING_REQUESTS) {
       throw new PairingRateLimitError(
@@ -122,7 +125,7 @@ export class DeviceService {
     }
 
     const now = this.now()
-    this.lastRequestAt.set(input.address, now)
+    this.lastRequestAt.set(key, now)
     this.recentRequests.push(now)
     const secret = randomBytes(SECRET_BYTES).toString('base64url')
     const device: DeviceRecord = {
@@ -273,9 +276,9 @@ export class DeviceService {
     return true
   }
 
-  private checkRate(address: string): void {
+  private checkRate(key: string): void {
     const now = this.now()
-    const last = this.lastRequestAt.get(address)
+    const last = this.lastRequestAt.get(key)
     if (last !== undefined && now - last < PAIRING_REQUEST_INTERVAL_MS) {
       throw new PairingRateLimitError(
         'Pairing requests from this address are too frequent. Wait a few seconds.'
@@ -289,9 +292,9 @@ export class DeviceService {
         'Too many pairing requests. Try again in a minute.'
       )
     }
-    for (const [key, time] of this.lastRequestAt) {
+    for (const [storedKey, time] of this.lastRequestAt) {
       if (now - time >= PAIRING_REQUEST_INTERVAL_MS) {
-        this.lastRequestAt.delete(key)
+        this.lastRequestAt.delete(storedKey)
       }
     }
   }

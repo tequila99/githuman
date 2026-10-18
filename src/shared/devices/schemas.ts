@@ -16,10 +16,11 @@ const code = Type.String({
 
 // The name reaches the server console: control characters could fake
 // lines or send terminal escape sequences (C0, DEL and C1 ranges).
+// Format characters (bidi overrides, zero-width) could fake the name.
 const name = Type.String({
   minLength: 1,
   maxLength: DEVICE_NAME_MAX_LENGTH,
-  pattern: '^\\P{Cc}*$',
+  pattern: '^[^\\p{Cc}\\p{Cf}]*$',
   description: 'Device name shown to the operator, without control characters.'
 })
 
