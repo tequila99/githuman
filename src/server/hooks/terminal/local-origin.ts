@@ -1,33 +1,19 @@
 import type { FastifyRequest } from 'fastify'
-import { isLoopbackHost } from '../../../shared/network/loopback.ts'
 import { ForbiddenError } from '../../errors/http.ts'
+import { isLocalRequest } from '../access/local-request.ts'
+import { isTrustedDeviceRequest } from '../access/require-access.ts'
 
-// Returns false on any malformed value: an invalid URL means an invalid origin.
-function isTerminalOrigin(host?: string, origin?: string): boolean {
-  if (!host || !origin) return false
-  try {
-    const source = new URL(origin)
-    const target = new URL(`http://${host}`)
-    return (
-      isLoopbackHost(target.hostname) &&
-      target.host === host &&
-      source.host === target.host &&
-      source.protocol === 'http:' &&
-      source.origin === origin &&
-      !target.username &&
-      !target.password
-    )
-  } catch {
-    return false
-  }
-}
-
+// A browser always sends `Origin` on a WebSocket upgrade and a POST.
+// Without it the token could not be bound to a page (ADR 0037).
 export async function requireTerminalOrigin(
   request: FastifyRequest
 ): Promise<void> {
-  if (!isTerminalOrigin(request.headers.host, request.headers.origin)) {
+  const allowed =
+    request.headers.origin !== undefined &&
+    (isLocalRequest(request) || isTrustedDeviceRequest(request, true))
+  if (!allowed) {
     throw new ForbiddenError(
-      'Terminal endpoints only accept requests from this local server. Open the app via localhost.'
+      'Terminal endpoints only accept requests from this machine or a trusted device.'
     )
   }
 }

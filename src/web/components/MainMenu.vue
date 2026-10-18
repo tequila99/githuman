@@ -10,6 +10,8 @@ import { useAgentStore } from '@/stores/agent-store'
 import { AGENT_ICON } from '@/utils/agent-icon'
 import { NAV_BREAKPOINT } from '@/composables/use-nav-drawer'
 import AgentChatStatusDot from '@/components/agent/AgentChatStatusDot.vue'
+import DevicesDialog from '@/components/devices/DevicesDialog.vue'
+import { useAccessStore } from '@/stores/access-store'
 
 const leftDrawerOpen = defineModel<boolean | null>({ required: true })
 
@@ -20,6 +22,8 @@ const previewStore = usePreviewStore()
 const agentStore = useAgentStore()
 const { enabled: agentEnabled, activeId, panelOpen } = storeToRefs(agentStore)
 const chatsOpen = ref(true)
+const { isLocal } = storeToRefs(useAccessStore())
+const devicesOpen = ref(false)
 </script>
 
 <template>
@@ -121,6 +125,10 @@ const chatsOpen = ref(true)
       </q-list>
 
       <q-list bordered :dark="isDark">
+        <q-item v-if="isLocal" v-ripple clickable @click="devicesOpen = true">
+          <q-item-section avatar><q-icon name="devices" /></q-item-section>
+          <q-item-section>{{ t('devices.menu') }}</q-item-section>
+        </q-item>
         <q-item v-ripple clickable @click="toggleTheme">
           <q-item-section avatar>
             <q-icon :name="isDark ? 'light_mode' : 'dark_mode'" />
@@ -131,6 +139,7 @@ const chatsOpen = ref(true)
         </q-item>
       </q-list>
     </div>
+    <DevicesDialog v-if="devicesOpen" @close="devicesOpen = false" />
   </q-drawer>
 </template>
 

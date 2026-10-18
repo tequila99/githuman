@@ -24,6 +24,13 @@ const routes: RouteRecordRaw[] = [
     ]
   },
 
+  // Pairing page for a LAN device without access (ADR 0079).
+  {
+    path: '/access',
+    name: 'access',
+    component: () => import('@/pages/AccessPage.vue')
+  },
+
   {
     path: '/:catchAll(.*)*',
     component: () => import('@/pages/ErrorNotFound.vue')

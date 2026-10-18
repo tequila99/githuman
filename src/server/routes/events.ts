@@ -3,18 +3,21 @@ import type { EventBus } from '../event-bus.ts'
 import { safeSend } from '../utils/sse.ts'
 import type { ServerHello } from '../../shared/events/types.ts'
 import { EventStreamSchema } from '../../shared/events/schemas.ts'
+import type { DeviceConnections } from '../services/device-connections.ts'
 
 export interface EventRoutesOptions {
   eventBus: EventBus
   /** Identifies this server process to clients — see ServerHello. */
   instanceId: string
+  /** Revoke and expiry close the streams of a device (ADR 0079). */
+  connections: DeviceConnections
 }
 
 export async function eventRoutes(
   app: FastifyInstance,
   opts: EventRoutesOptions
 ): Promise<void> {
-  const { eventBus, instanceId } = opts
+  const { eventBus, instanceId, connections } = opts
   const hello: ServerHello = { instanceId }
 
   app.get(
@@ -39,6 +42,11 @@ export async function eventRoutes(
       if (!reply.sse.isConnected) {
         return
       }
+      // No `await` between this check of the device and the subscription.
+      const release = connections.track(request, () => reply.sse.close())
+      if (!release) {
+        return
+      }
 
       const unsubscribe = eventBus.subscribe(event => {
         safeSend(reply.sse, {
@@ -49,6 +57,7 @@ export async function eventRoutes(
 
       reply.sse.onClose(() => {
         unsubscribe()
+        release()
       })
     }
   )

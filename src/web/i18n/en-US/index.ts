@@ -208,6 +208,55 @@ export default {
     switchToLight: 'Light theme',
     switchToDark: 'Dark theme'
   },
+  access: {
+    title: 'Access from the local network',
+    noAccess: 'This device has no access to GitHuman on this computer.',
+    nameLabel: 'Device name (optional)',
+    request: 'Request access',
+    pending:
+      'Approve this device on the computer, in a GitHuman tab opened on localhost. Check that the code there is the same:',
+    expiresIn: 'The request expires in {time}.',
+    ended:
+      'The request was rejected or expired. Keep a GitHuman tab open on localhost on the computer, then request access again.',
+    unavailable: 'The server is not available.',
+    retry: 'Retry',
+    requestFailed: 'Could not request access',
+    httpWarning:
+      'The connection uses plain HTTP. Use it only in a network that you trust.'
+  },
+  devices: {
+    menu: 'Devices',
+    title: 'Devices',
+    connect: 'Connect a device',
+    connectHint:
+      'Open this address on the device, or scan the code. The server must listen on the network: githuman serve --host 0.0.0.0',
+    noAddresses: 'This computer has no network address.',
+    address: 'Network address',
+    trusted: 'Trusted devices',
+    none: 'No trusted devices.',
+    lastSeen: 'Last activity {time}, {address}',
+    rename: 'Rename',
+    renameTitle: 'Rename device',
+    revoke: 'Revoke access',
+    revokeTitle: 'Revoke access?',
+    revokeMessage:
+      '{name} loses access at once. Its open terminal and chats close.',
+    cancel: 'Cancel',
+    save: 'Save',
+    actionFailed: 'Could not change the device',
+    request: {
+      title: 'A device requests access',
+      from: '{name} — {address}, opened as {host}',
+      code: 'Code shown on the device',
+      expiresIn: 'Expires in {time}',
+      expired: 'The request has expired.',
+      warning:
+        'A trusted device can use the terminal and the agents of this computer. The connection uses plain HTTP.',
+      approve: 'Approve',
+      reject: 'Reject',
+      failed: 'Could not answer the request'
+    }
+  },
   changes: {
     listMode: {
       tree: 'Tree view',

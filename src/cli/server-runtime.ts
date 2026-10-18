@@ -7,8 +7,8 @@ import type { FastifyInstance } from 'fastify'
 import { buildApp } from '../server/app.ts'
 import { createFileDatabase } from '../server/db/index.ts'
 import { resolveDbPrefix, type ServeOptions } from './config.ts'
-import { isLoopbackHost } from '../shared/network/loopback.ts'
 import { loadAgentPresets } from '../server/config/agents.ts'
+import { WILDCARD_HOSTS } from '../server/utils/lan-addresses.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -91,6 +91,8 @@ export async function startServer(
     resolveReviewsDbPath(repositoryPath, options.dbPrefix)
   )
 
+  // Agents and the terminal exist on every bind. Their hooks decide per
+  // request: a request from this machine or a trusted device (ADR 0079).
   const app = buildApp({
     staticRoot: resolveStaticRoot(),
     repositoryPath,
@@ -99,23 +101,27 @@ export async function startServer(
     db,
     watchFiles: true,
     apiDocs: options.apiDocs === true,
-    loopbackBind: isLoopbackHost(options.host),
-    terminalEnabled: isLoopbackHost(options.host),
-    // Agents can run commands, so they are only offered on a loopback bind.
-    ...(isLoopbackHost(options.host)
-      ? {
-          agentPresets: loadAgentPresets(
-            resolveAgentsConfigPath(repositoryPath, options.dbPrefix)
-          )
-        }
-      : {})
+    allowedHosts: options.allowedHosts ?? [],
+    onPairingRequest: device =>
+      console.log(
+        `Pairing request from ${device.name} (${device.address}). Enter the code from the device in a localhost tab.`
+      ),
+    terminalEnabled: true,
+    agentPresets: loadAgentPresets(
+      resolveAgentsConfigPath(repositoryPath, options.dbPrefix)
+    )
   })
 
   const address = await app.listen({ port: options.port, host: options.host })
+  // A wildcard bind reports its own address (`http://[::]:3847`), which is
+  // not a local Host. The operator tab must use localhost to approve devices.
+  const url = WILDCARD_HOSTS.has(options.host)
+    ? `http://localhost:${new URL(address).port}`
+    : address
 
   if (options.open) {
-    openBrowser(address)
+    openBrowser(url)
   }
 
-  return { app, url: address }
+  return { app, url }
 }

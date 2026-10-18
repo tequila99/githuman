@@ -4,6 +4,7 @@ import { ref } from 'vue'
 import { exportFile } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { useNotifyError } from '@/composables/use-notify-error'
+import { apiGetText } from '@/api/client'
 
 const props = defineProps<{
   /** GET endpoint returning the file's raw content (e.g. text/markdown). */
@@ -20,11 +21,7 @@ async function download() {
   downloading.value = true
 
   try {
-    const response = await fetch(props.url)
-    if (!response.ok) {
-      throw new Error(`Request failed with status ${response.status}`)
-    }
-    const text = await response.text()
+    const text = await apiGetText(props.url)
 
     // exportFile returns the error instead of throwing it.
     const result = exportFile(props.filename, text, 'text/markdown')

@@ -8,6 +8,7 @@ import {
   resolveReviewsDbPath
 } from './server-runtime.ts'
 import { formatStartupMessage } from './startup-message.ts'
+import { lanAddresses } from '../server/utils/lan-addresses.ts'
 import { parseListArgs, runList } from './commands/list.ts'
 import { parseExportArgs, runExport } from './commands/export.ts'
 import { createFileDatabase } from '../server/db/index.ts'
@@ -58,7 +59,7 @@ async function main(argv: string[]): Promise<void> {
       }
       process.once('SIGINT', shutdown)
       process.once('SIGTERM', shutdown)
-      console.log(formatStartupMessage(url, options.host))
+      console.log(formatStartupMessage(url, lanAddresses(options.host)))
       return
     }
     case 'list': {

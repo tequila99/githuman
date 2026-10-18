@@ -1,4 +1,5 @@
 import type { NotesService } from '../services/notes.service.ts'
+import type { DeviceConnections } from '../services/device-connections.ts'
 import { NotFoundError } from '../errors/http.ts'
 import { Type } from '@sinclair/typebox'
 import {
@@ -59,13 +60,15 @@ export interface AgentRoutesOptions {
   repositoryPath: string
   /** Tells the file search when its cached file list went stale. */
   eventBus: EventBus
+  /** Revoke and expiry close the agent stream of a device (ADR 0079). */
+  connections: DeviceConnections
 }
 
 export async function agentRoutes(
   app: FastifyInstance,
   opts: AgentRoutesOptions
 ): Promise<void> {
-  const { registry, db, repositoryPath, eventBus } = opts
+  const { registry, db, repositoryPath, eventBus, connections } = opts
   const typedApp = app.withTypeProvider<TypeBoxTypeProvider>()
   const fileIndex = createFileIndex(repositoryPath, eventBus)
 
@@ -357,6 +360,11 @@ export async function agentRoutes(
       if (!reply.sse.isConnected) {
         return
       }
+      // No `await` between this check of the device and the subscription.
+      const release = connections.track(request, () => reply.sse.close())
+      if (!release) {
+        return
+      }
       const unsubscribe = registry.subscribe(
         message => {
           if (message.type === 'event') {
@@ -382,9 +390,13 @@ export async function agentRoutes(
       // have run then, so the listener is removed here.
       if (!reply.sse.isConnected) {
         unsubscribe()
+        release()
         return
       }
-      reply.sse.onClose(unsubscribe)
+      reply.sse.onClose(() => {
+        unsubscribe()
+        release()
+      })
     }
   )
 }

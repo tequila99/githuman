@@ -2,32 +2,20 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { formatStartupMessage } from '../../src/cli/startup-message.ts'
 
-test('localhost host produces only the listening line, no LAN warning', () => {
-  const message = formatStartupMessage('http://127.0.0.1:3847', 'localhost')
-
-  assert.equal(message, 'githuman listening on http://127.0.0.1:3847')
-})
-
-test('a non-localhost host adds a LAN-exposure warning', () => {
-  const message = formatStartupMessage('http://0.0.0.0:3847', '0.0.0.0')
-
+test('a loopback bind produces only the listening line', () => {
   assert.equal(
-    message,
-    'githuman listening on http://0.0.0.0:3847\n' +
-      'Warning: server is reachable from your local network without authentication.\n' +
-      'Agent chat is disabled: it is only available when listening on localhost.'
+    formatStartupMessage('http://127.0.0.1:3847', []),
+    'githuman listening on http://127.0.0.1:3847'
   )
 })
 
-test('127.0.0.1 is treated the same as localhost (no warning)', () => {
-  const message = formatStartupMessage('http://127.0.0.1:3847', '127.0.0.1')
-
-  assert.equal(message, 'githuman listening on http://127.0.0.1:3847')
-})
-
-test('::1 is loopback too', () => {
+test('a wildcard bind lists LAN addresses, explains pairing and warns about HTTP', () => {
   assert.equal(
-    formatStartupMessage('http://[::1]:3847', '::1'),
-    'githuman listening on http://[::1]:3847'
+    formatStartupMessage('http://localhost:3847', ['192.168.1.10', 'fd00::5']),
+    'githuman listening on http://localhost:3847\n' +
+      'Local network: http://192.168.1.10:3847\n' +
+      'Local network: http://[fd00::5]:3847\n' +
+      'Other devices request access at a local network address. Approve them in a localhost tab.\n' +
+      'Warning: traffic is plain HTTP. Anyone on this network can read it, including device cookies.'
   )
 })

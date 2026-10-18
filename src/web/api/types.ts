@@ -34,6 +34,12 @@ export type {
 } from '../../shared/comments/types.ts'
 export type { ServerEventType, ServerHello } from '../../shared/events/types.ts'
 export type {
+  Access,
+  AccessStatus,
+  Device,
+  DeviceState
+} from '../../shared/devices/types.ts'
+export type {
   AgentPresetInfo,
   AgentSessionStatus,
   AgentSessionInfo,
@@ -60,3 +66,8 @@ export type {
 export { SERVER_EVENT_TYPES } from '../../shared/events/types'
 export { MAX_AGENT_SESSIONS } from '../../shared/agents/constants'
 export { uniqueChatName } from '../../shared/agents/chat-names'
+export { addressUrl } from '../../shared/network/address-url'
+export {
+  DEVICE_NAME_MAX_LENGTH,
+  PAIRING_CODE_LENGTH
+} from '../../shared/devices/constants'

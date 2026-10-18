@@ -608,39 +608,34 @@ test('notes work below a symlinked root and skip unreadable files', async t => {
   assert.equal(saved.statusCode, 201, saved.body)
 })
 
-test('loopback binds reject rebound hosts, other binds accept any matching origin', async t => {
+test('notes reject rebound hosts and foreign origins', async t => {
   const project = await mkdtemp(join(tmpdir(), 'notes-rebind-'))
   t.after(() => rm(project, { recursive: true, force: true }))
-  const local = buildApp({ projectPath: project, loopbackBind: true })
-  t.after(() => local.close())
-  const lan = buildApp({ projectPath: project })
-  t.after(() => lan.close())
+  const app = buildApp({ projectPath: project })
+  t.after(() => app.close())
   const rebound = {
     host: 'evil.example:3847',
     origin: 'http://evil.example:3847'
   }
   assert.equal(
-    (await local.inject({ url: '/api/notes', headers: rebound })).statusCode,
+    (await app.inject({ url: '/api/notes', headers: rebound })).statusCode,
     403
   )
   assert.equal(
     (
-      await local.inject({
+      await app.inject({
         url: '/api/notes',
         headers: { host: 'localhost:3847', origin: 'http://localhost:3847' }
       })
     ).statusCode,
     200
   )
-  assert.equal(
-    (await lan.inject({ url: '/api/notes', headers: rebound })).statusCode,
-    200
-  )
+  // Notes check Origin on reads too.
   assert.equal(
     (
-      await lan.inject({
+      await app.inject({
         url: '/api/notes',
-        headers: { host: 'a:1', origin: 'http://b:1' }
+        headers: { host: 'localhost:3847', origin: 'http://localhost:1' }
       })
     ).statusCode,
     403
