@@ -9,6 +9,7 @@ import { requireTerminalOrigin } from '../hooks/terminal/local-origin.ts'
 import { TerminalRegistry } from '../services/terminal/registry.ts'
 import { TerminalTokens } from '../services/terminal/tokens.ts'
 import { attachTerminalSocket } from '../services/terminal/socket.ts'
+import type { DeviceConnections } from '../services/device-connections.ts'
 
 // Reject oversized values early. A real token has 43 characters.
 const MAX_TOKEN_LENGTH = 64
@@ -22,7 +23,11 @@ export const TERMINAL_WEBSOCKET_OPTIONS: WebsocketPluginOptions = {
 
 export async function terminalRoutes(
   app: FastifyInstance,
-  options: { registry: TerminalRegistry }
+  options: {
+    registry: TerminalRegistry
+    /** Revoke and expiry close the sockets of a device (ADR 0079). */
+    deviceConnections: DeviceConnections
+  }
 ): Promise<void> {
   const tokens = new TerminalTokens()
   const connections = new Set<{ close: () => void }>()
@@ -73,9 +78,19 @@ export async function terminalRoutes(
         }
       }
     },
-    socket => {
+    (socket, request) => {
+      // No `await` between this check of the device and the attach.
+      const release = options.deviceConnections.track(request, () =>
+        socket.terminate()
+      )
+      if (!release) {
+        return
+      }
       const connection = attachTerminalSocket(socket, options.registry, {
-        onDisconnect: () => connections.delete(connection)
+        onDisconnect: () => {
+          connections.delete(connection)
+          release()
+        }
       })
       connections.add(connection)
     }

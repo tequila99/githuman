@@ -239,6 +239,31 @@ test('requests with a foreign Origin or a non-loopback Host are rejected', async
   assert.equal(ok.statusCode, 200)
 })
 
+test('a LAN client with a loopback Host is rejected, directly or through a proxy', async t => {
+  const { app } = await setup(t)
+
+  const direct = await app.inject({
+    method: 'POST',
+    url: '/api/agent/sessions',
+    remoteAddress: '192.168.1.5',
+    headers: { host: 'localhost:3847' },
+    payload: { presetId: 'fake' }
+  })
+  assert.equal(direct.statusCode, 403)
+
+  // The Quasar dev proxy connects from loopback and keeps the client Host.
+  const proxied = await app.inject({
+    method: 'POST',
+    url: '/api/agent/sessions',
+    headers: { host: 'localhost:9000', 'x-forwarded-for': '192.168.1.5' },
+    payload: { presetId: 'fake' }
+  })
+  assert.equal(proxied.statusCode, 403)
+
+  const sessions = await app.inject({ url: '/api/agent/sessions' })
+  assert.deepEqual(sessions.json(), [])
+})
+
 test('presets list reports availability and the auto-approve flag', async t => {
   const { app } = await setup(t, [
     fakePreset(),

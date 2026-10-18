@@ -37,26 +37,30 @@ test('terminal routes do not exist when disabled and app-info reports it', async
   })
 })
 
-test('token HTTP endpoint requires exact loopback origin', async t => {
+test('token HTTP endpoint requires a local request with an exact origin', async t => {
   const app = buildApp({ terminalEnabled: true })
   t.after(() => app.close())
-  for (const headers of [
-    {},
-    { host: 'localhost:3847', origin: 'null' },
-    { host: 'localhost:3847', origin: 'http://evil.example' },
-    { host: 'localhost:3847', origin: 'http://localhost:3848' },
-    { host: 'localhost:3847', origin: 'https://localhost:3847' },
-    { host: 'evil.example', origin: 'http://evil.example' }
+  const localPage = { host: 'localhost:3847', origin: 'http://localhost:3847' }
+  for (const request of [
+    { headers: {} },
+    { headers: { host: 'localhost:3847' } },
+    { headers: { host: 'localhost:3847', origin: 'null' } },
+    { headers: { host: 'localhost:3847', origin: 'http://evil.example' } },
+    { headers: { host: 'localhost:3847', origin: 'http://localhost:3848' } },
+    { headers: { host: 'evil.example', origin: 'http://evil.example' } },
+    { headers: localPage, remoteAddress: '192.168.1.5' },
+    { headers: { ...localPage, 'x-forwarded-for': '192.168.1.5' } }
   ]) {
     assert.equal(
       (
         await app.inject({
           method: 'POST',
           url: '/api/terminal/token',
-          headers
+          ...request
         })
       ).statusCode,
-      403
+      403,
+      JSON.stringify(request)
     )
   }
   const good = await app.inject({

@@ -38,8 +38,23 @@ import type { AgentPreset } from '../shared/agents/types.ts'
 import { createTestDatabase } from './db/index.ts'
 import { createEventBus, type EventBus } from './event-bus.ts'
 import { watchRepository } from './services/file-watcher.service.ts'
+import fastifyCookie from '@fastify/cookie'
+import fastifyPlugin from 'fastify-plugin'
+import { DeviceService } from './services/device.service.ts'
+import { DeviceConnections } from './services/device-connections.ts'
+import { createAccessHook } from './hooks/access/require-access.ts'
+import { deviceRoutes } from './routes/devices.ts'
+import { AllowedHosts } from './utils/allowed-hosts.ts'
+import type { Device } from '../shared/devices/types.ts'
 // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- documented workaround above
 const fastifySse = fastifySseImport as unknown as FastifyPluginAsync
+
+// Expired records leave the database within this time (ADR 0079, item 8).
+const DEVICE_SWEEP_MS = 60 * 60 * 1000
+// Open connections of a device that lost access close within this time,
+// also when another server process on the same database revoked it.
+// One indexed SELECT per connected device.
+const DEVICE_RECHECK_MS = 2000
 
 export interface BuildAppOptions {
   /** Launch directory used for project notes; it can differ from the Git root. */
@@ -60,8 +75,8 @@ export interface BuildAppOptions {
   instanceId?: string
   /**
    * Enables the agent chat routes (ADR 0023) with these launch presets. Off by
-   * default: the routes are a remote-execution surface, so the CLI passes this
-   * only for a loopback bind. Tests pass a fake-agent preset.
+   * default. The routes are a remote-execution surface: their hook accepts
+   * only local requests (ADR 0079). Tests pass a fake-agent preset.
    */
   agentPresets?: readonly AgentPreset[]
   /**
@@ -69,8 +84,12 @@ export interface BuildAppOptions {
    * `--api-docs` flag turn it on. `/api/openapi.json` is always served.
    */
   apiDocs?: boolean
-  /** True when the server listens on loopback only. Notes then also require a loopback Host (DNS rebinding). */
-  loopbackBind?: boolean
+  /** Exact host names that LAN requests may use besides the machine addresses (ADR 0079). */
+  allowedHosts?: readonly string[]
+  /** Tells the operator about a pairing request, for example in the console. */
+  onPairingRequest?: (device: Device) => void
+  /** Clock of the device service; tests move it. */
+  now?: () => number
   terminalEnabled?: boolean
   terminalRegistry?: TerminalRegistry
 }
@@ -92,6 +111,23 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const db = options.db ?? createTestDatabase()
   const eventBus = options.eventBus ?? createEventBus()
 
+  const devices = new DeviceService(db, {
+    ...(options.now ? { now: options.now } : {}),
+    onChange: () => eventBus.publish({ type: 'devices:changed' })
+  })
+  const deviceConnections = new DeviceConnections(devices)
+  devices.removeExpired()
+  const sweep = setInterval(() => devices.removeExpired(), DEVICE_SWEEP_MS)
+  sweep.unref()
+  const recheck = setInterval(
+    () => deviceConnections.recheck(),
+    DEVICE_RECHECK_MS
+  )
+  recheck.unref()
+  app.addHook('onClose', async () => {
+    clearInterval(sweep)
+    clearInterval(recheck)
+  })
   // Windows includes a PTY binary, but the shell and process list are Unix-only.
   const terminalEnabled =
     options.terminalEnabled === true && terminalSupported()
@@ -100,6 +136,22 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     app.register(fastifyWebsocket, TERMINAL_WEBSOCKET_OPTIONS)
   }
   app.register(fastifySse)
+  app.decorateRequest('access', null)
+  app.register(fastifyCookie)
+  // Registered after the cookie and WebSocket plugins: the hook needs parsed
+  // cookies, and a rejected upgrade before the WebSocket hook leaves the socket open.
+  app.register(
+    fastifyPlugin(async root => {
+      root.addHook(
+        'onRequest',
+        createAccessHook({
+          devices,
+          allowedHosts: new AllowedHosts(options.allowedHosts)
+        })
+      )
+    })
+  )
+
   // The spec collects routes as they are added, so it comes before them.
   app.register(fastifySwagger, openApiOptions())
   if (options.apiDocs) {
@@ -121,10 +173,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     eventBus,
     db
   )
-  app.register(notesRoutes, {
-    service: notes,
-    loopbackBind: options.loopbackBind === true
-  })
+  app.register(notesRoutes, { service: notes })
   app.addHook('onClose', async () => {
     await notes.identity.close()
   })
@@ -141,13 +190,21 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.register(reviewRoutes, { repositoryPath, db, eventBus })
   app.register(commentRoutes, { db, eventBus })
   app.register(exportRoutes, { db, repositoryPath })
+  app.register(deviceRoutes, {
+    devices,
+    ...(options.onPairingRequest
+      ? { onPairingRequest: options.onPairingRequest }
+      : {})
+  })
   app.register(eventRoutes, {
     eventBus,
+    connections: deviceConnections,
     instanceId: options.instanceId ?? randomUUID()
   })
 
   if (terminalEnabled) {
     app.register(terminalRoutes, {
+      deviceConnections,
       registry:
         options.terminalRegistry ??
         new TerminalRegistry({
@@ -167,7 +224,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       }),
       db,
       repositoryPath,
-      eventBus
+      eventBus,
+      connections: deviceConnections
     })
   }
 

@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { request } from 'node:http'
 import { networkInterfaces } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -77,6 +78,57 @@ test("startServer bound to 0.0.0.0 answers /health on the machine's LAN address"
   const response = await fetch(`http://${lanAddress}:${port}/health`)
 
   assert.equal(response.status, 200)
+})
+
+test('a wildcard bind reports a localhost URL and keeps agents and terminal local', async t => {
+  const { app, url } = await startServer({
+    port: 0,
+    host: '0.0.0.0',
+    open: false
+  })
+  t.after(async () => {
+    await app.close()
+  })
+  const port = new URL(url).port
+  assert.equal(url, `http://localhost:${port}`)
+
+  const local = await fetch(`${url}/api/agent/presets`)
+  assert.equal(local.status, 200)
+
+  const lanAddress = findLanAddress()
+  if (!lanAddress) {
+    t.skip('no non-loopback IPv4 interface available in this environment')
+    return
+  }
+  // A spoofed Host must not help a LAN client. `fetch` replaces Host, so
+  // the request goes through node:http.
+  for (const [path, method] of [
+    ['/api/agent/presets', 'GET'],
+    ['/api/agent/sessions', 'POST'],
+    ['/api/terminal/token', 'POST']
+  ] as const) {
+    const status = await new Promise<number | undefined>((resolve, reject) => {
+      request(
+        {
+          host: lanAddress,
+          port,
+          path,
+          method,
+          headers: {
+            host: `localhost:${port}`,
+            origin: `http://localhost:${port}`
+          }
+        },
+        response => {
+          response.resume()
+          resolve(response.statusCode)
+        }
+      )
+        .on('error', reject)
+        .end()
+    })
+    assert.equal(status, 403, path)
+  }
 })
 
 test('startServer rejects when the requested port is already taken', async t => {

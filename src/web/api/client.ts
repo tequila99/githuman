@@ -3,6 +3,7 @@
  * In dev, /api is proxied to the backend (see quasar.config.ts devServer.proxy).
  */
 import { isRecord } from '@/utils/guards'
+import { reportAccessProblem } from '@/utils/access-problem'
 
 export class ApiRequestError extends Error {
   readonly status: number
@@ -19,6 +20,9 @@ async function checkedFetch(
   init?: RequestInit
 ): Promise<Response> {
   const response = await fetch(path, init)
+
+  // A device can lose access at any time (revoke or expiry, ADR 0079).
+  if (response.status === 401) reportAccessProblem()
 
   if (!response.ok) {
     // The server's JSON error body (see src/shared/http/types.ts ApiError) carries
@@ -57,6 +61,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function apiGet<T>(path: string): Promise<T> {
   return request<T>(path)
+}
+
+/** GET of a raw text body, for example a markdown export. */
+export async function apiGetText(path: string): Promise<string> {
+  return (await checkedFetch(path)).text()
 }
 
 function withJsonBody(method: string, body: unknown): RequestInit {

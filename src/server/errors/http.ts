@@ -14,3 +14,8 @@ export const ForbiddenError = createError<
   [message?: string, options?: ErrorOptions]
 >('GHT_HTTP_FORBIDDEN', '%s', 403)
 export type ForbiddenError = InstanceType<typeof ForbiddenError>
+
+export const UnauthorizedError = createError<
+  [message?: string, options?: ErrorOptions]
+>('GHT_HTTP_UNAUTHORIZED', '%s', 401)
+export type UnauthorizedError = InstanceType<typeof UnauthorizedError>

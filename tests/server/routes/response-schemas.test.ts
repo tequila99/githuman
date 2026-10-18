@@ -479,3 +479,48 @@ test('the agent guard and server errors keep the error body', async t => {
   assert.equal(body.error, 'Internal Server Error')
   assert.equal(typeof body.message, 'string')
 })
+
+test('device routes write every field of their schemas', async t => {
+  const db = createTestDatabase()
+  const app = buildApp({ db, allowedHosts: ['192.168.1.10'] })
+  t.after(() => app.close())
+  const lan = {
+    remoteAddress: '192.168.1.5',
+    headers: { host: '192.168.1.10:3847' }
+  }
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/devices/requests',
+    ...lan,
+    payload: { name: 'Phone' }
+  })
+  const [listed] = (await app.inject('/api/devices')).json()
+  const { code, remainingMs } = created.json().pairing
+  assert.ok(remainingMs > 0)
+  assert.match(code, /^\d{6}$/)
+  assert.deepEqual(created.json(), {
+    status: 'pending',
+    pairing: { code, expiresAt: listed.expiresAt, remainingMs }
+  })
+  assert.deepEqual(
+    json(listed),
+    json({
+      id: listed.id,
+      name: 'Phone',
+      state: 'pending',
+      host: '192.168.1.10:3847',
+      address: '192.168.1.5',
+      createdAt: listed.createdAt,
+      expiresAt: listed.expiresAt,
+      lastSeenAt: listed.createdAt
+    })
+  )
+  const approved = await app.inject({
+    method: 'POST',
+    url: `/api/devices/${listed.id}/approve`,
+    payload: { code }
+  })
+  const [trusted] = (await app.inject('/api/devices')).json()
+  assert.deepEqual(approved.json(), trusted)
+  assert.equal(trusted.state, 'trusted')
+})
