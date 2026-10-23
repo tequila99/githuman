@@ -5,6 +5,7 @@ import {
   NoteAssetQueueError
 } from '../errors/note-assets.ts'
 import {
+  destroyRemoteAssetResponse,
   remoteAssetRequest,
   translateRemoteAssetError,
   type RemoteAssetRequest,
@@ -101,7 +102,7 @@ export class NotesExternalAssetsService {
           size: isSuccess(response) ? this.length(response) : null
         }
       } finally {
-        response.destroy()
+        destroyRemoteAssetResponse(response)
       }
     })
   }
@@ -188,7 +189,7 @@ export class NotesExternalAssetsService {
           throw error
         }
       } finally {
-        response.destroy()
+        destroyRemoteAssetResponse(response)
       }
     })
   }
@@ -217,7 +218,7 @@ export class NotesExternalAssetsService {
         }
         return { body, mime: format.mime }
       } finally {
-        response.destroy()
+        destroyRemoteAssetResponse(response)
       }
     })
   }
