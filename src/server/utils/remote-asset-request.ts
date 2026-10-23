@@ -2,7 +2,7 @@ import { lookup } from 'node:dns/promises'
 import type { LookupAddress } from 'node:dns'
 import type { IncomingHttpHeaders } from 'node:http'
 import { BlockList, isIP, type LookupFunction } from 'node:net'
-import type { Readable } from 'node:stream'
+import { finished, type Readable } from 'node:stream'
 import { Agent, request, type Dispatcher } from 'undici'
 import { BadRequestError } from '../errors/http.ts'
 import { isCredentialFreeWebUrl } from '../../shared/utils/web-url.ts'
@@ -83,6 +83,13 @@ export type HostResolver = (
 export type RemoteAssetResponse = Readable & {
   statusCode?: number
   headers: IncomingHttpHeaders
+}
+
+/** Unread Undici bodies emit an abort error when destroyed, even without an explicit error. */
+export function destroyRemoteAssetResponse(response: Readable): void {
+  // Keep the error listener for late transport errors after disposal.
+  finished(response, () => {})
+  response.destroy()
 }
 
 export type RemoteAssetRequest = (
@@ -201,12 +208,12 @@ export async function remoteAssetRequest(
     const { statusCode, headers, body } = await untilAborted(
       request(url, { method, signal, dispatcher, headers: REQUEST_HEADERS }),
       signal,
-      late => late.body.destroy()
+      late => destroyRemoteAssetResponse(late.body)
     )
     if (!REDIRECT_STATUSES.includes(statusCode)) {
       return Object.assign(body, { statusCode, headers })
     }
-    body.destroy()
+    destroyRemoteAssetResponse(body)
     if (redirects >= MAX_REDIRECTS) {
       throw new BadRequestError('Too many attachment redirects')
     }
