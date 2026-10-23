@@ -1,6 +1,8 @@
 import { PREVIEW_WINDOW_ID } from '@/constants/windows/constants'
+import { isNarrowWorkspace } from '@/utils/workspace-navigation'
 import { ref, computed, onScopeDispose } from 'vue'
 import { defineStore } from 'pinia'
+import { Screen, uid } from 'quasar'
 import { apiGet, ApiRequestError } from '@/api/client'
 import type { FileContentResponse } from '@/api/types'
 import { useAgentStore } from '@/stores/agent-store'
@@ -94,7 +96,11 @@ export const usePreviewStore = defineStore('preview', () => {
     )
   }
   function show() {
-    if (!state.windowSize && typeof window !== 'undefined') {
+    if (
+      !state.windowSize &&
+      typeof window !== 'undefined' &&
+      !isNarrowWorkspace(Screen.width)
+    ) {
       state.windowSize = {
         width: window.innerWidth * DEFAULT_VIEWPORT_RATIO,
         height: window.innerHeight * DEFAULT_VIEWPORT_RATIO
@@ -165,7 +171,8 @@ export const usePreviewStore = defineStore('preview', () => {
       activate(existing.id)
       return existing.id
     }
-    const id = crypto.randomUUID()
+    // `crypto.randomUUID` is missing on plain HTTP from the network. Quasar `uid` works there.
+    const id = uid()
     tabs.value.push({
       id,
       kind,
@@ -184,7 +191,7 @@ export const usePreviewStore = defineStore('preview', () => {
   function openLocal(file: File): string | null {
     const kind = localPreviewKind(file)
     if (!kind) return null
-    const sourceId = crypto.randomUUID()
+    const sourceId = uid()
     localFiles.set(sourceId, file)
     return open(kind, { type: 'local', id: sourceId }, { title: file.name })
   }

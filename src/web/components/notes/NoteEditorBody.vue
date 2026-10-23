@@ -72,6 +72,7 @@ const position = useNoteEditorPosition(
   text => emit('change', text),
   () => visualVersion.value++
 )
+let visualText = parts.value.body
 function ready() {
   position.ready()
   visualReady()
@@ -88,7 +89,14 @@ watch(
   },
   { immediate: true }
 )
-watch(mode, async () => {
+watch(mode, async (current, previous) => {
+  if (previous === 'visual') visualText = parts.value.body
+  if (
+    current === 'visual' &&
+    (visualText !== parts.value.body || visualUnsupported.value)
+  ) {
+    visualVersion.value++
+  }
   await nextTick()
   emit('ready')
 })
@@ -96,7 +104,7 @@ watchEffect(() =>
   emit('state', {
     editorError: editorError.value,
     visualUnsupported: visualUnsupported.value,
-    metadataError: !!metadata.value.error
+    metadataError: Boolean(metadata.value.error)
   })
 )
 defineExpose({ prepareLink, apply: position.apply })
@@ -118,27 +126,31 @@ defineExpose({ prepareLink, apply: position.apply })
       :tags="tags"
       @change="emit('change', $event)"
     />
-    <NoteSourceEditor
-      v-if="mode === 'source'"
-      ref="source"
-      :text="draft.text"
-      :path="draft.path"
-      :paths="paths"
-      @change="emit('change', $event)"
-    />
-    <NoteVisualEditor
-      v-else
-      ref="visual"
-      :key="`${draft.revision}:${visualVersion}`"
-      :text="parts.body"
-      :path="draft.path"
-      :paths="paths"
-      @link="linkOpen = true"
-      @change="changeBody"
-      @document="text => importDocument(text, draft.id)"
-      @unsupported="unsupported"
-      @ready="ready"
-    />
+    <KeepAlive :max="1">
+      <NoteSourceEditor
+        v-if="mode === 'source'"
+        ref="source"
+        :text="draft.text"
+        :path="draft.path"
+        :paths="paths"
+        @change="emit('change', $event)"
+      />
+    </KeepAlive>
+    <KeepAlive :max="1">
+      <NoteVisualEditor
+        v-if="mode === 'visual'"
+        ref="visual"
+        :key="`${draft.revision}:${visualVersion}`"
+        :text="parts.body"
+        :path="draft.path"
+        :paths="paths"
+        @link="linkOpen = true"
+        @change="changeBody"
+        @document="text => importDocument(text, draft.id)"
+        @unsupported="unsupported"
+        @ready="ready"
+      />
+    </KeepAlive>
   </div>
   <NoteLinkPicker v-model="linkOpen" :paths="paths" @select="insertLink" />
 </template>

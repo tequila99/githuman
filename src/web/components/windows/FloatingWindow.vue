@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { useTemplateRef } from 'vue'
+import { useTemplateRef, ref, watch } from 'vue'
 import { useWindowMotion } from '@/composables/windows/use-window-motion'
 import { useWindowStore } from '@/stores/windows/window-store'
 import { useWindowGeometry } from '@/composables/windows/use-window-geometry'
 import WindowResizeHandles from './WindowResizeHandles.vue'
+import { useWorkspaceNavigation } from '@/composables/use-workspace-navigation'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   windowId: string
@@ -11,7 +13,23 @@ const props = defineProps<{
   minimum?: { width: number; height: number } | undefined
 }>()
 const windows = useWindowStore()
+const workspace = useWorkspaceNavigation()
+const visited = ref(false)
+const { t } = useI18n()
 const { state, style } = useWindowGeometry(props.windowId)
+// A window shown from history keeps its content while it is open. A closed and hidden
+// window unmounts, so its content does not stay in the DOM until a reload.
+watch(
+  () => [workspace.window.value === props.windowId, state.open] as const,
+  ([shown, open]) => {
+    if (shown) {
+      visited.value = true
+    } else if (!open) {
+      visited.value = false
+    }
+  },
+  { immediate: true }
+)
 const element = useTemplateRef<HTMLElement>('window')
 useWindowMotion(props.windowId, state, element)
 </script>
@@ -21,24 +39,44 @@ useWindowMotion(props.windowId, state, element)
     ref="window"
     tabindex="-1"
     :data-window-id="windowId"
-    v-if="state.open"
-    v-show="!state.minimized"
+    v-if="state.open || visited"
+    v-show="
+      workspace.narrow.value
+        ? workspace.window.value === windowId
+        : state.open && !state.minimized
+    "
     class="floating-window"
-    :class="{ 'floating-window--maximized': state.maximized }"
+    :class="{
+      'floating-window--maximized': state.maximized || workspace.narrow.value,
+      'floating-window--narrow': workspace.narrow.value
+    }"
     :style="style"
     :aria-label="title"
-    @pointerdown.capture="windows.focus(windowId)"
-    @focusin="windows.focus(windowId)"
+    @pointerdown.capture="!workspace.narrow.value && windows.focus(windowId)"
+    @focusin="!workspace.narrow.value && windows.focus(windowId)"
   >
     <div
       class="floating-window__frame"
       :class="$q.dark.isActive ? 'bg-dark text-white' : 'bg-white text-dark'"
     >
+      <div
+        v-if="workspace.narrow.value"
+        class="row items-center no-wrap q-px-sm"
+      >
+        <q-btn
+          flat
+          round
+          icon="arrow_back"
+          :aria-label="t('workspace.back')"
+          @click="workspace.back"
+        />
+        <span class="ellipsis">{{ title }}</span>
+      </div>
       <slot name="header" />
       <div class="floating-window__body"><slot /></div>
     </div>
     <WindowResizeHandles
-      v-if="!state.maximized"
+      v-if="!state.maximized && !workspace.narrow.value"
       :window-id="windowId"
       :minimum="minimum"
     />
@@ -71,5 +109,9 @@ useWindowMotion(props.windowId, state, element)
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+.floating-window--narrow {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 </style>

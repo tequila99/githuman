@@ -7,6 +7,7 @@ interface FollowTargetOptions {
   now?: () => number
   requestFrame?: (callback: () => void) => number
   cancelFrame?: (id: number) => void
+  offset?: number
 }
 
 /** Distance from the top of the scroll window to the top of `target`. Negative above it. */
@@ -24,12 +25,16 @@ export function isAboveRoot(root: Element, target: Element): boolean {
 }
 
 /** The `scrollTop` of `root` that puts the top of `target` at the top of the scroll window. */
-export function scrollTopToAlign(root: Element, target: Element): number {
+export function scrollTopToAlign(
+  root: Element,
+  target: Element,
+  offset = 0
+): number {
   return Math.max(
     0,
     Math.min(
       root.scrollHeight - root.clientHeight,
-      root.scrollTop + offsetFromRootTop(root, target)
+      root.scrollTop + offsetFromRootTop(root, target) - offset
     )
   )
 }
@@ -58,7 +63,7 @@ export function followScrollTarget(options: FollowTargetOptions): () => void {
     const target = options.target()
     if (target) {
       const root = options.root
-      const next = scrollTopToAlign(root, target)
+      const next = scrollTopToAlign(root, target, options.offset)
       if (Math.abs(next - root.scrollTop) > 0.5) root.scrollTop = next
     }
     frame = requestFrame(align)

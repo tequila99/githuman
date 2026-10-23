@@ -63,14 +63,12 @@ const icon = computed(() => notePropertyIcon(notePropertyType(props.property)))
 .body--dark .note-property-key {
   color: #aaa;
 }
-@media (max-width: 700px) {
-  .note-property-row {
-    grid-template-columns: 112px minmax(0, 1fr) 24px;
-    column-gap: 8px;
-  }
-  .note-property-key {
-    gap: 6px;
-  }
+.workspace--narrow .note-property-row {
+  grid-template-columns: 112px minmax(0, 1fr) 24px;
+  column-gap: 8px;
+}
+.workspace--narrow .note-property-key {
+  gap: 6px;
 }
 @media (pointer: coarse) {
   .note-property-remove {

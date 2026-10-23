@@ -101,7 +101,7 @@ export function useNoteExternalAssets(
     return JSON.stringify([
       draft.storageId,
       draft.id ?? draft.path,
-      !!draft.deleted,
+      Boolean(draft.deleted),
       draft.status === 'conflict'
     ])
   }

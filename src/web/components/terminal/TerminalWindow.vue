@@ -12,9 +12,11 @@ import TerminalTabs from './TerminalTabs.vue'
 import TerminalLimitedBanner from './TerminalLimitedBanner.vue'
 import FloatingWindow from '@/components/windows/FloatingWindow.vue'
 import TerminalCloseDialog from './TerminalCloseDialog.vue'
+import { useWorkspaceNavigation } from '@/composables/use-workspace-navigation'
 
 const TerminalView = defineAsyncComponent(() => import('./TerminalView.vue'))
 const store = useTerminalStore()
+const workspace = useWorkspaceNavigation()
 const windows = useWindowStore()
 const { isDark } = useAppTheme()
 const { t } = useI18n()
@@ -34,9 +36,14 @@ const closeDialog = ref(false)
 const closeTarget = ref<string | null>(null)
 
 function minimize(): void {
+  if (workspace.narrow.value) {
+    workspace.back()
+    return
+  }
   store.minimize()
 }
 function toggleMaximized(): void {
+  if (workspace.narrow.value) return
   windows.toggleMode(TERMINAL_WINDOW_ID, 'maximized')
 }
 function requestClose(id: string | null): void {
@@ -71,6 +78,7 @@ watch(
   <FloatingWindow :window-id="TERMINAL_WINDOW_ID" :title="t('terminal.title')">
     <template #header>
       <TerminalWindowHeader
+        :narrow="workspace.narrow.value"
         :maximized="store.maximized"
         :connected="connected"
         :original-colors="store.originalColors"
@@ -101,13 +109,19 @@ watch(
     </q-banner>
     <TerminalLimitedBanner v-if="activeSession?.mode === 'pipe'" />
     <div class="terminal-window__body">
+      <div v-if="!store.sessions.length" class="q-pa-md text-grey">{{
+        t('terminal.empty')
+      }}</div>
       <TerminalView
         v-for="session in store.sessions"
         v-show="store.activeId === session.id"
         :key="session.id"
         :session="session"
         :active="
-          store.activeId === session.id && windows.isActive(TERMINAL_WINDOW_ID)
+          store.activeId === session.id &&
+          (workspace.narrow.value
+            ? workspace.window.value === TERMINAL_WINDOW_ID
+            : windows.isActive(TERMINAL_WINDOW_ID))
         "
         :dark="isDark"
         :original-colors="store.originalColors"

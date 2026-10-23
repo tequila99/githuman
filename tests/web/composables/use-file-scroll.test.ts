@@ -16,7 +16,7 @@ async function flush() {
   await nextTick()
   await nextTick()
 }
-function setup(ready = true) {
+function setup(ready = true, visible = true) {
   const request = shallowRef<ScrollRequest | null>({
     path: 'a.ts',
     index: 4,
@@ -31,6 +31,7 @@ function setup(ready = true) {
   const rootElement = {} as Element
   const root = shallowRef<Element | null>(ready ? rootElement : null)
   const input = new EventTarget()
+  const geometryReady = shallowRef(visible)
   let followers = 0,
     stopped = 0
   let target: (() => Element | null) | undefined
@@ -43,7 +44,14 @@ function setup(ready = true) {
   }
   const scope = effectScope()
   scope.run(() =>
-    useFileScroll({ request, list, root, inputTarget: input, follow })
+    useFileScroll({
+      request,
+      list,
+      root,
+      ready: geometryReady,
+      inputTarget: input,
+      follow
+    })
   )
   cleanups.push(() => scope.stop())
   return {
@@ -53,12 +61,52 @@ function setup(ready = true) {
     root,
     rootElement,
     input,
+    geometryReady,
     scope,
     calls,
     counts: () => ({ followers, stopped }),
     target: () => target?.()
   }
 }
+
+test('a hidden pane keeps the latest request until its geometry is ready', async () => {
+  const s = setup(true, false)
+  await flush()
+  s.input.dispatchEvent(new Event('pointerdown'))
+  s.request.value = { path: 'b.ts', index: 20, seq: 2 }
+  await flush()
+  assert.deepEqual(s.calls, [])
+  s.geometryReady.value = true
+  await flush()
+  assert.deepEqual(s.calls, [[20, 'start']])
+})
+
+test('hiding stops navigation and showing does not replay a consumed request', async () => {
+  const s = setup()
+  await flush()
+  s.geometryReady.value = false
+  await flush()
+  assert.equal(s.counts().stopped, 1)
+  s.geometryReady.value = true
+  await flush()
+  assert.deepEqual(s.calls, [[4, 'start']])
+  s.request.value = { path: 'a.ts', index: 4, seq: 2 }
+  await flush()
+  assert.deepEqual(s.calls, [
+    [4, 'start'],
+    [4, 'start']
+  ])
+})
+
+test('hiding before nextTick cancels the pending scroll', async () => {
+  const s = setup()
+  s.geometryReady.value = false
+  await flush()
+  assert.deepEqual(s.calls, [])
+  s.geometryReady.value = true
+  await flush()
+  assert.deepEqual(s.calls, [[4, 'start']])
+})
 
 test('starts when request, list and root become ready', async () => {
   const s = setup(false)

@@ -52,7 +52,9 @@ function cancel(): void {
 }
 
 function isCurrent(element: HTMLElement | null): boolean {
-  return !!element?.isConnected && element.dataset.tooltip === activeLabel
+  return (
+    element?.isConnected === true && element.dataset.tooltip === activeLabel
+  )
 }
 
 function checkActive(): void {

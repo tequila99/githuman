@@ -108,6 +108,8 @@ test('scrollTopToAlign puts the target at the top and clamps to the scroll range
     getBoundingClientRect: () => ({ top: 100 })
   } as Element
   assert.equal(scrollTopToAlign(root, elementAt(51)), 250)
+  assert.equal(scrollTopToAlign(root, elementAt(51), -50), 300)
+  assert.equal(scrollTopToAlign(root, elementAt(401), 100), 500)
   assert.equal(scrollTopToAlign(root, elementAt(-1000)), 0)
   assert.equal(scrollTopToAlign(root, elementAt(5000)), 1500)
 })

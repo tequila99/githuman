@@ -25,7 +25,9 @@ export class TerminalTokens {
   consume(token: string, origin: string): boolean {
     const info = this.tokens.get(token)
     this.tokens.delete(token)
-    return !!info && info.expires > this.now() && info.origin === origin
+    return (
+      info !== undefined && info.expires > this.now() && info.origin === origin
+    )
   }
   private prune(): void {
     for (const [token, info] of this.tokens) {

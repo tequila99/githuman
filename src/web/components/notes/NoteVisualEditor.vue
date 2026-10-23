@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { hasNoteFrontmatter } from '@/utils/notes/document-paste'
-import { useTemplateRef } from 'vue'
+import { useTemplateRef, watch, onActivated, onDeactivated } from 'vue'
+import { usePaneVisibility } from '@/composables/use-pane-visibility'
 import type { EditorView } from '@milkdown/kit/prose/view'
 import { useNoteVisualEditor } from '@/composables/notes/use-note-visual-editor'
 import { useNoteVisualLinks } from '@/composables/notes/use-note-visual-links'
@@ -22,6 +23,14 @@ const links = useNoteVisualLinks(
   () => props.paths
 )
 const { popup, matches, active, prepareLink, insertLink } = links
+const visible = usePaneVisibility()
+watch(visible, value => {
+  if (!value) popup.value = null
+})
+onDeactivated(() => {
+  popup.value = null
+})
+onActivated(() => emit('ready'))
 const { error, getView } = useNoteVisualEditor(root, () => props.text, {
   change: text => emit('change', text),
   unsupported: () => emit('unsupported'),

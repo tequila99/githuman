@@ -406,6 +406,7 @@ export const useFileExplorerStore = defineStore('file-explorer', () => {
     collapseAllFiles,
     toggleAllFiles,
     selectFile,
+    scrollToFile,
     refresh,
     refreshFromServerEvent
   }

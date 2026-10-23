@@ -119,12 +119,10 @@ const title = computed(() => {
 .body--dark .note-properties :deep(a) {
   color: #c4aaff;
 }
-@media (max-width: 700px) {
-  .note-properties {
-    margin: 12px 12px 20px;
-  }
-  .note-properties-title {
-    font-size: 23px;
-  }
+.workspace--narrow .note-properties {
+  margin: 12px 12px 20px;
+}
+.workspace--narrow .note-properties-title {
+  font-size: 23px;
 }
 </style>

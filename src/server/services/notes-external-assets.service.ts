@@ -56,7 +56,7 @@ async function* boundedChunks(
 
 function isSuccess(response: RemoteAssetResponse) {
   return (
-    !!response.statusCode &&
+    response.statusCode !== undefined &&
     response.statusCode >= 200 &&
     response.statusCode < 300
   )

@@ -17,6 +17,7 @@ import {
   type TokensByLine
 } from '@/composables/use-syntax-highlighting'
 import type { LineDocument } from '@/utils/shiki-engine'
+import { usePaneVisibility } from './use-pane-visibility'
 
 // The longest hold. After it, the code shows without colors, and the colors arrive later.
 // A warm engine sends the first slice much sooner.
@@ -46,6 +47,7 @@ export function useLineTokens(
   tokens: ShallowRef<TokensByLine | null>
   holdForTokens: ComputedRef<boolean>
 } {
+  const visible = usePaneVisibility()
   // Shallow: the tokens are plain data, and a deep proxy of thousands of lines costs time.
   const tokens = shallowRef<TokensByLine | null>(null)
   // True after the first answer of any kind: tokens, none, or a failure. Later
@@ -89,7 +91,7 @@ export function useLineTokens(
   }
 
   watch(
-    () => [currentKey.value, toValue(enabled)] as const,
+    () => [currentKey.value, toValue(enabled) && visible()] as const,
     async ([key, on]) => {
       if (!on) {
         cancel()

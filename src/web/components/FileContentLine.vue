@@ -3,8 +3,9 @@ import type {
   HighlightedToken,
   LineTokens
 } from '@/composables/use-syntax-highlighting'
+import { useGutterTap } from '@/composables/use-gutter-tap'
 
-defineProps<{
+const props = defineProps<{
   lineNumber: number
   content: string
   tokens?: LineTokens | null | undefined
@@ -16,7 +17,11 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'gutter-mousedown'): void
   (e: 'gutter-mouseenter'): void
+  (e: 'gutter-tap'): void
 }>()
+const tap = useGutterTap(() => {
+  if (props.selectable) emit('gutter-tap')
+})
 
 function tokenColor(token: HighlightedToken): string | undefined {
   if (token.colorLight && token.colorDark) {
@@ -29,7 +34,11 @@ function tokenColor(token: HighlightedToken): string | undefined {
 <template>
   <div
     class="file-content-line row no-wrap text-mono"
-    :class="{ 'file-content-line--wrap': wrap }"
+    :data-line-key="`full:${lineNumber}`"
+    :class="{
+      'file-content-line--wrap': wrap,
+      'file-content-line--selectable': selectable
+    }"
   >
     <span
       class="file-content-line__gutter"
@@ -37,7 +46,10 @@ function tokenColor(token: HighlightedToken): string | undefined {
         'file-content-line__gutter--selectable': selectable,
         'file-content-line__gutter--selected': selected
       }"
-      @mousedown="emit('gutter-mousedown')"
+      @pointerdown="tap.down($event, undefined)"
+      @pointerup="tap.up"
+      @pointercancel="tap.cancel"
+      @mousedown="tap.mouseAllowed() && emit('gutter-mousedown')"
       @mouseenter="emit('gutter-mouseenter')"
       >{{ lineNumber }}</span
     >

@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
 import type { DiffFile, DiffFileStatus } from '@/api/types'
 import type { DiffSource } from '@/stores/diff-store'
 import { pathOf } from '@/utils/diff-file'
-import { useFileActions } from '@/composables/use-file-actions'
+import FileActionButtons from '@/components/FileActionButtons.vue'
 import { useActiveReviewStore } from '@/stores/active-review-store'
 import CommentCountBadge from './CommentCountBadge.vue'
 import { treeIndentPx } from '@/utils/file-tree'
@@ -36,8 +35,6 @@ const props = defineProps<{
 }>()
 defineEmits<{ (e: 'click'): void }>()
 
-const { t } = useI18n()
-const { stage, unstage, discard } = useFileActions()
 const activeReview = useActiveReviewStore()
 const path = computed(() => pathOf(props.file))
 const commentCount = computed(
@@ -89,42 +86,7 @@ const commentCount = computed(
       </span>
     </q-item-section>
     <q-item-section side class="file-list-item__actions">
-      <template v-if="source === 'unstaged'">
-        <q-btn
-          v-ripple
-          flat
-          dense
-          round
-          size="sm"
-          icon="undo"
-          :aria-label="t('changes.actions.discard')"
-          :data-tooltip="t('changes.actions.discard')"
-          @click.stop="discard(path)"
-        />
-        <q-btn
-          v-ripple
-          flat
-          dense
-          round
-          size="sm"
-          icon="add"
-          :aria-label="t('changes.actions.stage')"
-          :data-tooltip="t('changes.actions.stage')"
-          @click.stop="stage(path)"
-        />
-      </template>
-      <q-btn
-        v-else
-        v-ripple
-        flat
-        dense
-        round
-        size="sm"
-        icon="remove"
-        :aria-label="t('changes.actions.unstage')"
-        :data-tooltip="t('changes.actions.unstage')"
-        @click.stop="unstage(path)"
-      />
+      <FileActionButtons :path="path" :source="source" />
     </q-item-section>
   </q-item>
 </template>

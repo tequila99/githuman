@@ -69,7 +69,7 @@ function onHide() {
           outlined
           :label="t('reviews.create.nameLabel')"
           :hint="t('reviews.create.nameHint')"
-          :error="!!errorMessage"
+          :error="Boolean(errorMessage)"
           :error-message="errorMessage ?? undefined"
           @keyup.enter="submit"
         />

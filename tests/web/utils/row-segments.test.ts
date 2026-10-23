@@ -3,7 +3,9 @@ import type { Comment } from '@/api/types'
 import assert from 'node:assert/strict'
 import {
   groupRows,
+  NARROW_ROW_HEIGHT,
   ROW_HEIGHT,
+  rowHeight,
   SEGMENT_COST,
   SEGMENT_SIZE,
   SEGMENT_THRESHOLD,
@@ -12,6 +14,7 @@ import {
   THREAD_COST,
   THREAD_HEIGHT_ESTIMATE
 } from '@/utils/row-segments'
+import { rememberSegmentHeight, segmentHeight } from '@/utils/segment-heights'
 
 const rowsOf = (count: number) => Array.from({ length: count }, (_, i) => i)
 
@@ -154,5 +157,34 @@ test('only fixed leaf code rows are externally cached; multiple comments cost on
   assert.equal(
     rowSegmentProps({ start: 0, rows: [[comment, comment]] }, options).cost,
     SEGMENT_COST + 1 + THREAD_COST
+  )
+})
+
+test('the row height enters the placeholder and the cache version of a segment', () => {
+  const rows = Array.from({ length: 25 }, (_, index) => index)
+  const options = {
+    comments: () => [],
+    hasForm: () => false,
+    owner: rows,
+    wrap: false,
+    commentsEditable: false
+  }
+  const wide = rowSegmentProps({ start: 0, rows }, options)
+  const narrow = rowSegmentProps(
+    { start: 0, rows },
+    { ...options, rowHeight: rowHeight(true) }
+  )
+  assert.equal(rowHeight(false), ROW_HEIGHT)
+  assert.equal(wide.minHeight, 500)
+  assert.equal(narrow.minHeight, 25 * NARROW_ROW_HEIGHT)
+  assert.equal(narrow.heightKey, wide.heightKey)
+  assert.notEqual(narrow.heightVersion, wide.heightVersion)
+  // The mount cost counts rows, not pixels: tall rows do not use more of the frame budget.
+  assert.equal(narrow.cost, wide.cost)
+  // A wide measurement is not read back in the narrow layout.
+  rememberSegmentHeight(rows, wide.heightKey, wide.heightVersion, 500)
+  assert.equal(
+    segmentHeight(rows, narrow.heightKey, narrow.heightVersion),
+    undefined
   )
 })

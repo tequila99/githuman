@@ -85,3 +85,19 @@ export function diffAnchorEndsAt(
     anchorEndsAt(anchor, 'new', line.newLineNumber)
   )
 }
+
+/** Anchor rows of one hunk. The line type is part of the text: `+x` and `-x` differ. */
+export function diffAnchorLines(
+  lines: readonly DiffLine[],
+  column: string
+): AnchorLine[] {
+  return lines.map(line => ({
+    key: column === 'old' ? line.oldLineNumber : line.newLineNumber,
+    text: `${line.type}\u0000${line.content}`
+  }))
+}
+
+/** Anchor rows of a full file: one-based line numbers (ADR 0017). */
+export function fullAnchorLines(lines: readonly string[]): AnchorLine[] {
+  return lines.map((text, index) => ({ key: index + 1, text }))
+}

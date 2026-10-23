@@ -10,8 +10,8 @@ playwright-report/
 .editorconfig
 .vscode/
 
-# Internal Claude Code planning/session directory — not part of the
-# published project (see .claude/docs/README.md for why ADR/plans live here).
+# Local Claude Code settings and skills. Internal documentation lives in
+# .githuman/docs/ alongside other ignored project data.
 .claude/
 
 # .env files

@@ -10,12 +10,15 @@ import HorizontalScrollBody from '@/components/HorizontalScrollBody.vue'
 import LoadErrorBanner from '@/components/LoadErrorBanner.vue'
 import RowSegment from '@/components/RowSegment.vue'
 import { diffAnchorEndsAt } from '@/utils/comment-anchor'
+import { useDiffFileTouchOwner } from '@/composables/use-diff-hunk-comment'
+import { useQuasar } from 'quasar'
 import {
   diffCommentThreads,
   commentsForDiffLine
 } from '@/utils/comment-threads'
 import { hunkHeightEstimate, rowSegmentProps } from '@/utils/row-segments'
 import type { FullFileVersion } from '@/composables/use-full-file-version'
+import { useRowHeight } from '@/composables/use-row-height'
 
 const props = withDefaults(
   defineProps<{
@@ -31,6 +34,8 @@ const props = withDefaults(
      * older hunks. `ready`: `file.hunks` is the diff, and empty means no text changes.
      */
     hunksState?: 'loading' | 'error' | 'ready'
+    /** The hunks are the current diff, not older hunks kept on screen during a refetch. */
+    hunksFresh?: boolean
     hunksError?: string | undefined
     /** The first tokens are on the way: show the spinner, not code that turns colored later. */
     holdForTokens?: boolean
@@ -46,6 +51,7 @@ const props = withDefaults(
     commentable: false,
     comments: () => [],
     hunksState: 'ready',
+    hunksFresh: true,
     hunksError: undefined,
     holdForTokens: false,
     loadingHeight: 0
@@ -57,6 +63,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const $q = useQuasar()
 
 // An error banner has priority: it must not wait for tokens of the hunks that stayed on screen.
 const holding = computed(
@@ -76,7 +83,14 @@ const fullFileComments = computed(() =>
 )
 
 const pending = usePendingDiffComment()
+const rowHeight = useRowHeight(() => props.commentable)
 const fullFileVersion = shallowRef<FullFileVersion | null>(null)
+useDiffFileTouchOwner({
+  hunks: () => props.file.hunks,
+  fresh: () => props.hunksFresh && props.viewMode === 'diff',
+  rejected: () =>
+    $q.notify({ type: 'warning', message: t('workspace.selectionChanged') })
+})
 const hunkSegments = computed(() => {
   if (props.commentsOnly) return []
   const threads = diffCommentThreads(diffComments.value)
@@ -89,8 +103,9 @@ const hunkSegments = computed(() => {
         hasForm: line => diffAnchorEndsAt(pending.value, line),
         owner: hunk,
         wrap: props.wrap,
-        commentsEditable: !!props.commentsEditable,
+        commentsEditable: Boolean(props.commentsEditable),
         slot: 'hunk',
+        rowHeight: rowHeight.value,
         // A hunk can contain queued placeholders rather than measured child rows.
         cacheHeight: false
       }

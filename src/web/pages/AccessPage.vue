@@ -144,6 +144,13 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.access-page {
+  overflow-y: auto;
+}
+.access-page :deep(.q-btn),
+.access-page :deep(.q-field__control) {
+  min-height: 44px;
+}
 .access-page__card {
   width: 420px;
   max-width: 100%;

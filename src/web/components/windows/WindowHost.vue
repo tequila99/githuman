@@ -14,8 +14,10 @@ import TerminalWindow from '@/components/terminal/TerminalWindow.vue'
 import PreviewWindow from '@/components/preview/PreviewWindow.vue'
 import WindowDock from './WindowDock.vue'
 import { useWindowShortcuts } from '@/composables/windows/use-window-shortcuts'
+import { useWorkspaceNavigation } from '@/composables/use-workspace-navigation'
 
 const { t } = useI18n()
+const { narrow } = useWorkspaceNavigation()
 const windows = useWindowStore()
 const terminal = useTerminalStore()
 const preview = usePreviewStore()
@@ -58,5 +60,5 @@ onBeforeUnmount(() => {
   <template v-for="application in applications" :key="application.id">
     <component v-if="application.component" :is="application.component" />
   </template>
-  <WindowDock :applications="applications" />
+  <WindowDock v-if="!narrow" :applications="applications" />
 </template>

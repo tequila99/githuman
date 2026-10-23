@@ -51,12 +51,27 @@ const matches = computed(() =>
 
 <style scoped>
 .note-link-picker {
+  --note-link-picker-max-height: 640px;
+  --note-link-picker-viewport-gap: 48px;
+
   display: flex;
   flex-direction: column;
   width: 520px;
   max-width: 90vw;
-  height: min(640px, calc(100dvh - 48px));
+  /* Chrome before 108 has no `dvh` and keeps the `vh` value. */
+  height: min(
+    var(--note-link-picker-max-height),
+    calc(100vh - var(--note-link-picker-viewport-gap))
+  );
   overflow: hidden;
+}
+@supports (height: 100dvh) {
+  .note-link-picker {
+    height: min(
+      var(--note-link-picker-max-height),
+      calc(100dvh - var(--note-link-picker-viewport-gap))
+    );
+  }
 }
 .note-link-picker__search {
   flex-shrink: 0;

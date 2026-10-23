@@ -70,7 +70,12 @@ function setup(pending = false) {
       signal = value
     },
     tick: () => frame?.(),
-    state: () => ({ stopped, closed, hasFrame: !!frame, outputConnections })
+    state: () => ({
+      stopped,
+      closed,
+      hasFrame: Boolean(frame),
+      outputConnections
+    })
   }
 }
 

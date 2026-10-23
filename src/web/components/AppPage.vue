@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useViewportStore } from '@/stores/viewport-store'
+const viewport = useViewportStore()
 /**
  * Without this, <q-page> only gets a height via CSS flex/percentage sizing,
  * which QScrollArea's internal .q-scrollarea__container computes as 0px in
@@ -8,7 +10,14 @@
  * lives here once instead of being redeclared per page.
  */
 function pageStyleFn(offset: number, height: number) {
-  return { height: `${height - offset}px` }
+  const visibleHeight =
+    viewport.metrics.scale === 1 && viewport.metrics.height > 0
+      ? Math.min(height, viewport.metrics.height)
+      : height
+  return {
+    height: `${Math.max(0, visibleHeight - offset)}px`,
+    minHeight: '0px'
+  }
 }
 </script>
 

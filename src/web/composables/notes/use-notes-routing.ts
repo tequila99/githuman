@@ -2,6 +2,7 @@ import { noteParentPath } from '../../../shared/notes/note-path.ts'
 import {
   computed,
   nextTick,
+  onScopeDispose,
   shallowRef,
   toValue,
   watch,
@@ -21,6 +22,14 @@ import {
 import { notesApi } from '@/api/notes'
 import type { useNotesStore } from '@/stores/notes-store'
 import { errorMessage } from '@/utils/error-message'
+import {
+  documentRouteKey,
+  isWorkspaceOnlyNavigation
+} from '@/utils/workspace-navigation'
+import { useWorkspaceNavigation } from '@/composables/use-workspace-navigation'
+
+// Bound view snapshots while keeping the current document's live editor separate.
+const MAX_NOTE_HISTORY_VIEWS = 128
 
 export function useNotesRouting(
   store: ReturnType<typeof useNotesStore>,
@@ -31,6 +40,7 @@ export function useNotesRouting(
 ) {
   const route = useRoute()
   const router = useRouter()
+  const workspace = useWorkspaceNavigation()
   const activeFolder = computed(() =>
     route.name === 'note-document'
       ? null
@@ -63,20 +73,54 @@ export function useNotesRouting(
           .querySelector('[data-note-mode]')
           ?.getAttribute('data-note-mode') ?? 'visual'
     })
+    while (views.size > MAX_NOTE_HISTORY_VIEWS) {
+      const oldest = views.keys().next().value
+      if (oldest === undefined) break
+      views.delete(oldest)
+    }
   }
-  async function guard() {
+  async function guard(
+    to: Parameters<typeof isWorkspaceOnlyNavigation>[0],
+    from: Parameters<typeof isWorkspaceOnlyNavigation>[1]
+  ) {
+    if (isWorkspaceOnlyNavigation(to, from)) {
+      capture()
+      return true
+    }
     const saved = await options.flush()
     if (saved) capture()
     return saved
   }
   onBeforeRouteUpdate(guard)
   onBeforeRouteLeave(guard)
-  async function open(id: string, anchor = '', replace = false) {
+  onScopeDispose(
+    router.afterEach((to, from, failure) => {
+      if (failure || !isWorkspaceOnlyNavigation(to, from)) return
+      if (!views.has(position() ?? -1)) capture()
+      const state = views.get(position() ?? -1)
+      if (!state) return
+      viewState.value = { ...state }
+      restoreCurrent = () => {
+        const panel = toValue(options.panel)
+        const body = panel?.querySelector('.note-body')
+        const source = panel?.querySelector('textarea')
+        if (body) body.scrollTop = state.scroll
+        if (source) source.scrollTop = state.sourceScroll
+      }
+      void nextTick().then(() => restoreCurrent?.())
+    })
+  )
+  async function open(id: string, anchor = '', replace = false, intent = true) {
     const storageId = store.index.storageId
     if (!storageId) return
     await router[replace ? 'replace' : 'push']({
       name: 'note-document',
       params: { storageId, id },
+      query: intent
+        ? workspace.narrow.value
+          ? { uiPane: 'content' }
+          : {}
+        : route.query,
       hash: anchor ? '#' + encodeURIComponent(anchor) : ''
     })
   }
@@ -92,7 +136,13 @@ export function useNotesRouting(
     }
   }
   async function selectFolder(path: string) {
-    await router.push({ name: 'notes', query: { folder: path } })
+    await router.push({
+      name: 'notes',
+      query: {
+        folder: path,
+        ...(workspace.narrow.value ? { uiPane: 'content' } : {})
+      }
+    })
   }
   async function showNote() {
     const id = store.createdId || store.selectedId
@@ -145,7 +195,8 @@ export function useNotesRouting(
       await open(
         store.selectedId,
         decodeURIComponent(route.hash.slice(1)),
-        true
+        true,
+        false
       )
       return
     }
@@ -183,7 +234,7 @@ export function useNotesRouting(
     restore()
   }
   watch(
-    () => route.fullPath,
+    () => documentRouteKey(route),
     () => {
       void applyRoute()
     },
@@ -199,7 +250,7 @@ export function useNotesRouting(
         String(route.params.storageId) === store.index.storageId &&
         canonicalId === id
       ) {
-        void open(id, decodeURIComponent(route.hash.slice(1)), true)
+        void open(id, decodeURIComponent(route.hash.slice(1)), true, false)
       }
     }
   )

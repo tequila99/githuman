@@ -33,7 +33,7 @@ const stats = computed(() => {
 
 <template>
   <div
-    class="diff-status-bar row items-center q-gutter-x-md q-pa-sm text-body2 non-selectable"
+    class="diff-status-bar row items-center q-pa-sm text-body2 non-selectable"
     role="button"
     tabindex="0"
     :aria-label="t(anyExpanded ? 'changes.collapseAll' : 'changes.expandAll')"
@@ -42,27 +42,31 @@ const stats = computed(() => {
     @keydown.enter.prevent="!$event.repeat && emit('toggle-all')"
     @keydown.space.prevent="!$event.repeat && emit('toggle-all')"
   >
-    <span class="text-weight-medium">
-      {{ t('changes.filesChanged', { count: stats.total }) }}
-    </span>
-    <span class="text-positive">
-      +{{ stats.additions }} {{ t('changes.additions') }}
-    </span>
-    <span class="text-negative">
-      -{{ stats.deletions }} {{ t('changes.deletions') }}
-    </span>
-    <span v-if="stats.added" class="text-grey-6">
-      {{ stats.added }} {{ t('changes.added') }}
-    </span>
-    <span v-if="stats.modified" class="text-grey-6">
-      {{ stats.modified }} {{ t('changes.modified') }}
-    </span>
-    <span v-if="stats.deleted" class="text-grey-6">
-      {{ stats.deleted }} {{ t('changes.deletedPlural') }}
-    </span>
-    <span v-if="stats.renamed" class="text-grey-6">
-      {{ stats.renamed }} {{ t('changes.renamed') }}
-    </span>
+    <div class="diff-status-bar__files ellipsis">
+      <span class="text-weight-medium"
+        >{{ t('changes.filesChanged', stats.total) }}:</span
+      >
+      <span v-if="stats.added" class="text-grey-6 q-ml-sm"
+        >{{ stats.added }} {{ t('changes.added') }}</span
+      >
+      <span v-if="stats.modified" class="text-grey-6 q-ml-sm"
+        >{{ stats.modified }} {{ t('changes.modified') }}</span
+      >
+      <span v-if="stats.deleted" class="text-grey-6 q-ml-sm"
+        >{{ stats.deleted }} {{ t('changes.deletedPlural') }}</span
+      >
+      <span v-if="stats.renamed" class="text-grey-6 q-ml-sm"
+        >{{ stats.renamed }} {{ t('changes.renamed') }}</span
+      >
+    </div>
+    <div class="diff-status-bar__lines row items-center q-gutter-x-md no-wrap">
+      <span class="text-positive"
+        >+{{ stats.additions }} {{ t('changes.additions') }}</span
+      >
+      <span class="text-negative"
+        >-{{ stats.deletions }} {{ t('changes.deletions') }}</span
+      >
+    </div>
 
     <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
       t(anyExpanded ? 'changes.collapseAllHint' : 'changes.expandAllHint')
@@ -73,12 +77,21 @@ const stats = computed(() => {
 <style scoped>
 .diff-status-bar {
   cursor: pointer;
+  gap: 4px 16px;
 }
 .diff-status-bar:focus-visible {
   outline: 2px solid var(--q-primary);
   outline-offset: -2px;
 }
-.diff-status-bar > span {
+.diff-status-bar__files {
+  min-width: 0;
+  max-width: 100%;
+}
+.diff-status-bar__lines {
   white-space: nowrap;
+}
+/* The narrow layout class keeps this rule on the shared workspace threshold. */
+.workspace--narrow .diff-status-bar__files {
+  flex-basis: 100%;
 }
 </style>
