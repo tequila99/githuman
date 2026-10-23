@@ -39,7 +39,14 @@ const { t } = useI18n()
       v-for="key in ['left', 'down', 'up', 'right'] as const"
       :key="key"
       flat
-      :icon="`arrow_${key === 'down' ? 'downward' : key === 'up' ? 'upward' : key}`"
+      :icon="
+        {
+          left: 'arrow_back',
+          right: 'arrow_forward',
+          up: 'arrow_upward',
+          down: 'arrow_downward'
+        }[key]
+      "
       :disable="disabled"
       :aria-label="t('terminal.keys.' + key)"
       @click="emit('key', key)"

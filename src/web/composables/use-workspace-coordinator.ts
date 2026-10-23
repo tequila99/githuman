@@ -58,8 +58,8 @@ export function createWorkspaceCoordinator(
     },
     { immediate: true }
   )
-  watch(workspace.narrow, (narrow, previous) => {
-    if (!narrow || previous === undefined) return
+  watch(workspace.narrow, narrow => {
+    if (!narrow) return
     const active = windows.activeId
     const pane =
       agent.enabled && agent.panelOpen

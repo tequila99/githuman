@@ -13,9 +13,14 @@ export function useGutterTap<T>(tap: (value: T) => void) {
       ? { id: event.pointerId, x: event.clientX, y: event.clientY, value }
       : null
   }
+  // The browser sends compatibility mouse events after the touch ends, not after it starts.
+  function extendMouseWindow() {
+    ignoreMouseUntil = Date.now() + COMPATIBILITY_MOUSE_DELAY_MS
+  }
   function up(event: PointerEvent) {
     const start = pointer
     pointer = null
+    if (event.pointerType !== 'mouse') extendMouseWindow()
     if (
       start?.id === event.pointerId &&
       Math.hypot(event.clientX - start.x, event.clientY - start.y) <=
@@ -25,6 +30,7 @@ export function useGutterTap<T>(tap: (value: T) => void) {
     }
   }
   function cancel() {
+    if (pointer) extendMouseWindow()
     pointer = null
   }
   return {

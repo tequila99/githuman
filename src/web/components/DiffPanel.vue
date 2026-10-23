@@ -36,8 +36,12 @@ const { t } = useI18n()
 const explorer = useFileExplorerStore()
 const cardState = useCardStateStore()
 // An unmounted card cannot confirm its range: bring it back, and its body confirms it.
+// A collapsed card has no body, so expand it before the scroll.
 const touchSelection = provideTouchCommentSelection({
-  reveal: path => explorer.scrollToFile(path)
+  reveal: path => {
+    explorer.expandFile(path)
+    explorer.scrollToFile(path)
+  }
 })
 // A range belongs to one source and one view mode. Its owner does not mount in the others.
 watchEffect(() => {
