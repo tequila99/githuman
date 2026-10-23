@@ -33,8 +33,8 @@ const {
 const tree = useTemplateRef<QTree>('tree')
 const selectedHidden = computed(
   () =>
-    !!props.selected &&
-    !!entryByPath.value.get(props.selected) &&
+    Boolean(props.selected) &&
+    Boolean(entryByPath.value.get(props.selected)) &&
     !tree.value?.getNodeByKey(props.selected)
 )
 watch(

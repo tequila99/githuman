@@ -193,7 +193,7 @@
   --note-inline-background: rgba(50, 56, 67, 0.6);
 }
 
-@media (max-width: 700px) {
+.workspace--narrow {
   .note-pane .md-content,
   .note-pane .note-visual .milkdown .ProseMirror {
     padding: 16px 12px;

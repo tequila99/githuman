@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import type { WindowPanEvent } from '@/composables/windows/use-window-geometry'
 
-defineProps<{ maximized: boolean }>()
+defineProps<{ maximized: boolean; narrow?: boolean }>()
 const emit = defineEmits<{
   drag: [event: WindowPanEvent]
   openFile: []
@@ -17,9 +17,11 @@ const { t } = useI18n()
 <template>
   <div class="window-header row items-center no-wrap">
     <div
-      v-touch-pan.prevent.mouse="(event: WindowPanEvent) => emit('drag', event)"
+      v-touch-pan.prevent.mouse="
+        narrow ? undefined : (event: WindowPanEvent) => emit('drag', event)
+      "
       class="window-header__title preview-title col ellipsis"
-      @dblclick="emit('toggleMaximized')"
+      @dblclick="!narrow && emit('toggleMaximized')"
       ><q-icon size="16px" name="visibility" class="q-mr-sm" />{{
         t('windows.preview')
       }}</div
@@ -43,6 +45,7 @@ const { t } = useI18n()
       size="sm"
       class="window-header__control"
       icon="minimize"
+      v-if="!narrow"
       :aria-label="t('windows.minimize')"
       @click="emit('minimize')"
       ><q-tooltip :delay="TOOLTIP_DELAY_MS"
@@ -55,6 +58,7 @@ const { t } = useI18n()
       size="sm"
       class="window-header__control"
       :icon="maximized ? 'filter_none' : 'crop_square'"
+      v-if="!narrow"
       :aria-label="t(maximized ? 'terminal.restore' : 'terminal.maximize')"
       @click="emit('toggleMaximized')"
       ><q-tooltip :delay="TOOLTIP_DELAY_MS"

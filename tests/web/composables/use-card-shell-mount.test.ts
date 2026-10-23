@@ -12,6 +12,7 @@ import {
   TestIntersectionObserver,
   TestResizeObserver
 } from '../helpers/segment-environment'
+import { cardShellVersion } from '@/utils/diff-card-height'
 
 let frames: Array<() => void>, restore: () => void
 const cleanups: Array<() => void> = []
@@ -131,4 +132,45 @@ test('leaving before activation cancels the heavy card job', () => {
   shell.scope.stop()
   frame()
   assert.equal(shell.mount.mounted.value, false)
+})
+
+// The shell version of an open diff card that differs only in the row height.
+const versionFor = (rowHeight: number) =>
+  cardShellVersion({
+    expanded: true,
+    mode: 'diff',
+    wrap: false,
+    activeReview: true,
+    rowHeight,
+    pending: null,
+    comments: []
+  })
+
+test('a row height change replaces the card reserve at an equal root width', async () => {
+  const owner = {},
+    root = { clientWidth: 800 } as Element
+  const wide = setup(owner, root, { version: versionFor(20) })
+  wide.mount.start()
+  wide.near(true)
+  frame()
+  wide.scope.stop()
+  // A new shell for the narrow layout must not take the wide measurement.
+  const narrow = setup(owner, root, { version: versionFor(44) })
+  assert.equal(narrow.mount.height.value, 100)
+  Object.assign(narrow.el, { offsetHeight: 1900 })
+  narrow.mount.start()
+  narrow.near(true)
+  frame()
+  narrow.near(false)
+  assert.equal(narrow.mount.height.value, 1900)
+  // A live shell drops its local measurement. The cache keeps one version per slot,
+  // so the narrow entry replaced the wide one and the estimate comes back.
+  narrow.options.version = versionFor(20)
+  await nextTick()
+  assert.equal(narrow.mount.height.value, 100)
+  narrow.scope.stop()
+  assert.equal(
+    setup(owner, root, { version: versionFor(44) }).mount.height.value,
+    1900
+  )
 })

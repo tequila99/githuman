@@ -1,18 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, provide, ref, watch } from 'vue'
+import { computed, nextTick, provide, ref, watch, watchEffect } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import type { QScrollArea } from 'quasar'
+import type { QScrollArea, QVirtualScroll } from 'quasar'
 import { useFileExplorerStore } from '@/stores/file-explorer-store'
 import { useActiveReviewStore } from '@/stores/active-review-store'
 import { useDiffStore } from '@/stores/diff-store'
 import { pathOf } from '@/utils/diff-file'
 import { equalArrays } from '@/utils/equal-arrays'
 import { SCROLL_ROOT_KEY } from '@/composables/use-scroll-root'
-import {
-  useFileScroll,
-  type VirtualScrollApi
-} from '@/composables/use-file-scroll'
+import { usePaneVisibility } from '@/composables/use-pane-visibility'
+import { useFileScroll } from '@/composables/use-file-scroll'
 import { CARD_HEIGHT_ESTIMATE } from '@/utils/diff-card-height'
 import { provideCommentActions } from '@/composables/use-comment-actions'
 import DiffStatusBar from './DiffStatusBar.vue'
@@ -20,6 +18,11 @@ import ChangesFileCard from './ChangesFileCard.vue'
 import ActiveReviewBar from './ActiveReviewBar.vue'
 import LoadErrorBanner from './LoadErrorBanner.vue'
 import CreateReviewFabButton from './buttons/CreateReviewFabButton.vue'
+import { provideTouchCommentSelection } from '@/composables/use-touch-comment-selection'
+import TouchCommentToolbar from './TouchCommentToolbar.vue'
+import { usePaneScrollPosition } from '@/composables/use-pane-scroll-position'
+import { useCardStateStore } from '@/stores/card-state-store'
+import { cardStateKey } from '@/utils/card-state-key'
 
 // How many rows the list draws around the window, and how many before and after
 // per window height. More rows after than before: people scroll down.
@@ -27,9 +30,27 @@ const SLICE_SIZE = 12
 const SLICE_RATIO_BEFORE = 1.5
 const SLICE_RATIO_AFTER = 2
 
+// `WorkspacePane` around the content side tells if this pane is on screen.
+const active = usePaneVisibility()
 const { t } = useI18n()
-
 const explorer = useFileExplorerStore()
+const cardState = useCardStateStore()
+// An unmounted card cannot confirm its range: bring it back, and its body confirms it.
+const touchSelection = provideTouchCommentSelection({
+  reveal: path => explorer.scrollToFile(path)
+})
+// A range belongs to one source and one view mode. Its owner does not mount in the others.
+watchEffect(() => {
+  const selected = touchSelection.selection.value
+  if (!selected) return
+  const mode = cardState.get(selected.cardKey, 'viewMode') ?? 'diff'
+  if (
+    selected.cardKey !== cardStateKey(explorer.source, selected.path) ||
+    mode !== selected.mode
+  ) {
+    touchSelection.cancel(selected.cardKey)
+  }
+})
 const { diffFiles } = storeToRefs(explorer)
 const { error: loadError, loading: diffLoading } = storeToRefs(useDiffStore())
 const activeReviewStore = useActiveReviewStore()
@@ -50,11 +71,42 @@ const scrollArea = ref<QScrollArea | null>(null)
 const scrollTarget = computed(() => scrollArea.value?.getScrollTarget() ?? null)
 provide(SCROLL_ROOT_KEY, () => scrollTarget.value)
 
-const virtualScroll = ref<VirtualScrollApi | null>(null)
+const virtualScroll = ref<QVirtualScroll | null>(null)
+const scrollSize = ref({ width: 0, height: 0 })
+const scrollReady = ref(false)
+const readingPosition = usePaneScrollPosition({
+  active,
+  ready: scrollReady,
+  root: scrollTarget,
+  request: () => explorer.scrollRequest
+})
+
+// A hidden pane retains its list, but navigation must wait for visible geometry.
+watch(
+  [active, scrollSize, virtualScroll],
+  async ([visible, size, list], _previous, onCleanup) => {
+    scrollReady.value = false
+    if (!visible || !list || size.width <= 0 || size.height <= 0) return
+    let current = true
+    readingPosition.capture()
+    onCleanup(() => {
+      current = false
+    })
+    await nextTick()
+    if (!current) return
+    // The default refresh aligns the previous row and can move the reading position.
+    list.refresh(-1)
+    await nextTick()
+    if (current) scrollReady.value = true
+  },
+  { flush: 'post' }
+)
+
 useFileScroll({
   request: () => explorer.scrollRequest,
   list: virtualScroll,
-  root: scrollTarget
+  root: scrollTarget,
+  ready: scrollReady
 })
 
 // Quasar measures rows once and resets only when the list length changes.
@@ -101,37 +153,58 @@ watch(diffFiles, async (files, previous) => {
       @toggle-all="explorer.toggleAllFiles"
     />
     <q-separator />
-    <q-scroll-area
-      ref="scrollArea"
-      class="col sticky-header-scroll"
-      content-style="padding: 8px; width: 100%; max-width: 100%"
-      content-active-style="padding: 8px; width: 100%; max-width: 100%"
-    >
-      <!-- The key holds the source: with the same length Quasar would keep the old heights. -->
-      <q-virtual-scroll
-        v-if="scrollTarget"
-        :key="explorer.source"
-        ref="virtualScroll"
-        :scroll-target="scrollTarget"
-        :items="diffFiles"
-        :virtual-scroll-item-size="CARD_HEIGHT_ESTIMATE"
-        :virtual-scroll-slice-size="SLICE_SIZE"
-        :virtual-scroll-slice-ratio-before="SLICE_RATIO_BEFORE"
-        :virtual-scroll-slice-ratio-after="SLICE_RATIO_AFTER"
+    <div class="col column diff-scroll-container">
+      <q-resize-observer @resize="scrollSize = $event" />
+      <q-scroll-area
+        ref="scrollArea"
+        class="col sticky-header-scroll"
+        content-style="padding: 8px; width: 100%; max-width: 100%"
+        content-active-style="padding: 8px; width: 100%; max-width: 100%"
       >
-        <template #default="{ item: file }">
-          <!-- No overflow or contain here: either would break the sticky bars inside the card. -->
-          <div :key="pathOf(file)" class="diff-virtual-slot">
-            <ChangesFileCard :file="file" />
-          </div>
-        </template>
-      </q-virtual-scroll>
-    </q-scroll-area>
+        <!-- The key holds the source: with the same length Quasar would keep the old heights. -->
+        <q-virtual-scroll
+          v-if="scrollTarget"
+          :key="explorer.source"
+          ref="virtualScroll"
+          :scroll-target="scrollTarget"
+          :items="diffFiles"
+          :virtual-scroll-item-size="CARD_HEIGHT_ESTIMATE"
+          :virtual-scroll-slice-size="SLICE_SIZE"
+          :virtual-scroll-slice-ratio-before="SLICE_RATIO_BEFORE"
+          :virtual-scroll-slice-ratio-after="SLICE_RATIO_AFTER"
+        >
+          <template #default="{ item: file }">
+            <!-- No overflow or contain here: either would break the sticky bars inside the card. -->
+            <div
+              :key="pathOf(file)"
+              :data-file-path="pathOf(file)"
+              class="diff-virtual-slot"
+            >
+              <ChangesFileCard :file="file" />
+            </div>
+          </template>
+        </q-virtual-scroll>
+      </q-scroll-area>
+    </div>
   </template>
   <CreateReviewFabButton v-if="!activeReview && diffFiles.length > 0" />
+  <TouchCommentToolbar
+    v-if="touchSelection.selection.value"
+    :path="touchSelection.selection.value.path"
+    :start="touchSelection.selection.value.anchor.startKey"
+    :end="touchSelection.selection.value.anchor.endKey"
+    :confirming="touchSelection.selection.value.phase === 'confirming'"
+    @confirm="touchSelection.confirm"
+    @cancel="touchSelection.cancel()"
+  />
 </template>
 
 <style scoped>
+.diff-scroll-container {
+  min-height: 0;
+  min-width: 0;
+}
+
 /* The virtual list measures a row without its margin, so the gap is padding inside the row. */
 .diff-virtual-slot {
   padding-bottom: 8px;

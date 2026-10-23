@@ -29,7 +29,7 @@ const { navigate, navigateFromMargin } = usePdfNavigation({
   page: pageIndex,
   pages,
   canvas,
-  blocked: () => busy.value || !!error.value,
+  blocked: () => busy.value || Boolean(error.value),
   onNavigate: () => emit('remember')
 })
 </script>

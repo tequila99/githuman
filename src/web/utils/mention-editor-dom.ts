@@ -103,7 +103,7 @@ export function validTrigger(
   at: EditorTrigger
 ): boolean {
   return (
-    !!root?.contains(at.node) &&
+    Boolean(root?.contains(at.node)) &&
     at.start >= 0 &&
     at.end <= at.node.length &&
     at.end > at.start &&

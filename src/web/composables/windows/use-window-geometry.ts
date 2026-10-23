@@ -5,7 +5,7 @@ import { withoutWindowMotion } from '@/utils/windows/window-elements'
 import { useWindowStore } from '@/stores/windows/window-store'
 import {
   clampWindowPosition,
-  windowLayoutRect,
+  projectWindowLayout,
   resizeWindow
 } from '@/utils/windows/window-geometry'
 import type {
@@ -13,6 +13,8 @@ import type {
   WindowPoint,
   WindowRect
 } from '@/types/windows/window'
+import { isNarrowWorkspace } from '@/utils/workspace-navigation'
+import { useViewportStore } from '@/stores/viewport-store'
 
 // The viewport origin anchors maximized windows and initializes drag coordinates.
 const ORIGIN: Readonly<WindowPoint> = { x: 0, y: 0 }
@@ -24,12 +26,27 @@ export function useWindowGeometry(
 ) {
   const store = useWindowStore()
   const $q = useQuasar()
+  const visibleViewport = useViewportStore()
+  const narrow = computed(() => isNarrowWorkspace($q.screen.width))
   const state = store.ensure(id)
   const viewport = computed(() => ({
     width: $q.screen.width,
     height: $q.screen.height
   }))
-  const layout = computed(() => windowLayoutRect(state, viewport.value))
+  const layout = computed(() =>
+    projectWindowLayout(
+      state,
+      viewport.value,
+      narrow.value
+        ? {
+            x: visibleViewport.metrics.offsetLeft,
+            y: visibleViewport.metrics.offsetTop,
+            width: visibleViewport.metrics.width || viewport.value.width,
+            height: visibleViewport.metrics.height || viewport.value.height
+          }
+        : undefined
+    )
+  )
   const size = computed(() => ({
     width: layout.value.width,
     height: layout.value.height
@@ -50,7 +67,7 @@ export function useWindowGeometry(
     pointer: { x: number; y: number }
   } | null = null
   function drag(event: WindowPanEvent) {
-    if (state.maximized) return
+    if (narrow.value || state.maximized) return
     if (event.isFirst) {
       if (state.mode === 'left' || state.mode === 'right') {
         const rect = { ...position.value, ...size.value }
@@ -84,6 +101,7 @@ export function useWindowGeometry(
   }
   function start(event: PointerEvent, edge: ResizeEdge) {
     if (
+      narrow.value ||
       state.maximized ||
       event.button !== 0 ||
       !(event.currentTarget instanceof Element)
@@ -109,6 +127,10 @@ export function useWindowGeometry(
     }
   }
   function move(event: PointerEvent) {
+    if (narrow.value) {
+      active = null
+      return
+    }
     if (active?.pointerId !== event.pointerId) return
     const rect = resizeWindow(
       active.start,

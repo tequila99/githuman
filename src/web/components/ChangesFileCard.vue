@@ -9,7 +9,8 @@ import { isMarkdown } from '@/utils/file-wrap'
 import {
   CARD_HEIGHT_ESTIMATE,
   diffCardBodyHeight,
-  commentHeightEstimate
+  commentHeightEstimate,
+  cardShellVersion
 } from '@/utils/diff-card-height'
 import { THREAD_HEIGHT_ESTIMATE } from '@/utils/row-segments'
 import { storeToRefs } from 'pinia'
@@ -20,6 +21,7 @@ import { cardStateKey } from '@/utils/card-state-key'
 import { pathOf } from '@/utils/diff-file'
 import type { DiffFile } from '@/api/types'
 import DiffFileCard from './DiffFileCard.vue'
+import { useRowHeight } from '@/composables/use-row-height'
 
 // A card shell reserves space; only a nearby shell creates a full card and loads its hunks.
 const props = defineProps<{ file: DiffFile }>()
@@ -41,7 +43,9 @@ const hunksError = computed(() =>
 )
 const expanded = computed(() => expandedFiles.value.has(path.value))
 const comments = computed(() => commentsByFile.value.get(path.value))
-const hasActiveReview = computed(() => !!activeReview.value)
+const hasActiveReview = computed(() => Boolean(activeReview.value))
+// The full card gets `commentable` from the active review, so the row height follows it too.
+const rowHeight = useRowHeight(hasActiveReview)
 
 // The source-keyed virtual list keeps this card key stable for the shell's lifetime.
 const ownState = { key: stateKey.value }
@@ -56,29 +60,21 @@ const shellHeight = computed(
   () =>
     CARD_HEIGHT_ESTIMATE +
     (expanded.value
-      ? diffCardBodyHeight(props.file, detail.value) +
+      ? diffCardBodyHeight(props.file, detail.value, rowHeight.value) +
         commentHeightEstimate(comments.value ?? [], mode.value) +
         (pending.value ? THREAD_HEIGHT_ESTIMATE : 0)
       : 0)
 )
 const shellVersion = computed(() =>
-  JSON.stringify([
-    expanded.value,
-    mode.value,
-    wrap.value,
-    hasActiveReview.value,
-    pending.value
-      ? [pending.value.column, pending.value.startKey, pending.value.endKey]
-      : null,
-    comments.value?.map(comment => [
-      comment.id,
-      comment.lineType,
-      comment.lineNumberEnd,
-      comment.content,
-      comment.suggestion,
-      comment.resolved
-    ])
-  ])
+  cardShellVersion({
+    expanded: expanded.value,
+    mode: mode.value,
+    wrap: wrap.value,
+    activeReview: hasActiveReview.value,
+    rowHeight: rowHeight.value,
+    pending: pending.value,
+    comments: comments.value
+  })
 )
 const el = useTemplateRef<HTMLElement>('el')
 const { mounted, height, start, stop } = useCardShellMount(
@@ -103,7 +99,7 @@ const { mounted, height, start, stop } = useCardShellMount(
       )
     },
     get keep() {
-      return !!pending.value
+      return Boolean(pending.value)
     }
   },
   () => el.value,

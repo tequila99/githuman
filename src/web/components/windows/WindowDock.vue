@@ -107,7 +107,7 @@ async function activate(app: WindowApplication) {
         :icon="entry.app.icon"
         class="window-dock__button"
         :class="{
-          'window-dock__button--running': entry.active || !!entry.badge,
+          'window-dock__button--running': entry.active || Boolean(entry.badge),
           'window-dock__button--active': entry.active
         }"
         :color="entry.active ? 'white' : entry.badge ? 'primary' : undefined"

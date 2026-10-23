@@ -37,8 +37,8 @@ export default defineConfig(ctx => {
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#build
     build: {
       target: {
-        // browser: 'baseline-widely-available',
-        // node: 'node22'
+        // Keep generated JavaScript and CSS usable in older Android Chrome.
+        browser: ['chrome103', 'edge111', 'firefox114', 'safari16.4', 'ios16.4']
       },
 
       // All frontend source lives under src/web/ (src/ also holds
@@ -180,7 +180,7 @@ export default defineConfig(ctx => {
       // directives: [],
 
       // Quasar plugins
-      plugins: ['LocalStorage', 'Dialog', 'Notify']
+      plugins: ['LocalStorage', 'Dialog', 'Notify', 'AppFullscreen']
     },
 
     // animations: 'all', // --- includes all animations

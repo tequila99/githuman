@@ -5,7 +5,8 @@ import {
   onMounted,
   onBeforeUnmount,
   watch,
-  nextTick
+  nextTick,
+  ref
 } from 'vue'
 import { format, useElementSize, useEventListener } from 'quasar'
 import { Terminal } from '@xterm/xterm'
@@ -26,6 +27,14 @@ import { terminalTheme } from '@/utils/terminal-theme'
 import TerminalLineInput from './TerminalLineInput.vue'
 import { TERMINAL_WINDOW_ID } from '@/constants/windows/constants'
 import { registerWindowFocus } from '@/utils/windows/window-elements'
+import { useWorkspaceNavigation } from '@/composables/use-workspace-navigation'
+import TerminalKeypad from './TerminalKeypad.vue'
+import {
+  isFocusReport,
+  terminalControlInput,
+  terminalKeyInput,
+  type TerminalKey
+} from '@/utils/terminal-keys'
 
 // Match the code font of the diff view.
 const FONT_SIZE = 13
@@ -42,6 +51,7 @@ const props = defineProps<{
 }>()
 const { between } = format
 const store = useTerminalStore()
+const workspace = useWorkspaceNavigation()
 // The padding and the space that the grid leaves free get the terminal color, so no strip shows.
 const background = computed(() => terminalTheme(props.dark).background)
 const host = useTemplateRef<HTMLDivElement>('host')
@@ -49,6 +59,37 @@ const lineInput =
   useTemplateRef<InstanceType<typeof TerminalLineInput>>('lineInput')
 
 let terminal: Terminal | null = null
+const controlArmed = ref(false)
+function inputKey(key: TerminalKey) {
+  if (
+    !terminal ||
+    !props.active ||
+    store.state !== 'connected' ||
+    props.session.mode !== 'pty'
+  ) {
+    return
+  }
+  controlArmed.value = false
+  terminal.input(
+    terminalKeyInput(key, terminal.modes.applicationCursorKeysMode),
+    true
+  )
+  focusInput()
+}
+function armControl() {
+  if (!props.active || store.state !== 'connected') return
+  controlArmed.value = !controlArmed.value
+  focusInput()
+}
+useEventListener(host, 'compositionstart', () => {
+  controlArmed.value = false
+})
+watch(
+  () => [props.active, props.session.id, store.state],
+  () => {
+    controlArmed.value = false
+  }
+)
 
 function focusInput(): void {
   if (props.session.mode === 'pipe') {
@@ -155,15 +196,25 @@ onMounted(async () => {
   ignoreTerminalQueries(terminal)
   terminal.open(host.value)
   terminal.onData(data => {
-    if (store.state === 'connected') {
+    if (!data || store.state !== 'connected') return
+    // Focus reports keep vim and tmux informed when the window loses focus. They bypass
+    // the one-shot Ctrl: a focus-in after a tap on the terminal must not disarm it.
+    if (isFocusReport(data)) {
       store.send({ type: 'input', terminalId: props.session.id, data })
+      return
+    }
+    // User input reaches only the visible selected session.
+    if (props.active) {
+      const input = controlArmed.value ? terminalControlInput(data) : data
+      controlArmed.value = false
+      store.send({ type: 'input', terminalId: props.session.id, data: input })
     }
   })
   if (!document.hidden) attachOutput()
   await document.fonts.ready
   if (!disposed) {
     resize()
-    if (props.active) focusInput()
+    if (props.active && !workspace.narrow.value) focusInput()
   }
 })
 watch(
@@ -188,7 +239,7 @@ watch(
     if (!active) return
     await nextTick()
     resize()
-    focusInput()
+    if (!workspace.narrow.value) focusInput()
   }
 )
 onBeforeUnmount(() => {
@@ -203,6 +254,13 @@ onBeforeUnmount(() => {
 <template>
   <div class="terminal-view" :style="{ background }">
     <div ref="host" class="terminal-view__screen" />
+    <TerminalKeypad
+      v-if="workspace.narrow.value && session.mode === 'pty'"
+      :disabled="!active || store.state !== 'connected'"
+      :control="controlArmed"
+      @key="inputKey"
+      @control="armControl"
+    />
     <TerminalLineInput
       ref="lineInput"
       v-if="session.mode === 'pipe'"

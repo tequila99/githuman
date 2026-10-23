@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { DiffLine } from '@/api/types'
+import { useGutterTap } from '@/composables/use-gutter-tap'
 import type {
   HighlightedToken,
   LineTokens
@@ -22,7 +23,17 @@ const emit = defineEmits<{
   (e: 'old-mouseenter'): void
   (e: 'new-mousedown'): void
   (e: 'new-mouseenter'): void
+  (e: 'old-tap'): void
+  (e: 'new-tap'): void
 }>()
+const tap = useGutterTap<'old' | 'new'>(column => {
+  if (!props.selectable) return
+  if (column === 'old') {
+    emit('old-tap')
+  } else {
+    emit('new-tap')
+  }
+})
 
 const prefix = computed(
   () => ({ added: '+', removed: '-', context: ' ' })[props.line.type]
@@ -45,7 +56,11 @@ function tokenColor(token: HighlightedToken): string | undefined {
 <template>
   <div
     class="diff-line row no-wrap text-mono"
-    :class="[rowClass, { 'diff-line--wrap': wrap }]"
+    :data-line-key="`${line.oldLineNumber ?? ''}:${line.newLineNumber ?? ''}`"
+    :class="[
+      rowClass,
+      { 'diff-line--wrap': wrap, 'diff-line--selectable': selectable }
+    ]"
   >
     <span
       class="diff-line__gutter"
@@ -53,7 +68,12 @@ function tokenColor(token: HighlightedToken): string | undefined {
         'diff-line__gutter--selectable': selectable && line.oldLineNumber,
         'diff-line__gutter--selected': oldSelected
       }"
-      @mousedown="line.oldLineNumber && emit('old-mousedown')"
+      @pointerdown="line.oldLineNumber && tap.down($event, 'old')"
+      @pointerup="tap.up"
+      @pointercancel="tap.cancel"
+      @mousedown="
+        tap.mouseAllowed() && line.oldLineNumber && emit('old-mousedown')
+      "
       @mouseenter="line.oldLineNumber && emit('old-mouseenter')"
       >{{ line.oldLineNumber ?? '' }}</span
     >
@@ -63,7 +83,12 @@ function tokenColor(token: HighlightedToken): string | undefined {
         'diff-line__gutter--selectable': selectable && line.newLineNumber,
         'diff-line__gutter--selected': newSelected
       }"
-      @mousedown="line.newLineNumber && emit('new-mousedown')"
+      @pointerdown="line.newLineNumber && tap.down($event, 'new')"
+      @pointerup="tap.up"
+      @pointercancel="tap.cancel"
+      @mousedown="
+        tap.mouseAllowed() && line.newLineNumber && emit('new-mousedown')
+      "
       @mouseenter="line.newLineNumber && emit('new-mouseenter')"
       >{{ line.newLineNumber ?? '' }}</span
     >

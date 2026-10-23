@@ -26,7 +26,7 @@ const typeLabel = computed(() => {
         :model-value="props.row.selected"
         :disable="busy"
         :aria-label="row.name"
-        @update:model-value="emit('select', !!$event)"
+        @update:model-value="emit('select', Boolean($event))"
       />
       <div class="external-asset-preview">
         <img v-if="row.preview" :src="row.preview" alt="" />

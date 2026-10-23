@@ -12,10 +12,13 @@ import { NAV_BREAKPOINT } from '@/composables/use-nav-drawer'
 import AgentChatStatusDot from '@/components/agent/AgentChatStatusDot.vue'
 import DevicesDialog from '@/components/devices/DevicesDialog.vue'
 import { useAccessStore } from '@/stores/access-store'
+import { useAppInfoStore } from '@/stores/app-info-store'
+import { useWorkspaceNavigation } from '@/composables/use-workspace-navigation'
 
 const leftDrawerOpen = defineModel<boolean | null>({ required: true })
 
 const { t } = useI18n()
+const { narrow } = useWorkspaceNavigation()
 const { isDark, toggleTheme } = useAppTheme()
 const terminalStore = useTerminalStore()
 const previewStore = usePreviewStore()
@@ -24,10 +27,14 @@ const { enabled: agentEnabled, activeId, panelOpen } = storeToRefs(agentStore)
 const chatsOpen = ref(true)
 const { isLocal } = storeToRefs(useAccessStore())
 const devicesOpen = ref(false)
+const { version } = storeToRefs(useAppInfoStore())
 </script>
 
 <template>
   <q-drawer
+    :no-swipe-open="narrow"
+    :no-swipe-close="narrow"
+    :no-swipe-backdrop="narrow"
     v-model="leftDrawerOpen"
     :breakpoint="NAV_BREAKPOINT"
     bordered
@@ -125,6 +132,11 @@ const devicesOpen = ref(false)
       </q-list>
 
       <q-list bordered :dark="isDark">
+        <q-item v-if="version" dense
+          ><q-item-section class="text-caption"
+            >{{ t('app.title') }} v{{ version }}</q-item-section
+          ></q-item
+        >
         <q-item v-if="isLocal" v-ripple clickable @click="devicesOpen = true">
           <q-item-section avatar><q-icon name="devices" /></q-item-section>
           <q-item-section>{{ t('devices.menu') }}</q-item-section>

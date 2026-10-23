@@ -6,6 +6,8 @@ import AgentChatPanel from '@/components/agent/AgentChatPanel.vue'
 import AgentNewChatDialog from '@/components/agent/AgentNewChatDialog.vue'
 import { useAppTheme } from '@/composables/use-app-theme'
 import { usePanelWidth } from '@/composables/use-panel-width'
+import { useWorkspaceNavigation } from '@/composables/use-workspace-navigation'
+import { NARROW_WORKSPACE_WIDTH } from '@/utils/workspace-navigation'
 
 // The page must keep at least this much room next to the chat panel.
 const MIN_PAGE_WIDTH = 360
@@ -15,12 +17,13 @@ const MIN_PANEL_WIDTH = 320
 const INITIAL_PANEL_WIDTH = 440
 // Limit chat width even when the window has more room.
 const MAX_PANEL_WIDTH = 1000
-// Switch the drawer to overlay mode on smaller windows.
-const DRAWER_BREAKPOINT = 900
+// The drawer switches to overlay mode at the narrow workspace width.
+const DRAWER_BREAKPOINT = NARROW_WORKSPACE_WIDTH
 
 const { t } = useI18n()
 const { panelOpen: agentPanelOpen } = storeToRefs(useAgentStore())
 const { isDark } = useAppTheme()
+const { narrow, pane, window: activeWindow } = useWorkspaceNavigation()
 
 const agentPanel = usePanelWidth({
   key: 'githuman.agentPanelWidth',
@@ -36,7 +39,15 @@ const agentPanel = usePanelWidth({
 
 <template>
   <q-drawer
-    v-model="agentPanelOpen"
+    :no-swipe-open="narrow"
+    :no-swipe-close="narrow"
+    :no-swipe-backdrop="narrow"
+    :model-value="!narrow && agentPanelOpen"
+    @update:model-value="
+      value => {
+        if (!narrow) agentPanelOpen = value
+      }
+    "
     side="right"
     bordered
     :width="agentPanel.width.value"
@@ -45,8 +56,14 @@ const agentPanel = usePanelWidth({
     :class="{ 'agent-drawer--dragging': agentPanel.dragging.value }"
     class="agent-drawer"
   >
-    <AgentChatPanel />
+    <Teleport defer to="#workspace-agent" :disabled="!narrow">
+      <AgentChatPanel
+        :active="narrow ? pane === 'agent' && !activeWindow : agentPanelOpen"
+        :autofocus="!narrow"
+      />
+    </Teleport>
     <div
+      v-if="!narrow"
       v-touch-pan.preserveCursor.prevent.mouse.horizontal="agentPanel.drag"
       class="agent-drawer__handle"
       role="separator"

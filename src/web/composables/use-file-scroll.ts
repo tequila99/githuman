@@ -8,18 +8,19 @@ import {
 import type { ScrollRequest } from '@/stores/file-explorer-store'
 import { followScrollTarget } from '@/utils/follow-scroll-target'
 
-// Any deliberate input releases the navigation anchor, including before list readiness.
+// Input in a visible pane releases the navigation anchor, including before list readiness.
 const CANCEL_EVENTS = ['wheel', 'pointerdown', 'keydown', 'touchstart'] as const
 
 export interface VirtualScrollApi {
   reset: () => void
-  scrollTo: (index: number, edge?: string) => void
+  scrollTo: (index: number, edge?: 'start') => void
 }
 
 export function useFileScroll(options: {
   request: MaybeRefOrGetter<ScrollRequest | null>
   list: MaybeRefOrGetter<VirtualScrollApi | null>
   root: MaybeRefOrGetter<Element | null>
+  ready?: MaybeRefOrGetter<boolean>
   inputTarget?: EventTarget | null
   target?: (request: ScrollRequest) => Element | null
   follow?: typeof followScrollTarget
@@ -30,6 +31,7 @@ export function useFileScroll(options: {
   let cancelledRequest: ScrollRequest | null = null
   let stopOperation: (() => void) | undefined
   function cancel() {
+    if (options.ready !== undefined && !toValue(options.ready)) return
     cancelledRequest = toValue(options.request)
     stopOperation?.()
     stopOperation = undefined
@@ -44,11 +46,21 @@ export function useFileScroll(options: {
     [
       () => toValue(options.request),
       () => toValue(options.list),
-      () => toValue(options.root)
+      () => toValue(options.root),
+      () => options.ready === undefined || toValue(options.ready)
     ],
-    ([request, list, root], _previous, onCleanup) => {
-      if (!request || request === cancelledRequest || !list || !root) return
+    ([request, list, root, ready], _previous, onCleanup) => {
+      if (
+        !request ||
+        request === cancelledRequest ||
+        !list ||
+        !root ||
+        !ready
+      ) {
+        return
+      }
       let stopped = false
+      let started = false
       let stopFollowing: (() => void) | undefined
       const stop = () => {
         stopped = true
@@ -59,11 +71,25 @@ export function useFileScroll(options: {
       onCleanup(() => {
         stop()
         // A changed list or root must not resume this request when it returns.
-        if (toValue(options.request) === request) cancelledRequest = request
+        if (
+          toValue(options.request) === request &&
+          (started ||
+            toValue(options.list) !== list ||
+            toValue(options.root) !== root)
+        ) {
+          cancelledRequest = request
+        }
         if (stopOperation === stop) stopOperation = undefined
       })
       void nextTick().then(() => {
-        if (stopped || request === cancelledRequest) return undefined
+        if (
+          stopped ||
+          request === cancelledRequest ||
+          (options.ready !== undefined && !toValue(options.ready))
+        ) {
+          return undefined
+        }
+        started = true
         list.scrollTo(request.index, 'start')
         stopFollowing = follow({
           root,

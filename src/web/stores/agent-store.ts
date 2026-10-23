@@ -60,6 +60,7 @@ export const useAgentStore = defineStore('agent', () => {
   const presets = ref<AgentPresetInfo[]>([])
   /** The server offers agents at all (it answers 404 when bound to a non-loopback host). */
   const enabled = ref(false)
+  const initialized = ref(false)
   const chats = ref<Record<string, AgentChatEntry>>({})
   /** Chat ids in creation order — the order of the tabs. */
   const order = ref<string[]>([])
@@ -303,6 +304,7 @@ export const useAgentStore = defineStore('agent', () => {
       presets.value = await apiGet<AgentPresetInfo[]>('/api/agent/presets')
     } catch (err) {
       if (disposed) return
+      initialized.value = true
       enabled.value = false
       // 404 is the normal "agents are off" answer, not an error worth showing.
       if (!(err instanceof ApiRequestError && err.status === 404)) {
@@ -312,6 +314,7 @@ export const useAgentStore = defineStore('agent', () => {
     }
     if (disposed) return
     enabled.value = true
+    initialized.value = true
     // Before the stream: a new page gets the buffered events at once, and
     // events of a chat that is not registered yet pile up (`MAX_ORPHAN_EVENTS`).
     await refreshSessions()
@@ -501,6 +504,7 @@ export const useAgentStore = defineStore('agent', () => {
   return {
     presets,
     enabled,
+    initialized,
     chats,
     order,
     list,

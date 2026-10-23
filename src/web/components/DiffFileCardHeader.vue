@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { computed } from 'vue'
+import { useQuasar } from 'quasar'
+import { isNarrowWorkspace } from '@/utils/workspace-navigation'
 import type { DiffFileStatus } from '@/api/types'
 import type { DiffSource } from '@/stores/diff-store'
+import FileActionButtons from '@/components/FileActionButtons.vue'
 import FileCardHeader from '@/components/FileCardHeader.vue'
 import FileHeaderMenu from '@/components/FileHeaderMenu.vue'
 import CommentCountBadge from '@/components/CommentCountBadge.vue'
@@ -34,6 +38,8 @@ const showFullFile = defineModel<boolean>('showFullFile', { required: true })
 const wrap = defineModel<boolean>('wrap', { required: true })
 
 const { t } = useI18n()
+const $q = useQuasar()
+const narrow = computed(() => isNarrowWorkspace($q.screen.width))
 </script>
 
 <template>
@@ -59,7 +65,7 @@ const { t } = useI18n()
       </template>
 
       <div
-        v-if="fullFileToggle"
+        v-if="fullFileToggle && !narrow"
         class="diff-file-card__toggle-section"
         @click.stop
       >
@@ -70,6 +76,14 @@ const { t } = useI18n()
           size="xs"
           :label="t('changes.showFullFile')"
         />
+      </div>
+
+      <div
+        v-if="narrow && agentSource"
+        class="diff-file-card__file-actions row no-wrap items-center"
+        @click.stop
+      >
+        <FileActionButtons :path="path" :source="agentSource" />
       </div>
 
       <div class="diff-file-card__status-section">
@@ -86,6 +100,8 @@ const { t } = useI18n()
       <div @click.stop>
         <FileHeaderMenu
           v-model="wrap"
+          v-model:show-full-file="showFullFile"
+          :full-file-toggle="fullFileToggle && narrow"
           :path="path"
           :diff-source="agentSource"
           :preview-ref="showFullFile ? 'WORKTREE' : previewRef"
@@ -107,6 +123,11 @@ const { t } = useI18n()
 
 .diff-file-card__chevron--expanded {
   transform: rotate(90deg);
+}
+
+.diff-file-card__file-actions {
+  margin-right: auto;
+  gap: 2px;
 }
 
 .diff-file-card__toggle-section {

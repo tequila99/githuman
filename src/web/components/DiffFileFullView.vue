@@ -11,6 +11,8 @@ import { useServerEvents } from '@/composables/use-server-events'
 import { useDiffStore } from '@/stores/diff-store'
 import { pathOf } from '@/utils/diff-file'
 import FileContentView from './FileContentView.vue'
+import { useQuasar } from 'quasar'
+import { useFullFileTouchOwner } from '@/composables/use-full-file-comment'
 
 const props = withDefaults(
   defineProps<{
@@ -59,6 +61,14 @@ const deletedOnDisk = computed(() =>
     f => f.status === 'deleted' && pathOf(f) === props.path
   )
 )
+const $q = useQuasar()
+// A deleted file has no lines, so a range in it is rejected.
+useFullFileTouchOwner({
+  lines: () => (deletedOnDisk.value ? [] : lines.value),
+  fresh: () => loaded.value && !loading.value && !error.value,
+  rejected: () =>
+    $q.notify({ type: 'warning', message: t('workspace.selectionChanged') })
+})
 const version = useFullFileVersion({
   lines,
   isBinary,

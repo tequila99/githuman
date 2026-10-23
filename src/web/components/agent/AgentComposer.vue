@@ -22,6 +22,7 @@ import { useAgentAttachments } from '@/composables/use-agent-attachments'
 import { useAgentAutoApprove } from '@/composables/use-agent-auto-approve'
 import { mentionContext } from '@/utils/mention-editor'
 import { isVoiceShortcut, isVoiceShortcutRelease } from '@/utils/speech'
+import { useWorkspaceNavigation } from '@/composables/use-workspace-navigation'
 
 const props = defineProps<{
   chatId: string
@@ -31,10 +32,16 @@ const props = defineProps<{
 
 const { t } = useI18n()
 const store = useAgentStore()
+const { narrow } = useWorkspaceNavigation()
 
 const entry = computed(() => store.chats[props.chatId])
 const status = computed(() => entry.value?.chat.status ?? 'closed')
 const pending = computed(() => entry.value?.pendingContext ?? [])
+// The selected chat takes the voice shortcut. On desktop the shortcut opens a closed panel.
+// A hidden narrow pane ignores it: a keyboard shortcut does not change the history (ADR 0082).
+const shortcutTarget = computed(
+  () => props.active || (!narrow.value && store.activeId === props.chatId)
+)
 
 const editor = useTemplateRef<InstanceType<typeof AgentMentionEditor>>('editor')
 const voice = useTemplateRef<InstanceType<typeof AgentVoiceButton>>('voice')
@@ -73,9 +80,9 @@ useEventListener(
   () => ({ disabled: !voiceShortcutHeld.value })
 )
 watch(
-  () => [props.active, store.panelOpen, status.value] as const,
-  ([active, open, state]) => {
-    if (!active || !open || state === 'closed') releaseVoiceShortcut()
+  () => [props.active, status.value] as const,
+  ([active, state]) => {
+    if (!active || state === 'closed') releaseVoiceShortcut()
   },
   { flush: 'sync' }
 )
@@ -96,7 +103,7 @@ useEventListener(
     if (!voice.value) return
     event.preventDefault()
     event.stopImmediatePropagation()
-    store.panelOpen = true
+    if (!props.active) store.panelOpen = true
     voiceShortcutHeld.value = true
     await nextTick()
     if (
@@ -114,7 +121,7 @@ useEventListener(
   },
   () => ({
     capture: true,
-    disabled: !props.active || status.value === 'closed'
+    disabled: !shortcutTarget.value || status.value === 'closed'
   })
 )
 
@@ -182,7 +189,7 @@ defineExpose({ focus: () => editor.value?.focus() })
         <AgentVoiceButton
           ref="voice"
           :disabled="status === 'closed'"
-          :active="active && store.panelOpen"
+          :active="active"
           @press="editor?.saveCaret()"
           @commit="text => editor?.insertText(text, active)"
         />

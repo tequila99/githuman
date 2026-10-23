@@ -21,7 +21,7 @@ export function useNotesTree(entries: MaybeRefOrGetter<NoteEntry[]>) {
   const expanded = shallowRef<string[]>([])
   const normalizedQuery = computed(() => query.value.trim().toLocaleLowerCase())
   const filtering = computed(
-    () => !!normalizedQuery.value || !!filter.value.tags.length
+    () => Boolean(normalizedQuery.value) || Boolean(filter.value.tags.length)
   )
   const nodes = computed(() => {
     const roots: TreeNode[] = [],

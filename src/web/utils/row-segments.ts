@@ -11,6 +11,9 @@ export const SEGMENT_SIZE = 25
 // Height of one code row in px. It matches `line-height` in DiffLineRow and FileContentLine.
 export const ROW_HEIGHT = 20
 
+// Height of a commentable code row in the narrow workspace: a gutter tap target is 44px (ADR 0083).
+export const NARROW_ROW_HEIGHT = 44
+
 // The hunk header has a 21px line box and 2px padding on each side.
 export const HUNK_HEADER_HEIGHT = 25
 
@@ -51,10 +54,19 @@ export function groupRows<T>(
   return { segmented: true, groups }
 }
 
+/** Height of one code row. Only commentable rows in the narrow workspace are tall. */
+export function rowHeight(tall: boolean): number {
+  return tall ? NARROW_ROW_HEIGHT : ROW_HEIGHT
+}
+
 /** Placeholder height and mount cost of a segment with `threads` comment threads. */
-export function segmentSize(rows: number, threads: number) {
+export function segmentSize(
+  rows: number,
+  threads: number,
+  height = ROW_HEIGHT
+) {
   return {
-    minHeight: rows * ROW_HEIGHT + threads * THREAD_HEIGHT_ESTIMATE,
+    minHeight: rows * height + threads * THREAD_HEIGHT_ESTIMATE,
     cost: SEGMENT_COST + rows + threads * THREAD_COST
   }
 }
@@ -76,8 +88,10 @@ export function rowSegmentProps<T>(
     commentsEditable: boolean
     slot?: string
     cacheHeight?: boolean
+    rowHeight?: number | undefined
   }
 ) {
+  const height = options.rowHeight ?? ROW_HEIGHT
   let keep = false
   const threads: Array<readonly [number, boolean, readonly Comment[]]> = []
   for (const [index, row] of group.rows.entries()) {
@@ -88,13 +102,15 @@ export function rowSegmentProps<T>(
   }
   const dynamic = threads.length > 0
   return {
-    ...segmentSize(group.rows.length, threads.length),
+    ...segmentSize(group.rows.length, threads.length, height),
     keep,
     heightOwner: options.owner,
     heightKey: options.slot ?? `rows:${group.start}`,
     // Full content and positions distinguish geometry even at equal text lengths.
+    // The row height separates the narrow and the wide measurement of one segment.
     heightVersion: JSON.stringify([
       group.rows.length,
+      height,
       options.wrap,
       options.commentsEditable,
       threads.map(([index, form, comments]) => [
@@ -104,7 +120,7 @@ export function rowSegmentProps<T>(
           comment.id,
           comment.content,
           comment.suggestion,
-          !!comment.resolved
+          Boolean(comment.resolved)
         ])
       ])
     ]),

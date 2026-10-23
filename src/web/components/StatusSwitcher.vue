@@ -40,7 +40,7 @@ function confirmChange(option: { value: ReviewStatus; color: string }) {
 </script>
 
 <template>
-  <div class="row q-gutter-x-sm no-wrap">
+  <div class="status-switcher row q-gutter-x-sm">
     <q-btn
       v-for="option in STATUSES"
       :key="option.value"

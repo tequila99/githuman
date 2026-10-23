@@ -8,6 +8,7 @@ import { ADD_TO_CHAT_ICON } from '@/utils/agent-icon'
 import { usePreviewStore } from '@/stores/windows/preview-store'
 
 const wrap = defineModel<boolean>({ required: true })
+const showFullFile = defineModel<boolean>('showFullFile', { default: false })
 
 const props = defineProps<{
   /** Repository-relative path — enables "add to agent chat". */
@@ -15,6 +16,7 @@ const props = defineProps<{
   /** Set on a diff card: which side of the diff the file is on. */
   diffSource?: DiffSource | undefined
   previewRef?: string | undefined
+  fullFileToggle?: boolean
 }>()
 
 const { t } = useI18n()
@@ -61,6 +63,18 @@ function addDiff() {
   >
     <q-menu>
       <q-list dense class="agent-menu">
+        <q-item
+          v-if="fullFileToggle"
+          v-close-popup
+          clickable
+          @click="showFullFile = !showFullFile"
+        >
+          <q-item-section side
+            ><q-icon
+              :name="showFullFile ? 'check_box' : 'check_box_outline_blank'"
+          /></q-item-section>
+          <q-item-section>{{ t('changes.showFullFile') }}</q-item-section>
+        </q-item>
         <q-item v-close-popup clickable @click="wrap = !wrap">
           <q-item-section side>
             <q-icon :name="wrap ? 'check_box' : 'check_box_outline_blank'" />

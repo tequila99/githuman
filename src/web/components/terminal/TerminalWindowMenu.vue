@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 defineProps<{
   maximized: boolean
+  narrow?: boolean
   connected: boolean
   originalColors: boolean
 }>()
@@ -29,10 +30,15 @@ const { t } = useI18n()
         <q-item-section>{{ t('terminal.originalColors') }}</q-item-section>
       </q-item>
       <q-separator />
-      <q-item v-close-popup clickable @click="emit('minimize')">
+      <q-item v-if="!narrow" v-close-popup clickable @click="emit('minimize')">
         <q-item-section>{{ t('terminal.minimize') }}</q-item-section>
       </q-item>
-      <q-item v-close-popup clickable @click="emit('toggleMaximized')">
+      <q-item
+        v-if="!narrow"
+        v-close-popup
+        clickable
+        @click="emit('toggleMaximized')"
+      >
         <q-item-section>{{
           t(maximized ? 'terminal.restore' : 'terminal.maximize')
         }}</q-item-section>

@@ -1,7 +1,30 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { windowLayoutRect } from '@/utils/windows/window-geometry'
+import {
+  windowLayoutRect,
+  projectWindowLayout
+} from '@/utils/windows/window-geometry'
 import type { WindowState } from '@/types/windows/window'
+
+test('mobile viewport projection leaves the persisted desktop snapshot unchanged', () => {
+  for (const mode of ['normal', 'left', 'right', 'maximized'] as const) {
+    const state: WindowState = {
+      position: { x: 260, y: 120 },
+      windowSize: { width: 800, height: 500 },
+      open: true,
+      minimized: false,
+      maximized: mode === 'maximized',
+      mode
+    }
+    const before = structuredClone(state)
+    const desktop = { width: 1440, height: 1000 }
+    const expected = projectWindowLayout(state, desktop)
+    const mobile = { x: 0, y: 30, width: 390, height: 460 }
+    assert.deepEqual(projectWindowLayout(state, desktop, mobile), mobile)
+    assert.deepEqual(state, before)
+    assert.deepEqual(projectWindowLayout(state, desktop), expected)
+  }
+})
 
 test('special layouts exactly fill the current viewport without modifying normal geometry', () => {
   const state: WindowState = {
