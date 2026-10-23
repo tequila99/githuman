@@ -14,6 +14,7 @@ import { pathOf } from '@/utils/diff-file'
 import { isMarkdown } from '@/utils/file-wrap'
 import { isAboveRoot, scrollTopToAlign } from '@/utils/follow-scroll-target'
 import type { DiffSource } from '@/stores/diff-store'
+import { useRowHeight } from '@/composables/use-row-height'
 
 const props = withDefaults(
   defineProps<{
@@ -115,8 +116,9 @@ watch(
 
 // Height guess for an open body while its hunks load. The hunks and their rows
 // mount later, and only near the window (ADR 0040).
+const rowHeight = useRowHeight(() => props.commentable)
 const bodyHeightEstimate = computed(() =>
-  diffCardBodyHeight(props.file, props.detail)
+  diffCardBodyHeight(props.file, props.detail, rowHeight.value)
 )
 
 // Only the open body of this card needs its hunks.
@@ -197,6 +199,7 @@ const showFullFile = computed({
         :wrap="wrap"
         :hunk-tokens="hunkTokens"
         :hunks-state="hunksState"
+        :hunks-fresh="hunksLoaded"
         :hold-for-tokens="holdForTokens"
         :hunks-error="hunksError"
         :loading-height="bodyHeightEstimate"

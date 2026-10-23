@@ -3,8 +3,10 @@ import assert from 'node:assert/strict'
 import type { Comment, DiffFile } from '@/api/types'
 import {
   diffCardBodyHeight,
-  commentHeightEstimate
+  commentHeightEstimate,
+  cardShellVersion
 } from '@/utils/diff-card-height'
+import { NARROW_ROW_HEIGHT } from '@/utils/row-segments'
 
 function comment(
   id: string,
@@ -55,6 +57,54 @@ test('summary estimates context, detail estimates actual hunk rows and empty det
     ]
   }
   assert.equal(diffCardBodyHeight(file, detail), 65)
+})
+
+test('narrow commentable rows scale the summary and the detail estimates', () => {
+  const line = {
+    type: 'added' as const,
+    oldLineNumber: null,
+    newLineNumber: 1,
+    content: 'a'
+  }
+  const file: DiffFile = {
+    oldPath: 'a.ts',
+    newPath: 'a.ts',
+    status: 'modified',
+    additions: 10,
+    deletions: 5,
+    isBinary: false,
+    hunks: [
+      {
+        oldStart: 0,
+        oldLines: 0,
+        newStart: 1,
+        newLines: 2,
+        lines: [line, line]
+      }
+    ]
+  }
+  // 15 rows of 44px and the 80px header estimate; 2 rows of 44px and a 25px hunk header.
+  assert.equal(diffCardBodyHeight(file, undefined, NARROW_ROW_HEIGHT), 740)
+  assert.equal(diffCardBodyHeight(file, file, NARROW_ROW_HEIGHT), 113)
+})
+
+test('card shell version separates measurements of different row heights', () => {
+  const state = {
+    expanded: true,
+    mode: 'diff' as const,
+    wrap: false,
+    activeReview: true,
+    pending: null,
+    comments: []
+  }
+  assert.notEqual(
+    cardShellVersion({ ...state, rowHeight: 20 }),
+    cardShellVersion({ ...state, rowHeight: 44 })
+  )
+  assert.equal(
+    cardShellVersion({ ...state, rowHeight: 20 }),
+    cardShellVersion({ ...state, rowHeight: 20 })
+  )
 })
 
 test('estimates old/new/full endpoint branches independently without counting comment duplicates', () => {

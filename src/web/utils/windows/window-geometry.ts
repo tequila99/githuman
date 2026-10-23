@@ -124,3 +124,13 @@ export function windowLayoutRect(
   const size = windowSize(state.windowSize, viewport)
   return { ...clampWindowPosition(state.position, size, viewport), ...size }
 }
+
+export function projectWindowLayout(
+  state: WindowState,
+  viewport: WindowSize,
+  visibleViewport?: WindowRect
+): WindowRect {
+  return visibleViewport
+    ? { ...visibleViewport }
+    : windowLayoutRect(state, viewport)
+}

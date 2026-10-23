@@ -5,6 +5,10 @@ import AgentEmptyState from './AgentEmptyState.vue'
 import AgentTabs from './AgentTabs.vue'
 
 const store = useAgentStore()
+const { active = true, autofocus = true } = defineProps<{
+  active?: boolean
+  autofocus?: boolean
+}>()
 </script>
 
 <template>
@@ -28,7 +32,8 @@ const store = useAgentStore()
           v-show="entry.info.id === store.activeId"
           :key="entry.info.id"
           :chat-id="entry.info.id"
-          :active="entry.info.id === store.activeId"
+          :active="active && entry.info.id === store.activeId"
+          :autofocus="autofocus"
         />
       </div>
     </template>

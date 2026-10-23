@@ -4,6 +4,7 @@ import { observeSegment } from '@/utils/segment-observer'
 import { observeScrollRootWidth } from '@/utils/scroll-root-width'
 import { rememberSegmentHeight, segmentHeight } from '@/utils/segment-heights'
 import { ROW_HEIGHT } from '@/utils/row-segments'
+import { usePaneVisibility } from './use-pane-visibility'
 
 // The first sources of the mount watcher reset the measured height when they change.
 const GEOMETRY_SOURCE_COUNT = 5
@@ -34,6 +35,9 @@ export function useSegmentMount(
   options: SegmentMountOptions,
   element: () => HTMLElement | null
 ) {
+  const paneVisible = usePaneVisibility()
+  let requested = false
+  let lastRoot: Element | null = null
   const mounted = ref(false)
   const height = ref(options.minHeight)
   let measured = false
@@ -94,6 +98,7 @@ export function useSegmentMount(
       return
     }
     job = queueMount(
+      // Row segments and card shells always give `cost`; the pixel fallback is for other callers.
       options.cost ?? Math.ceil(height.value / ROW_HEIGHT),
       () => {
         job = undefined
@@ -110,6 +115,9 @@ export function useSegmentMount(
   }
 
   function start(root: Element | null) {
+    requested = true
+    lastRoot = root
+    if (!paneVisible()) return
     if (active) return
     active = true
     const el = element()
@@ -146,7 +154,7 @@ export function useSegmentMount(
     })
   }
 
-  function stop() {
+  function pause() {
     if (!active) return
     // Only persisted measurements can outlive a destroyed segment.
     if (
@@ -163,6 +171,22 @@ export function useSegmentMount(
     stopPosition = undefined
     stopWidth = undefined
   }
+
+  function stop() {
+    requested = false
+    pause()
+  }
+  watch(
+    paneVisible,
+    paneIsVisible => {
+      if (paneIsVisible && requested) {
+        start(lastRoot)
+      } else {
+        pause()
+      }
+    },
+    { flush: 'sync' }
+  )
 
   resetHeight()
   watch(

@@ -1,4 +1,5 @@
 import { ref, toValue, watch, type MaybeRefOrGetter } from 'vue'
+import { usePaneVisibility } from './use-pane-visibility'
 
 /**
  * Asks for the hunks of a card, but only while its open body is mounted.
@@ -18,6 +19,7 @@ export function useHunksOnDemand(options: {
   onCollapsed?: () => void
 }) {
   const bodyMounted = ref(false)
+  const visible = usePaneVisibility()
 
   watch(
     () => toValue(options.expanded),
@@ -34,6 +36,7 @@ export function useHunksOnDemand(options: {
     [
       () =>
         toValue(options.expanded) &&
+        visible() &&
         bodyMounted.value &&
         !toValue(options.loaded) &&
         !toValue(options.error),

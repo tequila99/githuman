@@ -14,10 +14,12 @@ import PreviewContent from './PreviewContent.vue'
 import PreviewWindowHeader from './PreviewWindowHeader.vue'
 import PreviewTabs from './PreviewTabs.vue'
 import PreviewEmptyState from './PreviewEmptyState.vue'
+import { useWorkspaceNavigation } from '@/composables/use-workspace-navigation'
 
 const { t } = useI18n()
 const $q = useQuasar()
 const preview = usePreviewStore()
+const workspace = useWorkspaceNavigation()
 const windows = useWindowStore()
 const { state, drag } = useWindowGeometry(PREVIEW_WINDOW_ID)
 const { openFilePicker, resetFilePicker } = useFilePicker({
@@ -99,9 +101,14 @@ function requestClose(id: string | null) {
   })
 }
 function minimize() {
+  if (workspace.narrow.value) {
+    workspace.back()
+    return
+  }
   windows.minimize(PREVIEW_WINDOW_ID)
 }
 function maximize() {
+  if (workspace.narrow.value) return
   windows.toggleMode(PREVIEW_WINDOW_ID, 'maximized')
 }
 </script>
@@ -117,6 +124,7 @@ function maximize() {
   >
     <template #header>
       <PreviewWindowHeader
+        :narrow="workspace.narrow.value"
         :maximized="state.maximized"
         @drag="drag"
         @open-file="openFilePicker"
@@ -143,7 +151,11 @@ function maximize() {
       v-if="preview.activeTab"
       :key="preview.activeTab.id"
       :tab="preview.activeTab"
-      :visible="state.open && !state.minimized"
+      :visible="
+        workspace.narrow.value
+          ? workspace.window.value === PREVIEW_WINDOW_ID
+          : state.open && !state.minimized
+      "
     />
     <PreviewEmptyState v-else @open-file="openFilePicker" />
   </FloatingWindow>

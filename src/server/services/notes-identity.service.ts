@@ -562,7 +562,9 @@ export class NotesIdentityService {
               .links(source.id)
               .some(
                 link =>
-                  !!link.targetId && this.record(link.targetId).id === note.id
+                  link.targetId !== null &&
+                  link.targetId !== '' &&
+                  this.record(link.targetId).id === note.id
               )
         )
       return { note, backlinks }
@@ -928,7 +930,7 @@ export class NotesIdentityService {
                   paths
                 )
                 return (
-                  !!target &&
+                  target !== null &&
                   target.path === clicked?.path &&
                   target.anchor === clicked.anchor
                 )

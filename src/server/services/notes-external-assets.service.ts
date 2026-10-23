@@ -5,6 +5,7 @@ import {
   NoteAssetQueueError
 } from '../errors/note-assets.ts'
 import {
+  destroyRemoteAssetResponse,
   remoteAssetRequest,
   translateRemoteAssetError,
   type RemoteAssetRequest,
@@ -55,7 +56,7 @@ async function* boundedChunks(
 
 function isSuccess(response: RemoteAssetResponse) {
   return (
-    !!response.statusCode &&
+    response.statusCode !== undefined &&
     response.statusCode >= 200 &&
     response.statusCode < 300
   )
@@ -101,7 +102,7 @@ export class NotesExternalAssetsService {
           size: isSuccess(response) ? this.length(response) : null
         }
       } finally {
-        response.destroy()
+        destroyRemoteAssetResponse(response)
       }
     })
   }
@@ -188,7 +189,7 @@ export class NotesExternalAssetsService {
           throw error
         }
       } finally {
-        response.destroy()
+        destroyRemoteAssetResponse(response)
       }
     })
   }
@@ -217,7 +218,7 @@ export class NotesExternalAssetsService {
         }
         return { body, mime: format.mime }
       } finally {
-        response.destroy()
+        destroyRemoteAssetResponse(response)
       }
     })
   }

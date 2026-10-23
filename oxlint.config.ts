@@ -72,6 +72,11 @@ export default defineConfig({
     'no-useless-rename': 'error',
     'no-useless-computed-key': 'error',
     'no-new-wrappers': 'error',
+    // Use Boolean(value) for explicit boolean conversion.
+    'no-implicit-coercion': [
+      'error',
+      { boolean: true, number: false, string: false }
+    ],
     'no-extend-native': 'error',
     'no-implied-eval': 'error',
     'no-eval': 'error',

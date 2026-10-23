@@ -8,8 +8,10 @@ import {
   WINDOW_SHORTCUTS
 } from '@/utils/windows/window-commands'
 import { focusWindow } from '@/utils/windows/window-elements'
+import { useWorkspaceNavigation } from '@/composables/use-workspace-navigation'
 
 export function useWindowShortcuts() {
+  const workspace = useWorkspaceNavigation()
   const windows = useWindowStore()
   const registry = useApplicationRegistry()
   const terminal = () =>
@@ -17,6 +19,7 @@ export function useWindowShortcuts() {
   useKeyboardShortcut(
     WINDOW_SHORTCUTS,
     async (event, shortcut) => {
+      if (workspace.narrow.value) return
       let restored = false
       const handled = dispatchWindowCommand(
         shortcut,
@@ -60,6 +63,7 @@ export function useWindowShortcuts() {
     async (id, previous) => {
       // Pointer focus must not move the caret out of the clicked field.
       const state = previous ? windows.windows[previous] : null
+      if (workspace.narrow.value) return
       if (state && (!state.open || state.minimized)) {
         await nextTick()
         focusWindow(id)
@@ -71,6 +75,7 @@ export function useWindowShortcuts() {
 /** Keep application-specific close behavior, including terminal confirmation. */
 export function useWindowCloseShortcut(id: string, requestClose: () => void) {
   const windows = useWindowStore()
+  const workspace = useWorkspaceNavigation()
   useKeyboardShortcut(
     'Ctrl+Meta+KeyW',
     event => {
@@ -82,7 +87,9 @@ export function useWindowCloseShortcut(id: string, requestClose: () => void) {
     () => ({
       capture: true,
       preventDefault: false,
-      disabled: !windows.isActive(id)
+      disabled: workspace.narrow.value
+        ? workspace.window.value !== id
+        : !windows.isActive(id)
     })
   )
 }

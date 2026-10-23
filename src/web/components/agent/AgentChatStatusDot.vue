@@ -2,18 +2,13 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AgentChatEntry } from '@/utils/agent-chat'
+import { agentChatStatus } from '@/utils/agent-chat-status'
 
 const props = defineProps<{ entry: AgentChatEntry }>()
 const { t } = useI18n()
 
 /** What the chat wants from the user, most pressing first. */
-const state = computed(() => {
-  const { chat } = props.entry
-  if (chat.permissions.length > 0) return 'attention'
-  if (chat.status === 'closed') return 'closed'
-  if (chat.status === 'busy' || chat.status === 'starting') return 'working'
-  return 'idle'
-})
+const state = computed(() => agentChatStatus(props.entry.chat))
 
 const label = computed(() =>
   state.value === 'attention'

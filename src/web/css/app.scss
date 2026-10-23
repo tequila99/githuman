@@ -210,3 +210,179 @@ body.body--dark {
 .sticky-header-scroll .q-scrollarea__container {
   scroll-padding-top: 48px;
 }
+
+body.workspace-narrow .workspace--narrow {
+  .diff-line__gutter--selectable,
+  .file-content-line__gutter--selectable {
+    min-width: var(--workspace-touch-target-size);
+    min-height: var(--workspace-touch-target-size);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  // A class on the row, not `:has()`: the build target Chrome 103 has no `:has()`.
+  // The height must match NARROW_ROW_HEIGHT in row-segments.ts.
+  .diff-line--selectable,
+  .file-content-line--selectable {
+    min-height: var(--workspace-touch-target-size);
+    align-items: center;
+  }
+  .q-btn,
+  .q-toggle,
+  .q-item {
+    min-height: var(--workspace-touch-target-size);
+  }
+  .q-btn {
+    min-width: var(--workspace-touch-target-size);
+  }
+  .q-btn.agent-attachment-thumb-remove {
+    --attachment-remove-size: 28px;
+
+    min-width: var(--attachment-remove-size);
+    min-height: var(--attachment-remove-size);
+    width: var(--attachment-remove-size);
+    height: var(--attachment-remove-size);
+  }
+  .q-field__control {
+    min-height: var(--workspace-touch-target-size);
+  }
+  .q-toolbar-title {
+    min-width: 0;
+  }
+  .file-card-header {
+    flex-wrap: wrap;
+    padding: 4px 8px;
+    column-gap: 4px;
+    row-gap: 0;
+    justify-content: flex-end;
+  }
+  .file-card-header__name {
+    --file-card-header-control-space: 36px;
+
+    flex: 1 1 calc(100% - var(--file-card-header-control-space));
+    max-width: calc(100% - var(--file-card-header-control-space));
+  }
+  .file-card-header__path {
+    flex: 1 1 auto;
+  }
+  .file-card-header > .q-space {
+    display: none;
+  }
+  // The two header rows use lower buttons. Full 44px targets make a large gap between the rows.
+  .file-card-header .q-btn {
+    min-height: 32px;
+  }
+  .diff-file-card__toggle-section {
+    min-width: 0;
+    flex: 1 1 auto;
+    justify-content: flex-start;
+  }
+  .diff-file-card__status-section {
+    min-width: 0;
+  }
+  .diff-file-card__stats {
+    min-width: 0;
+  }
+  .note-action {
+    width: var(--workspace-touch-target-size);
+    height: var(--workspace-touch-target-size);
+    min-width: var(--workspace-touch-target-size);
+    min-height: var(--workspace-touch-target-size);
+  }
+  .note-toolbar {
+    padding: 8px;
+    flex-wrap: wrap;
+  }
+  .note-toolbar > .ellipsis {
+    flex: 1 0 45%;
+  }
+  .note-body {
+    padding: 8px;
+  }
+  .note-pane .note-visual .milkdown .ProseMirror {
+    padding: 12px;
+  }
+  .note-properties {
+    margin: 12px 4px 20px;
+  }
+  .note-property-row {
+    grid-template-columns: 92px minmax(0, 1fr) var(
+        --workspace-touch-target-size
+      );
+    column-gap: 4px;
+  }
+  .note-property-remove {
+    opacity: 1;
+  }
+  .review-filters > .row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .review-filters > .row > .q-field {
+    flex: 1 1 140px;
+  }
+  .active-review-bar {
+    flex-wrap: wrap;
+    padding: 4px 8px;
+  }
+  .status-switcher {
+    row-gap: 4px;
+  }
+  .comment-thread {
+    --comment-thread-indent: 0px;
+  }
+  .file-list-item {
+    min-height: var(--workspace-touch-target-size);
+  }
+}
+
+.workspace--short.workspace--narrow {
+  .notes-workspace-content {
+    overflow-y: auto;
+  }
+  .note-pane,
+  .agent-panel {
+    min-height: 300px;
+  }
+  .workspace-agent {
+    overflow-y: auto;
+  }
+}
+.floating-window--narrow.floating-window .floating-window__frame {
+  overflow-y: auto;
+}
+.floating-window--narrow.floating-window .floating-window__body {
+  min-height: 140px;
+}
+
+body.workspace-narrow {
+  --code-font-size: 13px;
+  // Keep this value equal to NARROW_ROW_HEIGHT in row-segments.ts.
+  --workspace-touch-target-size: 44px;
+
+  .q-dialog .q-card {
+    --dialog-viewport-gap: 16px;
+
+    min-width: 0 !important;
+    max-width: calc(100vw - var(--dialog-viewport-gap)) !important;
+    // Chrome before 108 has no `dvh` and keeps this `vh` value.
+    max-height: calc(100vh - var(--dialog-viewport-gap)) !important;
+    @supports (height: 100dvh) {
+      max-height: calc(100dvh - var(--dialog-viewport-gap)) !important;
+    }
+    overflow-y: auto;
+  }
+  .q-dialog .q-btn,
+  .q-menu .q-item {
+    min-height: var(--workspace-touch-target-size);
+    min-width: var(--workspace-touch-target-size);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace--narrow *,
+  .workspace--narrow *::before,
+  .workspace--narrow *::after {
+    transition-duration: 0s !important;
+  }
+}

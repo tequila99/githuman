@@ -8,6 +8,7 @@ import { errorMessage } from '@/utils/error-message'
 export const useAppInfoStore = defineStore('appInfo', () => {
   const version = ref<string | null>(null)
   const loading = ref(false)
+  const initialized = ref(false)
   const error = ref<string | null>(null)
 
   async function fetchInfo() {
@@ -23,10 +24,11 @@ export const useAppInfoStore = defineStore('appInfo', () => {
       error.value = errorMessage(err)
     } finally {
       loading.value = false
+      initialized.value = true
     }
   }
 
-  return { version, loading, error, fetchInfo }
+  return { version, loading, initialized, error, fetchInfo }
 })
 
 if (import.meta.hot) {

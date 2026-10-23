@@ -2,6 +2,21 @@
 // so you can safely delete all default props below
 
 export default {
+  workspace: {
+    selectLines: 'Select comment lines',
+    extendSelection: 'Tap another line number to extend the selection',
+    commentRange: 'Comment lines {start}–{end}',
+    cancelSelection: 'Cancel',
+    selectionChanged: 'The selected lines changed. Select them again.',
+    list: 'Files',
+    note: 'Note',
+    file: 'File',
+    working: 'Agent is working',
+    back: 'Back to workspace',
+    fullscreen: 'Fullscreen',
+    exitFullscreen: 'Exit fullscreen',
+    fullscreenFailed: 'Could not enter fullscreen'
+  },
   notes: {
     externalAssets: {
       title: 'Download external attachments',
@@ -165,6 +180,16 @@ export default {
     }
   },
   terminal: {
+    empty: 'No terminal sessions. Use + to create one.',
+    keys: {
+      title: 'Terminal keys',
+      escape: 'Escape',
+      tab: 'Tab',
+      up: 'Arrow up',
+      down: 'Arrow down',
+      left: 'Arrow left',
+      right: 'Arrow right'
+    },
     maximize: 'Maximize',
     restore: 'Restore window',
     menu: 'Terminal menu',
@@ -269,7 +294,7 @@ export default {
     filterPlaceholder: 'Filter files...',
     emptyFileList: 'No changed files',
     emptyDiffPanel: 'No changes to display',
-    filesChanged: '{count} files changed',
+    filesChanged: '{count} file | {count} files',
     additions: 'additions',
     deletions: 'deletions',
     added: 'added',

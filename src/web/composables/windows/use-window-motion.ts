@@ -1,5 +1,6 @@
 import { nextTick, onBeforeUnmount, onMounted, watch, type Ref } from 'vue'
-import { useEventListener, useTimeout } from 'quasar'
+import { useEventListener, useTimeout, useQuasar } from 'quasar'
+import { isNarrowWorkspace } from '@/utils/workspace-navigation'
 import {
   WINDOW_ANIMATION_DURATION_MS,
   WINDOW_BASE_Z_INDEX,
@@ -30,6 +31,7 @@ export function useWindowMotion(
   target: Ref<HTMLElement | null>
 ) {
   const store = useWindowStore()
+  const $q = useQuasar()
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
   const { registerTimeout, removeTimeout } = useTimeout()
   function isReduced() {
@@ -70,6 +72,7 @@ export function useWindowMotion(
       const anchor = dockElement(id)
       if (
         !ready ||
+        isNarrowWorkspace($q.screen.width) ||
         isWindowGesture(id) ||
         document.hidden ||
         isReduced() ||
@@ -105,7 +108,14 @@ export function useWindowMotion(
           removeTimeout()
         }
         resolve()
-        if (visible && !wasVisible && store.isActive(id)) focusWindow(id)
+        if (
+          visible &&
+          !wasVisible &&
+          store.isActive(id) &&
+          !isNarrowWorkspace($q.screen.width)
+        ) {
+          focusWindow(id)
+        }
       }
       finish = cleanup
       trackWindowTransition(id, transition)

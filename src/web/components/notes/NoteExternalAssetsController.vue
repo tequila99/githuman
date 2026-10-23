@@ -9,6 +9,7 @@ import {
   type ExternalAssetEdit
 } from '../../../shared/notes/external-assets.ts'
 import NoteExternalAssetsDialog from './NoteExternalAssetsDialog.vue'
+import { usePaneVisibility } from '@/composables/use-pane-visibility'
 
 const props = defineProps<{ draft: NoteDraft; pane: HTMLElement | null }>()
 const emit = defineEmits<{
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 }>()
 const $q = useQuasar()
 const { t } = useI18n()
+const visible = usePaneVisibility()
 let returnFocus: HTMLElement | null = null
 const assets = useNoteExternalAssets(() => props.draft, {
   protocol: typeof location === 'undefined' ? 'https:' : location.protocol,
@@ -42,11 +44,16 @@ function shortcut(event: KeyboardEvent) {
   event.stopPropagation()
   open()
 }
-// The pane exists only while a note is on screen, so the listener needs no focus check.
-useEventListener(() => window, 'keydown', shortcut, { capture: true })
+useEventListener(
+  () => window,
+  'keydown',
+  shortcut,
+  () => ({ capture: true, disabled: !visible() })
+)
 function close() {
   assets.close()
   void nextTick(() => {
+    if (!visible()) return
     if (returnFocus?.isConnected) {
       returnFocus.focus()
     } else {

@@ -16,6 +16,7 @@ const props = defineProps<{
   chatId: string
   /** The visible chat; the others stay mounted (drafts, scroll position) but hidden. */
   active: boolean
+  autofocus?: boolean
 }>()
 
 const { t } = useI18n()
@@ -97,7 +98,7 @@ watch(
     } else {
       scroll.value?.setScrollPosition('vertical', lastTop)
     }
-    composer.value?.focus()
+    if (props.autofocus !== false) composer.value?.focus()
   }
 )
 

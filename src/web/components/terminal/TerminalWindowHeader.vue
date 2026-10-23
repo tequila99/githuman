@@ -7,6 +7,7 @@ import TerminalWindowMenu from './TerminalWindowMenu.vue'
 
 const props = defineProps<{
   maximized: boolean
+  narrow?: boolean
   connected: boolean
   originalColors: boolean
 }>()
@@ -26,10 +27,12 @@ const maximizeLabel = computed(() =>
 <template>
   <div class="window-header row items-center no-wrap">
     <div
-      v-touch-pan.prevent.mouse="(event: WindowPanEvent) => emit('drag', event)"
+      v-touch-pan.prevent.mouse="
+        narrow ? undefined : (event: WindowPanEvent) => emit('drag', event)
+      "
       class="window-header__title terminal-header__drag col row items-center"
       :class="{ 'terminal-header__drag--static': maximized }"
-      @dblclick="emit('toggleMaximized')"
+      @dblclick="!narrow && emit('toggleMaximized')"
     >
       <q-icon size="16px" name="terminal" class="q-mr-sm" />
       <span>{{ t('terminal.title') }}</span>
@@ -44,6 +47,7 @@ const maximizeLabel = computed(() =>
     >
       <TerminalWindowMenu
         :maximized="maximized"
+        :narrow="narrow"
         :connected="connected"
         :original-colors="originalColors"
         @toggle-original-colors="emit('toggleOriginalColors')"
@@ -58,6 +62,7 @@ const maximizeLabel = computed(() =>
       size="sm"
       class="window-header__control"
       icon="minimize"
+      v-if="!narrow"
       :aria-label="t('terminal.minimize')"
       @click="emit('minimize')"
     >
@@ -71,6 +76,7 @@ const maximizeLabel = computed(() =>
       size="sm"
       class="window-header__control"
       :icon="maximized ? 'filter_none' : 'crop_square'"
+      v-if="!narrow"
       :aria-label="maximizeLabel"
       @click="emit('toggleMaximized')"
     >

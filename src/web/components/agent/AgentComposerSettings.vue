@@ -32,7 +32,7 @@ const speechSupported =
       <AgentChatStatusDot :entry="entry" />
       <span class="q-ml-xs">{{ t(`agent.status.${status}`) }}</span>
     </span>
-    <div class="col row items-center q-gutter-x-xs">
+    <div class="agent-composer__options col row items-center q-gutter-x-xs">
       <AgentConfigButton
         v-if="modelOption"
         :option="modelOption"
@@ -54,12 +54,14 @@ const speechSupported =
         @select="value => emit('select', option, value)"
       />
     </div>
-    <AgentSpeechLanguageButton v-if="speechSupported" />
-    <AgentAutoApproveButton
-      :enabled="autoApprove"
-      :disabled="status === 'closed'"
-      @toggle="emit('toggle-auto-approve')"
-    />
+    <div class="agent-composer__actions row no-wrap items-center">
+      <AgentSpeechLanguageButton v-if="speechSupported" />
+      <AgentAutoApproveButton
+        :enabled="autoApprove"
+        :disabled="status === 'closed'"
+        @toggle="emit('toggle-auto-approve')"
+      />
+    </div>
   </div>
 </template>
 <style scoped>
@@ -71,5 +73,28 @@ const speechSupported =
   padding-right: 8px;
   font-size: 12px;
   opacity: 0.8;
+}
+.workspace--narrow .agent-composer__status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.workspace--narrow .agent-composer__options {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  width: 100%;
+  margin-left: 0;
+  column-gap: 4px;
+}
+.workspace--narrow .agent-composer__options > :deep(.q-btn) {
+  margin-left: 0;
+  max-width: 100%;
+}
+.workspace--narrow .agent-composer__state {
+  grid-column: 1;
+  grid-row: 2;
+}
+.workspace--narrow .agent-composer__actions {
+  grid-column: 2;
+  grid-row: 2;
 }
 </style>

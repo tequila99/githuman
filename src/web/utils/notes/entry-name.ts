@@ -1,7 +1,7 @@
 export function validNoteEntryName(value: string): boolean {
   const name = value.trim()
   return (
-    !!name &&
+    Boolean(name) &&
     name.length <= 255 &&
     !/[/\\\0]/.test(name) &&
     !name.startsWith('.')
