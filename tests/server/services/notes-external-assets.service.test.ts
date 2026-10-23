@@ -240,3 +240,66 @@ test('an import starts before earlier inspections and the order is stable otherw
     'https://e.com/low-2'
   ])
 })
+
+test('unread Undici bodies do not crash the process during inspection and early rejection', async () => {
+  const { execFile } = await import('node:child_process')
+  const { promisify } = await import('node:util')
+  const serviceUrl = new URL(
+    '../../../src/server/services/notes-external-assets.service.ts',
+    import.meta.url
+  ).href
+  const { stdout } = await promisify(execFile)(process.execPath, [
+    '--input-type=module',
+    '-e',
+    `
+      import assert from 'node:assert/strict'
+      import { createRequire } from 'node:module'
+      import { setImmediate } from 'node:timers/promises'
+      import { NotesExternalAssetsService } from ${JSON.stringify(serviceUrl)}
+      const require = createRequire(${JSON.stringify(serviceUrl)})
+      // Use Undici's real body: IncomingMessage does not emit this cleanup error.
+      const { Readable: BodyReadable } = require('undici/lib/api/readable.js')
+      let aborted = 0
+      let consumed = 0
+      let statusCode = 200
+      let size = 123
+      const service = new NotesExternalAssetsService(async () => Object.assign(
+        new BodyReadable({ resume() { consumed++ }, abort() { aborted++ } }),
+        { statusCode, headers: { 'content-length': String(size) } }
+      ))
+      const signal = () => new AbortController().signal
+      const input = {
+        url: 'https://example.com/a.png', kind: 'image',
+        allowLargePdf: false, remainingBytes: 100000000
+      }
+      const save = async () => { throw new Error('must not save') }
+      for (let i = 0; i < 5; i++) {
+        assert.deepEqual(await service.inspect(input.url, signal()), { size: 123 })
+        await setImmediate()
+      }
+      statusCode = 404
+      await assert.rejects(service.preview(input.url, signal()), /HTTP 404/)
+      await assert.rejects(service.importAsset(input, signal(), save), /HTTP 404/)
+      statusCode = 200
+      size = 100000001
+      assert.equal((await service.importAsset(input, signal(), save)).status, 'rejected')
+      await assert.rejects(service.preview(input.url, signal()), /10 MB/)
+      size = 50000001
+      assert.equal((await service.importAsset({ ...input, kind: 'pdf', remainingBytes: 200000000 }, signal(), save)).status, 'confirmation-required')
+      await setImmediate()
+      assert.equal(aborted, 10)
+      assert.equal(consumed, 0)
+      const failed = new NotesExternalAssetsService(async () => Object.assign(
+        new BodyReadable({
+          resume() { this.destroy(new Error('download failed')) },
+          abort() {}
+        }),
+        { statusCode: 200, headers: {} }
+      ))
+      await assert.rejects(failed.preview(input.url, signal()), /download failed/)
+      await setImmediate()
+      console.log('cleanup survived')
+    `
+  ])
+  assert.match(stdout, /cleanup survived/)
+})
