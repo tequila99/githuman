@@ -89,26 +89,26 @@ defineExpose({ prepareLink, insertLink })
   --crepe-font-code: var(--font-mono);
   --crepe-color-primary: var(--q-primary);
   --crepe-color-background: transparent;
-  --crepe-color-on-background: var(--q-dark);
+  /* Document tokens change with the theme, so these lines serve both themes. */
+  --crepe-color-on-background: var(--doc-text);
+  --crepe-color-surface: var(--doc-surface);
+  --crepe-color-outline: var(--doc-outline);
+  --crepe-color-selected: var(--doc-selected);
+  --crepe-color-inline-code: var(--doc-inline-code);
+  --crepe-color-inline-area: var(--doc-inline-area);
 }
 /* One Dark keeps a dark active gutter after Crepe replaces the light block background. */
 .body--light .note-visual .milkdown .cm-activeLineGutter {
   background-color: #6699ff0b;
 }
 .body--dark .note-visual .milkdown {
-  --crepe-color-on-background: #eee;
-  --crepe-color-surface: #292c32;
   --crepe-color-on-surface: #eee;
   --crepe-color-surface-low: #23262b;
   --crepe-color-on-surface-variant: #c6cbd4;
   --crepe-color-primary: #8ab4f8;
   --crepe-color-secondary: #3b475b;
   --crepe-color-on-secondary: #eee;
-  --crepe-color-outline: #77808f;
   --crepe-color-hover: #353a44;
-  --crepe-color-selected: #414a5b;
-  --crepe-color-inline-area: #323843;
-  --crepe-color-inline-code: #ffb4ab;
 }
 .note-visual .milkdown .ProseMirror {
   min-height: 320px;

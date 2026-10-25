@@ -14,6 +14,9 @@ const OPEN_ROUTE_LINK = new RegExp(
 // A rewritten link to an error: the original target is not a project file.
 const INVALID_LINK = new RegExp('[?&]' + PROJECT_FILE_INVALID_QUERY + '(?:&|$)')
 
+// A table sits in this box. The box scrolls a wide table, so the table can fill the column.
+const TABLE_WRAPPER_CLASS = 'md-table'
+
 // Same-origin note attachment URL. The server and the renderer share one
 // identifier pattern, so a new asset format cannot be accepted by only one side.
 const NOTE_ASSET_URL = new RegExp(
@@ -71,6 +74,19 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   token?.attrSet('rel', 'noopener noreferrer')
   return renderLinkOpen(tokens, idx, options, env, self)
 }
+
+// markdown-it has no own table rules, so the wrapper adds markup around the default output.
+const renderTableOpen =
+  md.renderer.rules.table_open ??
+  ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
+const renderTableClose =
+  md.renderer.rules.table_close ??
+  ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
+md.renderer.rules.table_open = (tokens, idx, options, env, self) =>
+  `<div class="${TABLE_WRAPPER_CLASS}">\n` +
+  renderTableOpen(tokens, idx, options, env, self)
+md.renderer.rules.table_close = (tokens, idx, options, env, self) =>
+  renderTableClose(tokens, idx, options, env, self) + '</div>\n'
 
 // Code blocks get a copy button. It is static markup (the code itself is
 // escaped by the default renderer) and the page wires the click. Mermaid
