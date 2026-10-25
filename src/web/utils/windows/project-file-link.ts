@@ -1,5 +1,4 @@
-import { resolveMarkdownFileLink } from './markdown-file-link'
-import { PROJECT_FILE_ROUTE } from '@/constants/project-files'
+import { FILE_URI_PATTERN, PROJECT_FILE_ROUTE } from '@/constants/project-files'
 import { WORKTREE_REF } from '@/constants/git'
 
 // Schemes that look like "name:digits" but never name a project file.
@@ -20,7 +19,7 @@ const NON_FILE_SCHEMES = new Set([
 const SCHEME_PATTERN = /^([a-z][a-z\d+.-]*):/i
 // "name:12" or "name:12:3": a file name with a position, not a scheme.
 const FILE_WITH_POSITION_PATTERN = /^[^/:]+:\d+(?::\d+)?(?:#.*)?$/
-const FILE_URI_PATTERN = /^file:\/\//i
+// An http: or https: link, which can point to this server.
 const WEB_URL_PATTERN = /^https?:\/\//i
 // Routes of this application: they are not repository-relative links.
 const APP_ROUTE_PATTERN = /^\/(api|notes|reviews|access|files)(?:[/?]|$)/
@@ -86,6 +85,40 @@ function isApplicationRoute(target: string): boolean {
   return target === '/' || APP_ROUTE_PATTERN.test(target)
 }
 
+/** Repository-relative path of a link target, resolved against the file that holds the link. */
+export function resolveProjectFilePath(
+  link: { path: string },
+  repositoryPath: string,
+  from = ''
+): string {
+  if (
+    !repositoryPath ||
+    link.path.includes('\\') ||
+    /\p{Cc}/u.test(link.path)
+  ) {
+    throw new Error('Invalid project file link')
+  }
+  const root = repositoryPath.replace(/\/$/, '')
+  const absolute = link.path.startsWith('/')
+    ? link.path
+    : root + '/' + [...from.split('/').slice(0, -1), link.path].join('/')
+  const parts: string[] = []
+  for (const part of absolute.split('/')) {
+    if (!part || part === '.') continue
+    if (part === '..') {
+      if (!parts.length) throw new Error('Link leaves the repository')
+      parts.pop()
+    } else {
+      parts.push(part)
+    }
+  }
+  const normalized = '/' + parts.join('/')
+  if (!normalized.startsWith(root + '/')) {
+    throw new Error('Link leaves the repository')
+  }
+  return normalized.slice(root.length + 1)
+}
+
 export function parseProjectFileLink(
   href: string,
   context: ProjectLinkContext
@@ -125,7 +158,7 @@ export function parseProjectFileLink(
     anchor: hash < 0 ? '' : decodeURIComponent(raw.slice(hash + 1))
   }
   return {
-    path: resolveMarkdownFileLink(link, context.repositoryPath, context.from),
+    path: resolveProjectFilePath(link, context.repositoryPath, context.from),
     anchor: link.anchor,
     ...(suffix
       ? { line: Number(suffix[1]), column: Number(suffix[2] ?? 1) }

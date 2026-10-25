@@ -3,7 +3,7 @@ import { shallowRef } from 'vue'
 import { apiGet } from '@/api/client'
 import { useRepositoryStore } from '@/stores/repository-store'
 import { usePreviewStore } from '@/stores/windows/preview-store'
-import type { ProjectFileMetadata } from '../../shared/project-files/types.ts'
+import type { ProjectFileContext, ProjectFileMetadata } from '@/api/types'
 import {
   projectFileContentUrl,
   type ProjectFileLink
@@ -11,6 +11,8 @@ import {
 import { singleFlight } from '@/utils/single-flight'
 import { isMarkdownPath } from '@/utils/markdown-path'
 import { WORKTREE_REF } from '@/constants/git'
+import { PROJECT_DOWNLOAD_LIMIT } from '@/constants/project-files'
+import { downloadFile } from '@/utils/download'
 
 export const useProjectFilesStore = defineStore('project-files', () => {
   const origins = shallowRef<string[]>([])
@@ -20,7 +22,7 @@ export const useProjectFilesStore = defineStore('project-files', () => {
   const prepare = singleFlight(async () => {
     if (!repository.info) await repository.fetchInfo()
     if (!ready.value) {
-      const context = await apiGet<{ origins: string[] }>(
+      const context = await apiGet<ProjectFileContext>(
         '/api/project-files/context'
       )
       origins.value = context.origins
@@ -50,12 +52,16 @@ export const useProjectFilesStore = defineStore('project-files', () => {
     )
     signal?.throwIfAborted()
     if (!metadata.previewable || metadata.kind === 'download') {
-      const anchor = document.createElement('a')
-      anchor.href = projectFileContentUrl(link.path, true)
-      anchor.download = metadata.name
-      document.body.append(anchor)
-      anchor.click()
-      anchor.remove()
+      if (metadata.size > PROJECT_DOWNLOAD_LIMIT) {
+        throw new Error(
+          `File is larger than ${PROJECT_DOWNLOAD_LIMIT / 1_000_000} MB`
+        )
+      }
+      await downloadFile(
+        projectFileContentUrl(link.path, true),
+        metadata.name,
+        signal
+      )
       return false
     }
     preview.open(

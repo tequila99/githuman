@@ -71,3 +71,7 @@ export {
   DEVICE_NAME_MAX_LENGTH,
   PAIRING_CODE_LENGTH
 } from '../../shared/devices/constants'
+export type {
+  ProjectFileContext,
+  ProjectFileMetadata
+} from '../../shared/project-files/types.ts'

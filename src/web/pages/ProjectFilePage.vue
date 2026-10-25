@@ -34,7 +34,7 @@ watch(
         const value = route.query[key]
         return typeof value === 'string' ? value : null
       })
-      if (!request) throw new Error('Invalid project file link')
+      if (!request) throw new Error(t('windows.fileLinkFailed'))
       const opened = await files.open(
         request.link,
         request.ref,

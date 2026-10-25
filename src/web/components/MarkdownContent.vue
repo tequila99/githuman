@@ -16,7 +16,10 @@ import {
   projectFileRoute
 } from '@/utils/windows/project-file-link'
 import { useRepositoryStore } from '@/stores/repository-store'
-import { PROJECT_FILE_ROUTE } from '@/constants/project-files'
+import {
+  PROJECT_FILE_INVALID_QUERY,
+  PROJECT_FILE_ROUTE
+} from '@/constants/project-files'
 import { WORKTREE_REF } from '@/constants/git'
 import type { PreviewSource } from '@/types/windows/preview'
 
@@ -84,7 +87,8 @@ function rewriteFileLink(href: string): string {
         ).href
       : href
   } catch {
-    return router.resolve(PROJECT_FILE_ROUTE + '?invalid=true').href
+    return router.resolve(PROJECT_FILE_ROUTE + '?' + PROJECT_FILE_INVALID_QUERY)
+      .href
   }
 }
 async function openFileLink(event: MouseEvent): Promise<boolean> {

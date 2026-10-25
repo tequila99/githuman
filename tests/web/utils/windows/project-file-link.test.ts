@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import {
   parseProjectFileLink,
   projectFileFromQuery,
-  projectFileRoute
+  projectFileRoute,
+  resolveProjectFilePath
 } from '@/utils/windows/project-file-link'
 import { renderMarkdown } from '@/utils/markdown'
 
@@ -115,6 +116,24 @@ test('file-link rewriting does not leak between renders or into other parsing', 
   assert.doesNotMatch(renderMarkdown('[a](file:///repo/a.pdf)'), /<a /)
 })
 
+test('a file link is rewritten once per render', () => {
+  let calls = 0
+  renderMarkdown('[a](file:///repo/a.pdf) [b](file:///repo/a.pdf)', {
+    fileLink: href => {
+      calls += 1
+      return rewrite(href)
+    }
+  })
+  assert.equal(calls, 1)
+})
+
+test('a link that cannot open keeps its original target in the tooltip', () => {
+  const html = renderMarkdown('[stdio](/usr/include/stdio.h)', {
+    fileLink: () => '/files/open?invalid=true'
+  })
+  assert.match(html, /data-tooltip="\/usr\/include\/stdio.h"/)
+})
+
 test('route parameters read back into the same link and ref', () => {
   const link = { path: 'a b.ts', anchor: 'part', line: 12, column: 3 }
   const query = new URLSearchParams(projectFileRoute(link, 'abc').split('?')[1])
@@ -137,4 +156,37 @@ test('route parameters read back into the same link and ref', () => {
     projectFileFromQuery(() => null),
     null
   )
+})
+
+test('relative paths resolve against the repository root or the source directory', () => {
+  assert.equal(
+    resolveProjectFilePath({ path: './docs/report.md' }, '/repo'),
+    'docs/report.md'
+  )
+  assert.equal(
+    resolveProjectFilePath({ path: '../other.md' }, '/repo', 'docs/report.md'),
+    'other.md'
+  )
+  assert.equal(
+    resolveProjectFilePath({ path: 'sibling.md' }, '/repo', 'docs/report.md'),
+    'docs/sibling.md'
+  )
+})
+
+test('paths cannot escape the repository through traversal, encoding or a sibling prefix', () => {
+  for (const path of [
+    '../outside.md',
+    '/repo-other/a.md',
+    '/repo/../../outside.md',
+    '/repo/a\u0000.md',
+    '/repo/a\\b.md',
+    '/repo/a\n.md'
+  ]) {
+    assert.throws(() => resolveProjectFilePath({ path }, '/repo'))
+  }
+  for (const href of ['%2e%2e/outside.md', '/repo/a%2f..%2f..%2foutside.md']) {
+    assert.throws(() => parseProjectFileLink(href, context))
+  }
+  assert.throws(() => parseProjectFileLink('bad%zz.md', context))
+  assert.throws(() => parseProjectFileLink('ok.md#bad%zz', context))
 })

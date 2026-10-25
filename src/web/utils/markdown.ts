@@ -1,14 +1,18 @@
 import { headingSlug } from '../../shared/utils/heading-slug.ts'
 import MarkdownIt, { type Env, type Token } from 'markdown-it'
 import { NOTE_ASSET_ID_PATTERN } from '../../shared/notes/asset-formats.ts'
-import { PROJECT_FILE_ROUTE } from '../../shared/project-files/constants.ts'
+import {
+  FILE_URI_PATTERN,
+  PROJECT_FILE_INVALID_QUERY,
+  PROJECT_FILE_ROUTE
+} from '../../shared/project-files/constants.ts'
 
 // A rewritten file link: the open route, with an optional base path and "#" prefix.
 const OPEN_ROUTE_LINK = new RegExp(
   '^(?:/[^?#]*)?#?' + PROJECT_FILE_ROUTE.replaceAll('/', '\\/') + '\\?'
 )
-// A file: link has no web scheme, so the default validation would reject it.
-const FILE_URI_PATTERN = /^file:\/\//i
+// A rewritten link to an error: the original target is not a project file.
+const INVALID_LINK = new RegExp('[?&]' + PROJECT_FILE_INVALID_QUERY + '(?:&|$)')
 
 // Same-origin note attachment URL. The server and the renderer share one
 // identifier pattern, so a new asset format cannot be accepted by only one side.
@@ -56,7 +60,12 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   }
   const href = token?.attrGet('href')
   if (href && typeof env?.fileLink === 'function') {
-    token?.attrSet('href', env.fileLink(href))
+    const rewritten = env.fileLink(href)
+    token?.attrSet('href', rewritten)
+    // The error page hides where the link led, so the tooltip shows it.
+    if (INVALID_LINK.test(rewritten) && !title) {
+      token?.attrSet('data-tooltip', href)
+    }
   }
   token?.attrSet('target', '_blank')
   token?.attrSet('rel', 'noopener noreferrer')
@@ -123,14 +132,29 @@ interface RenderEnv extends Env {
   fileLink?: ((href: string) => string) | undefined
 }
 
+function memoize(rewrite: (href: string) => string): (href: string) => string {
+  const cache = new Map<string, string>()
+  return href => {
+    let result = cache.get(href)
+    if (result === undefined) {
+      result = rewrite(href)
+      cache.set(href, result)
+    }
+    return result
+  }
+}
+
 export function renderMarkdown(source: string, env: RenderEnv = {}): string {
-  currentFileLink = env.fileLink
+  // The parser and the renderer both rewrite each file link: cache per render.
+  const fileLink = env.fileLink && memoize(env.fileLink)
+  currentFileLink = fileLink
+  const renderEnv = { ...env, fileLink }
   try {
     return md.render(
       source,
       env.headingAnchors
-        ? { ...env, headingCounts: new Map<string, number>() }
-        : env
+        ? { ...renderEnv, headingCounts: new Map<string, number>() }
+        : renderEnv
     )
   } finally {
     currentFileLink = undefined
