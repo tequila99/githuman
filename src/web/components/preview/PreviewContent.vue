@@ -105,6 +105,7 @@ watch(
         :preview-source="tab.source"
         :preview-title="tab.title"
         :file-links="tab.source.type === 'file'"
+        variant="document"
         heading-anchors
       />
       <TextPreview
@@ -178,24 +179,6 @@ watch(
 }
 .preview-markdown {
   padding: 24px clamp(32px, 8%, 128px);
-}
-.preview-markdown :deep(.md-content) {
-  line-height: 1.8;
-}
-.preview-markdown :deep(.md-content p) {
-  margin-bottom: 1.2em;
-}
-.preview-markdown :deep(.md-content li) {
-  margin: 0.8em 0;
-}
-.preview-markdown :deep(.md-content li > p) {
-  margin-bottom: 0;
-}
-.preview-markdown :deep(.md-content li > p + p) {
-  margin-top: 1.2em;
-}
-.preview-markdown :deep(.md-content > :last-child) {
-  margin-bottom: 0;
 }
 .preview-refresh {
   position: sticky;

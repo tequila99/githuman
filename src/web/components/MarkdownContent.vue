@@ -34,9 +34,12 @@ const props = withDefaults(
     previewSource?: PreviewSource
     previewTitle?: string
     fileLinks?: boolean
+    /** `document` gives the note typography (ADR 0087); chat keeps `compact`. */
+    variant?: 'compact' | 'document'
   }>(),
   {
-    mermaidDebounce: 0
+    mermaidDebounce: 0,
+    variant: 'compact'
   }
 )
 const { t } = useI18n()
@@ -176,6 +179,7 @@ async function onClick(event: MouseEvent) {
     <div
       ref="body"
       class="md-content"
+      :class="{ 'md-document': variant === 'document' }"
       @click="onClick"
       @keydown.enter="openDiagram"
       v-html="html"

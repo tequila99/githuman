@@ -1,0 +1,226 @@
+// Document typography (ADR 0087): a note in the visual editor and Markdown in
+// the preview window look the same. The note is the reference. Milkdown Crepe
+// draws its blocks with its own DOM, so the block rules below copy its look for
+// rendered Markdown (`.md-content.md-document`) only.
+
+// Document tokens. Crepe takes its colors from them in the note, and the
+// preview uses them directly, so both places change together.
+:root {
+  --doc-text: var(--q-dark);
+  --doc-surface: #f7f7f7;
+  --doc-outline: #a8a8a8;
+  --doc-selected: #d5d5d5;
+  --doc-inline-code: #ba1a1a;
+  --doc-inline-area: #cacaca;
+}
+
+body.body--dark {
+  --doc-text: #eee;
+  --doc-surface: #292c32;
+  --doc-outline: #77808f;
+  --doc-selected: #414a5b;
+  --doc-inline-code: #ffb4ab;
+  --doc-inline-area: #323843;
+}
+
+// Shared by the note and the preview. The column padding is not shared: each
+// place keeps its own margins.
+.note-pane .note-visual .milkdown .ProseMirror,
+.md-content.md-document {
+  font-family: var(--font-agent);
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--doc-text);
+  overflow-wrap: anywhere;
+}
+
+:is(.note-pane .note-visual .milkdown .ProseMirror, .md-content.md-document) {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-agent);
+    font-weight: 400;
+    letter-spacing: normal;
+    padding: 2px 0;
+    margin-bottom: 0;
+  }
+  h1 {
+    font-size: 2.625em;
+    line-height: 1.1905;
+    margin-top: 32px;
+  }
+  h2 {
+    font-size: 2.25em;
+    line-height: 1.2222;
+    margin-top: 28px;
+  }
+  h3 {
+    font-size: 2em;
+    line-height: 1.25;
+    margin-top: 24px;
+  }
+  h4 {
+    font-size: 1.75em;
+    line-height: 1.2857;
+    margin-top: 20px;
+  }
+  h5 {
+    font-size: 1.5em;
+    line-height: 1.3333;
+    margin-top: 16px;
+  }
+  h6 {
+    font-size: 1.125em;
+    line-height: 1.5556;
+    margin-top: 16px;
+    font-weight: 700;
+  }
+  p {
+    margin: 0;
+    padding: 4px 0;
+    font-size: 1em;
+    line-height: 1.5;
+  }
+  a {
+    color: var(--q-primary);
+    text-decoration: underline;
+  }
+  code {
+    font-family: var(--font-mono);
+  }
+}
+
+// Blocks that Crepe draws in the note. Values copy the Crepe look.
+.md-content.md-document {
+  // Lists: the marker sits in a 24px box, and the text starts 34px from the edge.
+  ul,
+  ol {
+    margin: 0;
+    padding-left: 34px;
+    list-style: none;
+  }
+  li {
+    position: relative;
+    margin: 0;
+    padding: 4px 0;
+  }
+  // A loose item has paragraphs. The paragraphs give the vertical padding, as in Crepe.
+  li:has(> p) {
+    padding: 0;
+  }
+  li > p {
+    margin: 0;
+  }
+  ul > li::before {
+    content: '';
+    position: absolute;
+    left: -25px;
+    top: 13px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--doc-outline);
+  }
+  // The built-in list-item counter keeps the start number of the list.
+  ol > li::before {
+    content: counter(list-item) '.';
+    position: absolute;
+    right: calc(100% + 10px);
+    top: 4px;
+    color: var(--doc-outline);
+    white-space: nowrap;
+  }
+  blockquote {
+    position: relative;
+    margin: 4px 0;
+    padding: 0 0 0 40px;
+    border: 0;
+    opacity: 1;
+    &::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 4px;
+      bottom: 4px;
+      width: 4px;
+      border-radius: 100px;
+      background: var(--doc-selected);
+    }
+  }
+  // Relative units, as in Crepe: inline code scales with headings and table cells.
+  :not(pre) > code {
+    display: inline-block;
+    font-size: 87.5%;
+    line-height: 1.4286;
+    padding: 0 2px;
+    border-radius: 4px;
+    color: var(--doc-inline-code);
+    background: color-mix(in srgb, var(--doc-inline-area), transparent 40%);
+  }
+  .agent-code,
+  .agent-mermaid {
+    margin: 4px 0;
+  }
+  pre {
+    margin: 0;
+    padding: 43px 20px 25px;
+    border-radius: 0;
+    background: var(--doc-surface);
+    font-family: var(--font-mono);
+    font-size: 16px;
+    line-height: 22.4px;
+  }
+  pre code {
+    font-size: inherit;
+    line-height: inherit;
+    padding: 0;
+    background: transparent;
+    color: inherit;
+  }
+  .md-table {
+    margin: 4px 0;
+    overflow-x: auto;
+  }
+  // Auto layout: a wide table grows past the wrapper and scrolls, a narrow table fills it.
+  table {
+    display: table;
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+    margin: 0;
+    border-collapse: collapse;
+    font-size: 1em;
+    overflow-wrap: normal;
+    word-break: normal;
+  }
+  // Crepe puts a paragraph with 4px padding in each cell, so the cell padding is 4px + 4px.
+  th,
+  td {
+    padding: 8px 16px;
+    border: 1px solid color-mix(in srgb, var(--doc-outline), transparent 80%);
+    background: none;
+    text-align: left;
+    vertical-align: top;
+    white-space: normal;
+  }
+  th {
+    font-weight: 700;
+  }
+  // Quasar gives hr content-box and zero height, so border-box is necessary.
+  hr {
+    box-sizing: border-box;
+    height: 13px;
+    margin: 0;
+    padding: 6px 0;
+    border: 0;
+    background: color-mix(in srgb, var(--doc-outline), transparent 80%);
+    background-clip: content-box;
+  }
+  img {
+    max-width: 100%;
+    vertical-align: bottom;
+  }
+}
