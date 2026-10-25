@@ -90,7 +90,9 @@ test('missing files retain a tab and can recover; inactive tabs do not load', as
     calls++
     return missing
       ? new Response('{}', { status: 404 })
-      : new Response(JSON.stringify({ content: '# Returned', isBinary: false }))
+      : new Response('# Returned', {
+          headers: { 'Content-Type': 'text/plain' }
+        })
   }
   const store = usePreviewStore()
   const id = store.open(
@@ -122,7 +124,7 @@ test('closing a tab during a request cannot bring back its runtime data', async 
   const request = store.load(id)
   store.close(id)
   assert.ok(answer)
-  answer(new Response(JSON.stringify({ content: 'late', isBinary: false })))
+  answer(new Response('late'))
   await request
   assert.equal(store.data[id], undefined)
 })
@@ -306,4 +308,92 @@ test('closing all previews captures the intact window and retains image URLs unt
     stop()
     URL.revokeObjectURL = original
   }
+})
+
+test('project PDFs restore by locator and load bytes without changing message image identity', async () => {
+  const saved = new Map<string, string>()
+  setStorageBackend({
+    getItem: key => saved.get(key),
+    setItem: (key, value) => saved.set(key, value),
+    removeItem: key => saved.delete(key)
+  })
+  const calls: string[] = []
+  globalThis.fetch = async input => {
+    calls.push(input instanceof Request ? input.url : input.toString())
+    return new Response('%PDF-1.7\n', {
+      headers: { 'Content-Type': 'application/pdf' }
+    })
+  }
+  const store = usePreviewStore()
+  const source = { type: 'file', path: 'chapter.pdf', ref: 'WORKTREE' } as const
+  const id = store.open('pdf', source, { title: 'Chapter' })
+  store.tabs[0]!.index = 3
+  assert.equal(store.open('pdf', source, { title: 'Chapter' }), id)
+  await store.load(id)
+  assert.equal(await store.data[id]?.pdf?.text(), '%PDF-1.7\n')
+  assert.match(calls[0]!, /\/api\/project-files\/content\?path=chapter.pdf/)
+  store.remember()
+  setActivePinia(createPinia())
+  const restored = usePreviewStore()
+  assert.equal(restored.tabs[0]?.kind, 'pdf')
+  assert.equal(restored.tabs[0]?.index, 3)
+  assert.equal(restored.data[id]?.pdf, null)
+  const message = {
+    type: 'message',
+    sessionId: 'chat',
+    messageId: 'msg'
+  } as const
+  assert.notEqual(
+    restored.open('image', message, { title: 'First', index: 0, content: 'a' }),
+    restored.open('image', message, { title: 'Second', index: 1, content: 'b' })
+  )
+})
+
+test('closing a project PDF cancels its in-flight request', async () => {
+  let aborted = false
+  globalThis.fetch = (_input, init) =>
+    new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener(
+        'abort',
+        () => {
+          aborted = true
+          reject(new DOMException('Cancelled', 'AbortError'))
+        },
+        { once: true }
+      )
+    })
+  const store = usePreviewStore()
+  const id = store.open(
+    'pdf',
+    { type: 'file', path: 'chapter.pdf', ref: 'WORKTREE' },
+    { title: 'Chapter' }
+  )
+  const pending = store.load(id)
+  store.close(id)
+  await pending
+  assert.equal(aborted, true)
+  assert.equal(store.data[id], undefined)
+})
+
+test('a line request is one-shot, repeats on reopen and is never persisted', () => {
+  const saved = new Map<string, string>()
+  setStorageBackend({
+    getItem: key => saved.get(key),
+    setItem: (key, value) => saved.set(key, value),
+    removeItem: key => saved.delete(key)
+  })
+  const store = usePreviewStore()
+  const source = { type: 'file', path: 'a.ts', ref: 'WORKTREE' } as const
+  const id = store.open('text', source, { title: 'a.ts', line: 12 })
+  assert.equal(store.lineRequests[id], true)
+  delete store.lineRequests[id]
+  assert.equal(store.open('text', source, { title: 'a.ts', line: 12 }), id)
+  assert.equal(store.lineRequests[id], true)
+  delete store.lineRequests[id]
+  store.open('text', source, { title: 'a.ts' })
+  assert.equal(store.lineRequests[id], undefined)
+  assert.ok(!saved.get('githuman:preview:v1')?.includes('lineRequests'))
+  store.open('text', source, { title: 'a.ts', line: 3 })
+  store.close(id)
+  assert.equal(store.lineRequests[id], undefined)
 })

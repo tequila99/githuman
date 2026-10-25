@@ -1,6 +1,18 @@
 import { headingSlug } from '../../shared/utils/heading-slug.ts'
 import MarkdownIt, { type Env, type Token } from 'markdown-it'
 import { NOTE_ASSET_ID_PATTERN } from '../../shared/notes/asset-formats.ts'
+import {
+  FILE_URI_PATTERN,
+  PROJECT_FILE_INVALID_QUERY,
+  PROJECT_FILE_ROUTE
+} from '../../shared/project-files/constants.ts'
+
+// A rewritten file link: the open route, with an optional base path and "#" prefix.
+const OPEN_ROUTE_LINK = new RegExp(
+  '^(?:/[^?#]*)?#?' + PROJECT_FILE_ROUTE.replaceAll('/', '\\/') + '\\?'
+)
+// A rewritten link to an error: the original target is not a project file.
+const INVALID_LINK = new RegExp('[?&]' + PROJECT_FILE_INVALID_QUERY + '(?:&|$)')
 
 // Same-origin note attachment URL. The server and the renderer share one
 // identifier pattern, so a new asset format cannot be accepted by only one side.
@@ -14,6 +26,16 @@ const NOTE_ASSET_URL = new RegExp(
 // This parser also renders agent messages, so image rendering there is limited
 // to the same attachments: no external image URL can load from message text.
 const md = new MarkdownIt({ html: false, linkify: false, breaks: false })
+// The renderer is synchronous, so one module variable can carry the rewrite
+// function of the current render. Other parser calls see no rewrite function.
+let currentFileLink: ((href: string) => string) | undefined
+// A file: link is valid only when this render rewrites it to an internal route.
+const validateLink = md.validateLink.bind(md)
+md.validateLink = href =>
+  validateLink(href) ||
+  (currentFileLink !== undefined &&
+    FILE_URI_PATTERN.test(href) &&
+    OPEN_ROUTE_LINK.test(currentFileLink(href)))
 const renderImage = md.renderer.rules.image!
 md.renderer.rules.image = (tokens, index, options, env, self) => {
   const source = String(tokens[index]?.attrGet('src') ?? '')
@@ -35,6 +57,15 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   if (title && token?.attrs) {
     token.attrs = token.attrs.filter(([name]) => name !== 'title')
     token.attrSet('data-tooltip', title)
+  }
+  const href = token?.attrGet('href')
+  if (href && typeof env?.fileLink === 'function') {
+    const rewritten = env.fileLink(href)
+    token?.attrSet('href', rewritten)
+    // The error page hides where the link led, so the tooltip shows it.
+    if (INVALID_LINK.test(rewritten) && !title) {
+      token?.attrSet('data-tooltip', href)
+    }
   }
   token?.attrSet('target', '_blank')
   token?.attrSet('rel', 'noopener noreferrer')
@@ -98,15 +129,36 @@ interface RenderEnv extends Env {
   headingAnchors?: boolean
   /** Accessible name of the copy button on code blocks. */
   copyLabel?: string
+  fileLink?: ((href: string) => string) | undefined
+}
+
+function memoize(rewrite: (href: string) => string): (href: string) => string {
+  const cache = new Map<string, string>()
+  return href => {
+    let result = cache.get(href)
+    if (result === undefined) {
+      result = rewrite(href)
+      cache.set(href, result)
+    }
+    return result
+  }
 }
 
 export function renderMarkdown(source: string, env: RenderEnv = {}): string {
-  return md.render(
-    source,
-    env.headingAnchors
-      ? { ...env, headingCounts: new Map<string, number>() }
-      : env
-  )
+  // The parser and the renderer both rewrite each file link: cache per render.
+  const fileLink = env.fileLink && memoize(env.fileLink)
+  currentFileLink = fileLink
+  const renderEnv = { ...env, fileLink }
+  try {
+    return md.render(
+      source,
+      env.headingAnchors
+        ? { ...renderEnv, headingCounts: new Map<string, number>() }
+        : renderEnv
+    )
+  } finally {
+    currentFileLink = undefined
+  }
 }
 
 /** Read fences from the parser so preview identities include blocks that failed to render. */

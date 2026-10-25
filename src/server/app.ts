@@ -25,6 +25,7 @@ import fastifySseImport from '@fastify/sse'
 import { healthRoutes } from './routes/health.ts'
 import { appInfoRoutes } from './routes/app-info.ts'
 import { diffRoutes } from './routes/diff.ts'
+import { projectFileRoutes } from './routes/project-files.ts'
 import { gitRoutes } from './routes/git.ts'
 import { reviewRoutes } from './routes/reviews.ts'
 import { commentRoutes } from './routes/comments.ts'
@@ -187,6 +188,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
   app.register(diffRoutes, { repositoryPath })
   app.register(gitRoutes, { repositoryPath })
+  app.register(projectFileRoutes, { repositoryPath })
   app.register(reviewRoutes, { repositoryPath, db, eventBus })
   app.register(commentRoutes, { db, eventBus })
   app.register(exportRoutes, { db, repositoryPath })

@@ -3,7 +3,7 @@ import { isNarrowWorkspace } from '@/utils/workspace-navigation'
 import { ref, computed, onScopeDispose } from 'vue'
 import { defineStore } from 'pinia'
 import { Screen, uid } from 'quasar'
-import { apiGet, ApiRequestError } from '@/api/client'
+import { apiGet, apiGetBlob, ApiRequestError } from '@/api/client'
 import type { FileContentResponse } from '@/api/types'
 import { useAgentStore } from '@/stores/agent-store'
 import { afterWindowTransition } from '@/utils/windows/window-elements'
@@ -18,6 +18,8 @@ import {
   parsePreviewTab,
   findDiagram
 } from '@/utils/windows/preview-source'
+import { projectFileContentUrl } from '@/utils/windows/project-file-link'
+import { WORKTREE_REF } from '@/constants/git'
 import { attachmentSrc } from '@/utils/attachments'
 import { localPreviewKind } from '@/utils/windows/local-preview'
 import { singleFlight } from '@/utils/single-flight'
@@ -55,9 +57,13 @@ export const usePreviewStore = defineStore('preview', () => {
   const activeId = ref<string | null>(null)
   const data = ref<Record<string, PreviewData>>({})
   const anchorRequests = ref<Record<string, string>>({})
+  // One-shot request to scroll a text tab to its line; it is never persisted.
+  const lineRequests = ref<Record<string, true>>({})
   const state = windows.ensure(PREVIEW_WINDOW_ID)
   const localFiles = new Map<string, File>()
   const localUrls = new Map<string, string>()
+  const fileControllers = new Map<string, AbortController>()
+  const fileUrls = new Map<string, string>()
   const requests = new Map<string, () => Promise<void>>()
   try {
     const saved: unknown = JSON.parse(safeStorage.get(STORAGE_KEY) ?? 'null')
@@ -120,7 +126,15 @@ export const usePreviewStore = defineStore('preview', () => {
   function open(
     kind: PreviewTab['kind'],
     source: PreviewSource,
-    { title, index = 0, content = '', sourceText, anchor }: PreviewOpenOptions
+    {
+      title,
+      index = 0,
+      content = '',
+      sourceText,
+      anchor,
+      line,
+      column
+    }: PreviewOpenOptions
   ) {
     if (kind === 'diagram' && sourceText !== undefined) {
       const sources = extractDiagramSources(sourceText)
@@ -160,6 +174,9 @@ export const usePreviewStore = defineStore('preview', () => {
         tab.kind === kind &&
         previewSourceKey(tab.source) === previewSourceKey(source) &&
         (kind === 'markdown' ||
+          kind === 'text' ||
+          kind === 'pdf' ||
+          (kind === 'image' && source.type !== 'message') ||
           (tab.index === index && tab.fingerprint === fingerprint))
     )
     if (existing) {
@@ -168,6 +185,9 @@ export const usePreviewStore = defineStore('preview', () => {
       } else if (anchor !== undefined) {
         delete anchorRequests.value[existing.id]
       }
+      existing.line = line
+      existing.column = column
+      if (line) lineRequests.value[existing.id] = true
       activate(existing.id)
       return existing.id
     }
@@ -181,10 +201,13 @@ export const usePreviewStore = defineStore('preview', () => {
       index,
       fingerprint,
       scroll: { x: 0, y: 0 },
+      line,
+      column,
       scale: 1
     })
     data.value[id] = emptyData()
     if (anchor) anchorRequests.value[id] = anchor
+    if (line) lineRequests.value[id] = true
     activate(id)
     return id
   }
@@ -210,11 +233,18 @@ export const usePreviewStore = defineStore('preview', () => {
     localUrls.delete(source.id)
   }
   onScopeDispose(() => {
+    for (const controller of fileControllers.values()) controller.abort()
+    for (const url of fileUrls.values()) URL.revokeObjectURL(url)
     for (const url of localUrls.values()) URL.revokeObjectURL(url)
     localUrls.clear()
     localFiles.clear()
   })
   function close(id: string) {
+    fileControllers.get(id)?.abort()
+    fileControllers.delete(id)
+    const fileUrl = fileUrls.get(id)
+    if (fileUrl) URL.revokeObjectURL(fileUrl)
+    fileUrls.delete(id)
     const tab = tabs.value.find(candidate => candidate.id === id)
     const index = tabs.value.findIndex(candidate => candidate.id === id)
     if (tab && tabs.value.length === 1) windows.close(PREVIEW_WINDOW_ID)
@@ -224,6 +254,7 @@ export const usePreviewStore = defineStore('preview', () => {
     }
     delete data.value[id]
     delete anchorRequests.value[id]
+    delete lineRequests.value[id]
     requests.delete(id)
     if (activeId.value === id) {
       activeId.value =
@@ -240,7 +271,7 @@ export const usePreviewStore = defineStore('preview', () => {
     for (const tab of tabs.value) {
       if (
         tab.source.type === 'file' &&
-        (tab.source.ref === 'WORKTREE' || tab.source.ref === 'INDEX')
+        (tab.source.ref === WORKTREE_REF || tab.source.ref === 'INDEX')
       ) {
         runtime(tab.id).stale = true
       }
@@ -268,6 +299,8 @@ export const usePreviewStore = defineStore('preview', () => {
     let pdf: File | null = null
     let missing: PreviewData['missing'] = null
     let error: string | null = null
+    const controller = new AbortController()
+    fileControllers.set(id, controller)
     try {
       if (tab.source.type === 'local') {
         const file = localFiles.get(tab.source.id)
@@ -286,17 +319,39 @@ export const usePreviewStore = defineStore('preview', () => {
           image = url
         }
       } else if (tab.source.type === 'file') {
-        const path = tab.source.path
-          .split('/')
-          .map(encodeURIComponent)
-          .join('/')
-        const response = await apiGet<FileContentResponse>(
-          `/api/git/file/${path}?ref=${encodeURIComponent(tab.source.ref)}&strict=true`
-        )
-        if (response.isBinary) {
-          missing = 'binary'
+        if (tab.source.ref === WORKTREE_REF) {
+          const blob = await apiGetBlob(
+            projectFileContentUrl(tab.source.path),
+            controller.signal
+          )
+          if (tab.kind === 'pdf') {
+            pdf = new File([blob], tab.source.path, { type: blob.type })
+          } else if (tab.kind === 'image') {
+            if (tabs.value.includes(tab)) {
+              const old = fileUrls.get(id)
+              if (old) URL.revokeObjectURL(old)
+              image = URL.createObjectURL(blob)
+              fileUrls.set(id, image)
+            }
+          } else {
+            text = await blob.text()
+          }
         } else {
-          text = response.content
+          if (tab.kind === 'pdf' || tab.kind === 'image') {
+            throw new Error(`Binary previews require ${WORKTREE_REF}`)
+          }
+          const path = tab.source.path
+            .split('/')
+            .map(encodeURIComponent)
+            .join('/')
+          const response = await apiGet<FileContentResponse>(
+            `/api/git/file/${path}?ref=${encodeURIComponent(tab.source.ref)}&strict=true`
+          )
+          if (response.isBinary) {
+            missing = 'binary'
+          } else {
+            text = response.content
+          }
         }
       } else {
         const chat = useAgentStore().chats[tab.source.sessionId]
@@ -345,6 +400,7 @@ export const usePreviewStore = defineStore('preview', () => {
         error = errorMessage(failure)
       }
     } finally {
+      if (fileControllers.get(id) === controller) fileControllers.delete(id)
       if (tabs.value.includes(tab)) {
         Object.assign(entry, {
           text,
@@ -364,6 +420,7 @@ export const usePreviewStore = defineStore('preview', () => {
     activeTab,
     data,
     anchorRequests,
+    lineRequests,
     show,
     open,
     openLocal,

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { isMarkdownPath } from '@/utils/markdown-path'
 import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '@/stores/agent-store'
 import { useAddAgentContext } from '@/composables/use-add-agent-context'
@@ -23,7 +24,7 @@ const { t } = useI18n()
 const agent = useAgentStore()
 const addToChat = useAddAgentContext()
 
-const isMarkdown = computed(() => /\.(md|markdown)$/i.test(props.path ?? ''))
+const isMarkdown = computed(() => isMarkdownPath(props.path ?? ''))
 const preview = usePreviewStore()
 function openPreview() {
   if (!props.path) return

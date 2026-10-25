@@ -141,8 +141,10 @@ export default {
     }
   },
   windows: {
+    downloadFile: 'Download file',
+    fileDownloading: 'Download started.',
     fileLinkFailed:
-      'Cannot open this link. Choose a Markdown file inside the current repository.',
+      'Cannot open this link. Choose a file inside the current repository.',
     panel: 'Window panel',
     newTerminalShortcut: 'New terminal tab: Ctrl+Win+T',
     layoutShortcuts: 'Window layout: Ctrl+Win+← / → / ↑ / ↓',
