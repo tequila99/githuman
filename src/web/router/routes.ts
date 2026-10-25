@@ -5,6 +5,10 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     children: [
+      {
+        path: 'files/open',
+        component: () => import('@/pages/ProjectFilePage.vue')
+      },
       { path: '', component: () => import('@/pages/IndexPage.vue') },
       {
         path: 'notes',

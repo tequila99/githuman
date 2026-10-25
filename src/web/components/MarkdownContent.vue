@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, useTemplateRef } from 'vue'
+import { computed, useTemplateRef, watchEffect } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import { useCodeBlockCopy } from '@/composables/use-code-block-copy'
@@ -7,12 +8,20 @@ import { useMermaidBlocks } from '@/composables/use-mermaid-blocks'
 import { renderMarkdown } from '@/utils/markdown'
 import { usePreviewStore } from '@/stores/windows/preview-store'
 import { useAgentStore } from '@/stores/agent-store'
-import { useRepositoryStore } from '@/stores/repository-store'
+import { errorMessage } from '@/utils/error-message'
+import { useProjectFilesStore } from '@/stores/project-files-store'
 import {
-  parseMarkdownFileLink,
-  resolveMarkdownFileLink
-} from '@/utils/windows/markdown-file-link'
+  parseProjectFileLink,
+  projectFileFromQuery,
+  projectFileRoute
+} from '@/utils/windows/project-file-link'
+import { useRepositoryStore } from '@/stores/repository-store'
+import { PROJECT_FILE_ROUTE } from '@/constants/project-files'
+import { WORKTREE_REF } from '@/constants/git'
 import type { PreviewSource } from '@/types/windows/preview'
+
+// Start of every link that this component opens in the preview window.
+const OPEN_ROUTE_PREFIX = PROJECT_FILE_ROUTE + '?'
 
 const props = withDefaults(
   defineProps<{
@@ -28,12 +37,18 @@ const props = withDefaults(
   }
 )
 const { t } = useI18n()
+const router = useRouter()
 const $q = useQuasar()
 const body = useTemplateRef<HTMLElement>('body')
+const preview = usePreviewStore()
+const agents = useAgentStore()
+const repository = useRepositoryStore()
+const projectFiles = useProjectFilesStore()
 const html = computed(() =>
   renderMarkdown(props.text, {
     copyLabel: t('agent.code.copy'),
-    headingAnchors: props.headingAnchors
+    headingAnchors: props.headingAnchors,
+    fileLink: props.fileLinks ? rewriteFileLink : undefined
   })
 )
 const { copyCodeBlock } = useCodeBlockCopy(html)
@@ -45,48 +60,66 @@ useMermaidBlocks(
   () => props.mermaidDebounce
 )
 
-const preview = usePreviewStore()
-const agents = useAgentStore()
-const repository = useRepositoryStore()
+watchEffect(() => {
+  if (props.fileLinks && !projectFiles.ready) {
+    void projectFiles.prepare().catch(() => {})
+  }
+})
+function rewriteFileLink(href: string): string {
+  if (!repository.info || !projectFiles.ready) return href
+  const source = props.previewSource
+  try {
+    const link = parseProjectFileLink(href, {
+      repositoryPath: repository.info.path,
+      origin: window.location.origin,
+      origins: projectFiles.origins,
+      from: source?.type === 'file' ? source.path : ''
+    })
+    return link
+      ? router.resolve(
+          projectFileRoute(
+            link,
+            source?.type === 'file' ? source.ref : WORKTREE_REF
+          )
+        ).href
+      : href
+  } catch {
+    return router.resolve(PROJECT_FILE_ROUTE + '?invalid=true').href
+  }
+}
 async function openFileLink(event: MouseEvent): Promise<boolean> {
   if (!props.fileLinks) return false
   const anchor =
     event.target instanceof Element ? event.target.closest('a') : null
   if (!anchor || !body.value?.contains(anchor)) return false
   const href = anchor.getAttribute('href') ?? ''
+  const url = new URL(href, window.location.href)
+  const target = url.hash.startsWith('#' + OPEN_ROUTE_PREFIX)
+    ? url.hash.slice(1)
+    : url.pathname + url.search
+  if (
+    url.origin !== window.location.origin ||
+    !target.startsWith(OPEN_ROUTE_PREFIX)
+  ) {
+    return false
+  }
+  if (
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    event.altKey ||
+    event.button !== 0
+  ) {
+    return true
+  }
+  event.preventDefault()
   try {
-    const link = parseMarkdownFileLink(href)
-    if (!link) return false
-    event.preventDefault()
-    if (!repository.info) await repository.fetchInfo()
-    if (!repository.info) {
-      $q.notify({
-        type: 'negative',
-        message: repository.error ?? t('windows.fileLinkFailed')
-      })
-      return true
-    }
-    const source = props.previewSource
-    const path = resolveMarkdownFileLink(
-      link,
-      repository.info.path,
-      source?.type === 'file' ? source.path : ''
-    )
-    preview.open(
-      'markdown',
-      {
-        type: 'file',
-        path,
-        ref: source?.type === 'file' ? source.ref : 'WORKTREE'
-      },
-      {
-        title: path,
-        anchor: link.anchor
-      }
-    )
-  } catch {
-    event.preventDefault()
-    $q.notify({ type: 'negative', message: t('windows.fileLinkFailed') })
+    const query = new URL(target, window.location.origin).searchParams
+    const request = projectFileFromQuery(key => query.get(key))
+    if (!request) throw new Error(t('windows.fileLinkFailed'))
+    await projectFiles.open(request.link, request.ref)
+  } catch (failure) {
+    $q.notify({ type: 'negative', message: errorMessage(failure) })
   }
   return true
 }

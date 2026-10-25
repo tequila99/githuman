@@ -1,3 +1,5 @@
+import { isMarkdownPath } from '@/utils/markdown-path'
+
 export interface MarkdownFileLink {
   path: string
   anchor: string
@@ -9,7 +11,7 @@ export function parseMarkdownFileLink(href: string): MarkdownFileLink | null {
   const target = hash < 0 ? href : href.slice(0, hash)
   if (!target || target.includes('?')) return null
   const path = decodeURIComponent(target).replace(/:\d+(?::\d+)?$/, '')
-  if (!/\.(md|markdown)$/i.test(path)) return null
+  if (!isMarkdownPath(path)) return null
   return {
     path,
     anchor: hash < 0 ? '' : decodeURIComponent(href.slice(hash + 1))

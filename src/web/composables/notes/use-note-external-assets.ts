@@ -96,15 +96,14 @@ export function useNoteExternalAssets(
   let usedBytes = 0
   let lastApplied = new Set<string>()
   let reverseEdits: ExternalAssetEdit[] = []
-  const identity = () => {
-    const draft = toValue(source)
-    return JSON.stringify([
-      draft.storageId,
-      draft.id ?? draft.path,
-      Boolean(draft.deleted),
-      draft.status === 'conflict'
-    ])
-  }
+  // One list feeds both the watcher and the string key, so they cannot differ.
+  const identityParts = [
+    () => toValue(source).storageId,
+    () => toValue(source).id ?? toValue(source).path,
+    () => Boolean(toValue(source).deleted),
+    () => toValue(source).status === 'conflict'
+  ]
+  const identity = () => JSON.stringify(identityParts.map(part => part()))
   const canRestore = computed(
     () =>
       after.value !== null &&
@@ -125,7 +124,7 @@ export function useNoteExternalAssets(
     opened.value = false
     after.value = null
   }
-  watch(identity, invalidate, { flush: 'sync' })
+  watch(identityParts, invalidate, { flush: 'sync' })
   onScopeDispose(invalidate)
   function open() {
     if (opened.value || busy.value) return

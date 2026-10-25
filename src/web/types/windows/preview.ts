@@ -4,12 +4,14 @@ export type PreviewSource =
   | { type: 'message'; sessionId: string; messageId: string }
 export interface PreviewTab {
   id: string
-  kind: 'markdown' | 'diagram' | 'image' | 'pdf'
+  kind: 'markdown' | 'diagram' | 'image' | 'pdf' | 'text'
   source: PreviewSource
   title: string
   index: number
   fingerprint: string
   scroll: { x: number; y: number }
+  line?: number | undefined
+  column?: number | undefined
   scale: number
 }
 export interface PreviewData {
@@ -24,6 +26,8 @@ export interface PreviewData {
 }
 
 export interface PreviewOpenOptions {
+  line?: number | undefined
+  column?: number | undefined
   title: string
   /** A heading fragment for this navigation; it is not a saved view preference. */
   anchor?: string
