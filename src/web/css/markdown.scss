@@ -42,12 +42,19 @@
 .md-content h6 {
   font-size: 1em;
 }
+/* The renderer puts each table in a wrapper, so the wrapper carries the gap
+   below the table. :where() keeps the specificity low: the first-child and
+   last-child rules above still remove the outer gaps. 0.76em equals the old
+   0.8em of the 0.95em table text. */
+.md-content :where(.md-table) {
+  margin: 0 0 0.76em;
+}
 /* Wide tables and code scroll inside their own box, so they can't stretch the
    bubble — and with it the wrapping of the text around them. */
 .md-content table {
   display: block;
   max-width: 100%;
-  margin: 0 0 0.8em;
+  margin: 0;
   overflow-x: auto;
   border-collapse: collapse;
   font-size: 0.95em;

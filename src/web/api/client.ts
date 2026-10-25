@@ -59,8 +59,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return JSON.parse(text) as T
 }
 
-export function apiGet<T>(path: string): Promise<T> {
-  return request<T>(path)
+export function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return request<T>(path, { signal: signal ?? null })
 }
 
 /** GET of a raw text body, for example a markdown export. */
@@ -112,4 +112,11 @@ export function apiPatch<T>(path: string, body?: unknown): Promise<T> {
 
 export function apiDelete<T>(path: string): Promise<T> {
   return request<T>(path, { method: 'DELETE' })
+}
+
+export async function apiGetBlob(
+  path: string,
+  signal?: AbortSignal
+): Promise<Blob> {
+  return (await checkedFetch(path, { signal: signal ?? null })).blob()
 }

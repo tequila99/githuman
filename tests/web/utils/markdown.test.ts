@@ -256,3 +256,25 @@ test('the clipped Moleculer article footer survives visual serialization', () =>
     true
   )
 })
+
+test('a table is wrapped in a scroll box and keeps its own markup', () => {
+  const table = '| A | B |\n| --- | --- |\n| 1 | 2 |'
+  const html = renderMarkdown(`# Title\n\n${table}`, {
+    headingAnchors: true,
+    fileLink: href => href
+  })
+  assert.match(
+    html,
+    /<div class="md-table">\s*<table>[\s\S]*<\/table>\s*<\/div>/
+  )
+  assert.match(html, /<th>A<\/th>/)
+  assert.match(html, /<td>1<\/td>/)
+  assert.match(html, /<h1 id="title">/)
+})
+
+test('markdown without tables renders without a table wrapper', () => {
+  assert.equal(
+    renderMarkdown('# A\n\ntext\n\n- item'),
+    '<h1>A</h1>\n<p>text</p>\n<ul>\n<li>item</li>\n</ul>\n'
+  )
+})

@@ -4,6 +4,8 @@ import {
   PREVIEW_MAX_SCALE
 } from '@/constants/windows/constants'
 import { defineAsyncComponent, computed, watch, useTemplateRef } from 'vue'
+import TextPreview from './TextPreview.vue'
+import { projectFileContentUrl } from '@/utils/windows/project-file-link'
 import { useI18n } from 'vue-i18n'
 import { usePreviewStore } from '@/stores/windows/preview-store'
 import { usePreviewSource } from '@/composables/preview/use-preview-source'
@@ -42,6 +44,23 @@ function zoom(delta: number) {
   )
   preview.remember()
 }
+function textRendered(selected: HTMLElement | null) {
+  const target = el.value
+  if (selected && target && preview.lineRequests[props.tab.id]) {
+    // Move only this container: scrollIntoView would also move outer panels.
+    const box = target.getBoundingClientRect()
+    const mark = selected.getBoundingClientRect()
+    target.scrollTop +=
+      mark.top - box.top - (target.clientHeight - mark.height) / 2
+    target.scrollLeft +=
+      mark.left - box.left - (target.clientWidth - mark.width) / 2
+    props.tab.scroll.x = target.scrollLeft
+    props.tab.scroll.y = target.scrollTop
+    preview.remember()
+  }
+  delete preview.lineRequests[props.tab.id]
+  restoreScroll()
+}
 watch(
   () => [
     entry.value.text,
@@ -71,7 +90,13 @@ watch(
       }}</div>
       <div v-else-if="entry.error" class="q-pa-md text-negative"
         >{{ entry.error
-        }}<q-btn flat :label="t('windows.retry')" @click="reload()"
+        }}<a
+          v-if="tab.source.type === 'file' && tab.source.ref === 'WORKTREE'"
+          :href="projectFileContentUrl(tab.source.path, true)"
+          download
+          class="q-ml-sm"
+          >{{ t('windows.downloadFile') }}</a
+        ><q-btn flat :label="t('windows.retry')" @click="reload()"
       /></div>
       <MarkdownContent
         v-else-if="tab.kind === 'markdown'"
@@ -80,7 +105,16 @@ watch(
         :preview-source="tab.source"
         :preview-title="tab.title"
         :file-links="tab.source.type === 'file'"
+        variant="document"
         heading-anchors
+      />
+      <TextPreview
+        v-else-if="tab.kind === 'text'"
+        :text="entry.text"
+        :line="tab.line"
+        :column="tab.column"
+        :request="!!preview.lineRequests[tab.id]"
+        @rendered="textRendered"
       />
       <DiagramPreview
         v-else-if="tab.kind === 'diagram'"
@@ -145,24 +179,6 @@ watch(
 }
 .preview-markdown {
   padding: 24px clamp(32px, 8%, 128px);
-}
-.preview-markdown :deep(.md-content) {
-  line-height: 1.8;
-}
-.preview-markdown :deep(.md-content p) {
-  margin-bottom: 1.2em;
-}
-.preview-markdown :deep(.md-content li) {
-  margin: 0.8em 0;
-}
-.preview-markdown :deep(.md-content li > p) {
-  margin-bottom: 0;
-}
-.preview-markdown :deep(.md-content li > p + p) {
-  margin-top: 1.2em;
-}
-.preview-markdown :deep(.md-content > :last-child) {
-  margin-bottom: 0;
 }
 .preview-refresh {
   position: sticky;

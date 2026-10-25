@@ -14,10 +14,9 @@
   }
 }
 
-// Keep note typography available before the visual editor loads.
+// Keep the note font available before the visual editor loads.
+// The editor typography is shared with the preview (markdown-document.scss).
 .note-pane {
-  --note-inline-color: #ba1a1a;
-  --note-inline-background: rgba(202, 202, 202, 0.6);
   font-family: var(--font-agent);
 
   .note-action {
@@ -42,162 +41,13 @@
     outline-offset: 2px;
   }
 
-  .md-content,
   .note-visual .milkdown .ProseMirror {
     padding: 24px 40px;
-    font-family: var(--font-agent);
-    font-size: 16px;
-    line-height: 24px;
-    overflow-wrap: anywhere;
-  }
-
-  :is(.md-content, .note-visual .milkdown .ProseMirror) {
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6 {
-      font-family: var(--font-agent);
-      font-weight: 400;
-      letter-spacing: normal;
-      padding: 2px 0;
-      margin-bottom: 0;
-    }
-    h1 {
-      font-size: 2.625em;
-      line-height: 1.1905;
-      margin-top: 32px;
-    }
-    h2 {
-      font-size: 2.25em;
-      line-height: 1.2222;
-      margin-top: 28px;
-    }
-    h3 {
-      font-size: 2em;
-      line-height: 1.25;
-      margin-top: 24px;
-    }
-    h4 {
-      font-size: 1.75em;
-      line-height: 1.2857;
-      margin-top: 20px;
-    }
-    h5 {
-      font-size: 1.5em;
-      line-height: 1.3333;
-      margin-top: 16px;
-    }
-    h6 {
-      font-size: 1.125em;
-      line-height: 1.5556;
-      margin-top: 16px;
-      font-weight: 700;
-    }
-    p {
-      margin: 0;
-      padding: 4px 0;
-      font-size: 1em;
-      line-height: 1.5;
-    }
-    a {
-      color: var(--q-primary);
-      text-decoration: underline;
-    }
-    code {
-      font-family: var(--font-mono);
-    }
-  }
-
-  .md-content {
-    ul,
-    ol {
-      margin: 0;
-      padding-left: 34px;
-    }
-    li {
-      margin: 0;
-      padding: 4px 0;
-    }
-    li > p {
-      padding: 0;
-    }
-    li > ul,
-    li > ol {
-      margin-top: 4px;
-    }
-    blockquote {
-      position: relative;
-      border: 0;
-      opacity: 1;
-      padding: 0 0 0 40px;
-      margin: 4px 0;
-      &::before {
-        content: '';
-        position: absolute;
-        width: 4px;
-        left: 0;
-        top: 4px;
-        bottom: 4px;
-        background: rgba(128, 128, 128, 0.35);
-        border-radius: 4px;
-      }
-    }
-    :not(pre) > code {
-      display: inline-block;
-      font-size: 14px;
-      line-height: 20px;
-      padding: 0 2px;
-      border-radius: 4px;
-      color: var(--note-inline-color);
-      background: var(--note-inline-background);
-    }
-    .agent-code {
-      margin: 4px 0;
-    }
-    pre {
-      font-size: 14px;
-      line-height: 20px;
-      padding: 10px;
-    }
-    pre code {
-      font-size: inherit;
-      line-height: inherit;
-    }
-    table {
-      font-size: 16px;
-      margin: 4px 0;
-    }
-    th,
-    td {
-      padding: 8px 16px;
-    }
-    hr {
-      box-sizing: border-box;
-      border: 0;
-      margin: 0;
-      height: 13px;
-      padding: 6px 0;
-      background: rgba(128, 128, 128, 0.2);
-      background-clip: content-box;
-    }
-    img {
-      max-width: 100%;
-    }
   }
 }
 
-.body--dark .note-pane {
-  --note-inline-color: #ffb4ab;
-  --note-inline-background: rgba(50, 56, 67, 0.6);
-}
-
-.workspace--narrow {
-  .note-pane .md-content,
-  .note-pane .note-visual .milkdown .ProseMirror {
-    padding: 16px 12px;
-  }
+.workspace--narrow .note-pane .note-visual .milkdown .ProseMirror {
+  padding: 16px 12px;
 }
 
 @media (pointer: coarse) {

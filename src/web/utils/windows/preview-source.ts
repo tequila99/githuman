@@ -37,7 +37,9 @@ export function parsePreviewTab(value: unknown): PreviewTab | null {
   if (
     value.kind !== 'markdown' &&
     value.kind !== 'diagram' &&
-    value.kind !== 'image'
+    value.kind !== 'image' &&
+    value.kind !== 'pdf' &&
+    value.kind !== 'text'
   ) {
     return null
   }
@@ -84,6 +86,16 @@ export function parsePreviewTab(value: unknown): PreviewTab | null {
       x: isFiniteNumber(scroll.x) ? Math.max(0, scroll.x) : 0,
       y: isFiniteNumber(scroll.y) ? Math.max(0, scroll.y) : 0
     },
+    ...(typeof value.line === 'number' &&
+    Number.isSafeInteger(value.line) &&
+    value.line > 0
+      ? { line: value.line }
+      : {}),
+    ...(typeof value.column === 'number' &&
+    Number.isSafeInteger(value.column) &&
+    value.column > 0
+      ? { column: value.column }
+      : {}),
     scale: isFiniteNumber(value.scale)
       ? Math.max(PREVIEW_MIN_SCALE, Math.min(PREVIEW_MAX_SCALE, value.scale))
       : 1
