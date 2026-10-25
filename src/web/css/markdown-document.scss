@@ -184,15 +184,16 @@ body.body--dark {
     margin: 4px 0;
     overflow-x: auto;
   }
+  // Auto layout: a wide table grows past the wrapper and scrolls, a narrow table fills it.
   table {
     display: table;
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     max-width: none;
     margin: 0;
-    table-layout: fixed;
     border-collapse: collapse;
     font-size: 1em;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
     word-break: normal;
   }
   // Crepe puts a paragraph with 4px padding in each cell, so the cell padding is 4px + 4px.
