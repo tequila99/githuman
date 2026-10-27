@@ -51,7 +51,11 @@ export async function eventRoutes(
       const unsubscribe = eventBus.subscribe(event => {
         safeSend(reply.sse, {
           event: event.type,
-          data: { reviewId: event.reviewId }
+          data: {
+            reviewId: event.reviewId,
+            storeId: event.storeId,
+            storeEpoch: event.storeEpoch
+          }
         })
       })
 

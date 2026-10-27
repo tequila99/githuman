@@ -1,3 +1,7 @@
+import { DEFAULT_DB_PREFIX } from '../shared/app/storage-constants.ts'
+import { artifactRoutes } from './routes/artifacts.ts'
+import { ArtifactStorageService } from './services/artifact-storage.service.ts'
+import { ArtifactMaintenanceService } from './services/artifact-maintenance.service.ts'
 import { watchNotes } from './services/notes-watcher.service.ts'
 import { notesRoutes } from './routes/notes.ts'
 import { NotesService } from './services/notes.service.ts'
@@ -68,6 +72,8 @@ export interface BuildAppOptions {
   repositoryPath?: string
   /** Database for reviews/comments. Defaults to a throwaway in-memory database — production callers (server-runtime) must pass a real file-backed one. */
   db?: DatabaseSync
+  artifactPrefix?: string
+  artifacts?: ArtifactStorageService
   /** Bus used to notify SSE clients of review/comment changes. Defaults to a fresh, process-local bus. */
   eventBus?: EventBus
   /** Watches the repository's working tree and publishes 'files:changed' SSE events on change. Off by default — the real server enables it; tests don't need it and it would otherwise watch process.cwd() by default. */
@@ -186,6 +192,27 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       watcher.close()
     })
   }
+  const artifacts =
+    options.artifacts ??
+    new ArtifactStorageService({
+      db,
+      repositoryPath,
+      prefix: options.artifactPrefix ?? DEFAULT_DB_PREFIX,
+      eventBus
+    })
+  app.register(artifactRoutes, { service: artifacts })
+  const artifactMaintenance = new ArtifactMaintenanceService({
+    storage: artifacts,
+    onError: (error, phase) => {
+      app.log.error({ err: error, phase }, 'Artifact maintenance failed')
+    }
+  })
+  app.addHook('onReady', async () => {
+    artifactMaintenance.start()
+  })
+  app.addHook('onClose', async () => {
+    artifactMaintenance.stop()
+  })
   app.register(diffRoutes, { repositoryPath })
   app.register(gitRoutes, { repositoryPath })
   app.register(projectFileRoutes, { repositoryPath })

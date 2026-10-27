@@ -13,6 +13,7 @@ playwright-report/
 # Local Claude Code settings and skills. Internal documentation lives in
 # .githuman/docs/ alongside other ignored project data.
 .claude/
+.Codex/
 
 # .env files
 .env*

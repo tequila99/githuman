@@ -1,5 +1,7 @@
+import { DEFAULT_DB_PREFIX } from '../shared/app/storage-constants.ts'
 import { isIP } from 'node:net'
 import { parseArgs } from 'node:util'
+import { isValidFilenamePrefix } from '../shared/utils/is-valid-filename-prefix.ts'
 import { isLoopbackHost } from '../shared/network/loopback.ts'
 import { WILDCARD_HOSTS } from '../server/utils/lan-addresses.ts'
 
@@ -31,7 +33,7 @@ const HOST_NAME_PATTERN =
  * without a prefix, running both tools against the same repository would
  * silently corrupt or crash on the other tool's database file.
  */
-export const DEFAULT_DB_PREFIX = 'ght-'
+export { DEFAULT_DB_PREFIX }
 
 /**
  * `GITHUMAN_DB_PREFIX` is intentionally not one of the env vars the original
@@ -134,6 +136,13 @@ export function parseServeArgs(argv: string[]): ServeOptions {
   const dbPrefix = resolveDbPrefix(
     typeof values['db-prefix'] === 'string' ? values['db-prefix'] : undefined
   )
+
+  // Only `serve` creates artifact files, so only it needs a filename-safe prefix.
+  if (!isValidFilenamePrefix(dbPrefix)) {
+    throw new Error(
+      `Invalid --db-prefix value "${dbPrefix}": use at most 100 characters and none of < > : " / \\ | ? * or control characters. Set it with --db-prefix or GITHUMAN_DB_PREFIX.`
+    )
+  }
 
   const apiDocs = values['api-docs'] === true
   const allowedHosts = resolveAllowedHosts(

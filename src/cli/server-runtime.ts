@@ -99,6 +99,7 @@ export async function startServer(
     projectPath: process.cwd(),
     notesDir: options.notesDir,
     db,
+    artifactPrefix: resolveDbPrefix(options.dbPrefix),
     watchFiles: true,
     apiDocs: options.apiDocs === true,
     allowedHosts: options.allowedHosts ?? [],
