@@ -30,6 +30,11 @@ async function openReviewsDb(
 }
 
 async function main(argv: string[]): Promise<void> {
+  if (argv[0] === 'mcp') {
+    const { runMcp } = await import('./commands/mcp.ts')
+    await runMcp(argv.slice(1))
+    return
+  }
   console.log(`githuman v${getAppVersion()}`)
 
   const [command, ...rest] = argv
@@ -86,7 +91,7 @@ async function main(argv: string[]): Promise<void> {
     }
     default:
       console.error(`Unknown command: ${command ?? '(none)'}`)
-      console.error('Usage: githuman serve|list|export [options]')
+      console.error('Usage: githuman serve|list|export|mcp [options]')
       process.exitCode = 1
   }
 }

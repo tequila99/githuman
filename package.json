@@ -59,6 +59,7 @@
     "@fastify/type-provider-typebox": "^6.1.0",
     "@fastify/websocket": "11.3.3",
     "@lydell/node-pty": "1.2.0-beta.15",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@sinclair/typebox": "^0.34.52",
     "@xterm/addon-serialize": "0.14.0",
     "@xterm/headless": "6.0.0",

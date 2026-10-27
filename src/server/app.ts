@@ -1,3 +1,7 @@
+import { addressUrl } from '../shared/network/address-url.ts'
+import { artifactAgentRoutes } from './routes/artifact-agent.ts'
+import type { AgentSessionRegistry } from './services/agent/session-registry.ts'
+import { ForbiddenError } from './errors/http.ts'
 import { artifactDefinitionRoutes } from './routes/artifact-definitions.ts'
 import { DEFAULT_DB_PREFIX } from '../shared/app/storage-constants.ts'
 import { artifactRoutes } from './routes/artifacts.ts'
@@ -61,6 +65,11 @@ const DEVICE_SWEEP_MS = 60 * 60 * 1000
 // also when another server process on the same database revoked it.
 // One indexed SELECT per connected device.
 const DEVICE_RECHECK_MS = 2000
+// A wildcard bind accepts loopback connections; the MCP process connects there.
+const WILDCARD_LOOPBACK: Record<string, string> = {
+  '::': '::1',
+  '0.0.0.0': '127.0.0.1'
+}
 
 export interface BuildAppOptions {
   /** Launch directory used for project notes; it can differ from the Git root. */
@@ -104,6 +113,8 @@ export interface BuildAppOptions {
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({
+    // Logging is off. Redact the Authorization header before you turn it on:
+    // it carries the agent session key (ADR 0096).
     logger: false,
     forceCloseConnections: true,
     ajv: {
@@ -124,6 +135,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     onChange: () => eventBus.publish({ type: 'devices:changed' })
   })
   const deviceConnections = new DeviceConnections(devices)
+  // Set after the access hook exists, because the registry needs the listening server address.
+  let agentRegistry: AgentSessionRegistry | undefined
   devices.removeExpired()
   const sweep = setInterval(() => devices.removeExpired(), DEVICE_SWEEP_MS)
   sweep.unref()
@@ -154,7 +167,20 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         'onRequest',
         createAccessHook({
           devices,
-          allowedHosts: new AllowedHosts(options.allowedHosts)
+          allowedHosts: new AllowedHosts(options.allowedHosts),
+          authorizeArtifactAgent(request, reply) {
+            const id = agentRegistry?.authenticateArtifactKey(
+              request.headers.authorization
+            )
+            if (!id || !agentRegistry) {
+              throw new ForbiddenError('Artifact session access denied.')
+            }
+            const release = agentRegistry.trackArtifactRequest(id, () =>
+              reply.raw.destroy()
+            )
+            reply.raw.once('finish', release)
+            reply.raw.once('close', release)
+          }
         })
       )
     })
@@ -249,9 +275,23 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   if (options.agentPresets) {
     const registry = createSessionRegistry({
       presets: options.agentPresets,
+      connections: deviceConnections,
+      artifactUrl: () => {
+        const address = app.server.address()
+        // Before listen there is no address; only tests that skip listen get here.
+        if (!address) return undefined
+        if (typeof address === 'string') {
+          throw new Error(
+            `Artifact tools need a TCP address, but the server listens on "${address}".`
+          )
+        }
+        return `${addressUrl(WILDCARD_LOOPBACK[address.address] ?? address.address, address.port)}/`
+      },
       repositoryPath,
       taskIds: sessionId => artifacts.definitions.assignment(sessionId).taskIds
     })
+    agentRegistry = registry
+    app.register(artifactAgentRoutes, { storage: artifacts, registry })
     artifacts.tasks.attachSessions(registry)
     app.register(agentRoutes, {
       notes,

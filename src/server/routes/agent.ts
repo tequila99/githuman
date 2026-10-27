@@ -135,7 +135,16 @@ export async function agentRoutes(
       }
 
       // The agent starts in the background; failure shows up as a closed session.
-      const session = registry.create(presetId, reviewId ?? null, name)
+      const deviceId =
+        request.access?.device.status === 'device'
+          ? request.access.device.device.id
+          : undefined
+      const session = registry.create(
+        presetId,
+        reviewId ?? null,
+        name,
+        deviceId
+      )
       reply.code(201)
       return session.info()
     }

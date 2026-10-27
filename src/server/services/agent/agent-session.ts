@@ -3,6 +3,7 @@ import {
   AgentSessionStateError,
   AgentConfigError
 } from '../../errors/agents.ts'
+import { ARTIFACT_AGENT_KEY_ENV } from '../../../shared/artifacts/mcp-constants.ts'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
@@ -60,6 +61,8 @@ export interface AgentSessionOptions {
   /** How many events a session keeps for late subscribers. */
   bufferLimit?: number
   taskIds?: (sessionId: string) => string[]
+  /** Trusted server configuration; never populated from an HTTP request. */
+  mcpServers?: acp.McpServer[] | ((sessionId: string) => acp.McpServer[])
 }
 
 interface PendingPermission {
@@ -104,6 +107,7 @@ export class AgentSession {
   #image = false
   #config: AgentConfigOption[] = []
   #stderrTail = ''
+  #mcpSecrets: string[] = []
   /** Settles when the agent process has exited. */
   #exited: Promise<unknown> = Promise.resolve()
   #ownEventId = 0
@@ -172,7 +176,7 @@ export class AgentSession {
     } catch (error) {
       // An exit during the start already reported itself (`#onExit`).
       if (this.#error === null && !this.#closing) {
-        const message = errorMessage(error)
+        const message = this.#redact(errorMessage(error))
         this.#error = message
         this.#emit({ type: 'error', message })
       }
@@ -191,7 +195,9 @@ export class AgentSession {
     this.#exited = new Promise(resolve => child.once('exit', resolve))
     child.stderr.setEncoding('utf-8')
     child.stderr.on('data', (chunk: string) => {
-      this.#stderrTail = (this.#stderrTail + chunk).slice(-STDERR_TAIL_CHARS)
+      this.#stderrTail = this.#redact(this.#stderrTail + chunk).slice(
+        -STDERR_TAIL_CHARS
+      )
     })
     // Swallow stdin EPIPE after the agent died; the closed connection reports it.
     child.stdin.on('error', () => {})
@@ -263,11 +269,22 @@ export class AgentSession {
     this.#embeddedContext = prompt?.embeddedContext === true
     this.#image = prompt?.image === true
 
+    const mcpServers =
+      typeof this.#options.mcpServers === 'function'
+        ? this.#options.mcpServers(this.id)
+        : (this.#options.mcpServers ?? [])
+    this.#mcpSecrets = mcpServers.flatMap(server =>
+      'env' in server
+        ? server.env
+            .filter(entry => entry.name === ARTIFACT_AGENT_KEY_ENV)
+            .map(entry => entry.value)
+        : []
+    )
     const created = await connection.agent.request(
       acp.methods.agent.session.new,
       {
         cwd: this.#options.cwd,
-        mcpServers: []
+        mcpServers
       }
     )
     this.#acpSessionId = created.sessionId
@@ -316,7 +333,9 @@ export class AgentSession {
       )
       this.#setConfig(mapConfigOptions(response.configOptions))
     } catch (error) {
-      throw new AgentSessionError(errorMessage(error), { cause: error })
+      throw new AgentSessionError(this.#redact(errorMessage(error)), {
+        cause: error
+      })
     }
   }
 
@@ -356,8 +375,16 @@ export class AgentSession {
     this.#markClosed()
   }
 
+  // Hides the session key in errors and stderr. Messages that the agent itself writes stay as they are.
+  #redact(text: string): string {
+    for (const secret of this.#mcpSecrets) {
+      text = text.replaceAll(secret, '[redacted]')
+    }
+    return text
+  }
+
   #exitMessage(code: number | null, signal: NodeJS.Signals | null): string {
-    const tail = this.#stderrTail.trim()
+    const tail = this.#redact(this.#stderrTail.trim())
     return (
       `Agent exited (${signal ?? `code ${code}`})` +
       (tail === '' ? '' : `: ${tail.slice(-400)}`)
@@ -421,7 +448,10 @@ export class AgentSession {
         ])
       }
       if (!this.#isClosed() && this.#error === null) {
-        this.#emit({ type: 'error', message: errorMessage(error) })
+        this.#emit({
+          type: 'error',
+          message: this.#redact(errorMessage(error))
+        })
       }
     } finally {
       // A request still open once the turn is over (it ended in an error, say)
@@ -449,7 +479,9 @@ export class AgentSession {
     } catch (error) {
       // The connection closed since the check above: the turn is over anyway.
       if (!this.#isClosed()) {
-        throw new AgentSessionError(errorMessage(error), { cause: error })
+        throw new AgentSessionError(this.#redact(errorMessage(error)), {
+          cause: error
+        })
       }
     }
   }

@@ -99,6 +99,13 @@ pnpm run build        # tsc (server) + quasar build (web) → dist/
   закрывают их синхронно. Фронтенд при потере доступа делает
   `location.reload()`. Без TLS cookie устройства перехватывается в сети —
   TLS отдельным ADR. Пароли, JWT и роли не добавлять без ADR.
+- **MCP артефактов** (ADR 0096): stdio CLI вызывает существующий HTTP
+  `POST /api/agent/artifacts/:operation`; отдельного IPC нет. Только этот
+  matched route/method принимает ключ агентской сессии вместо user RequestAccess.
+  Host/Origin проверяются; bridge требует ключ и на loopback. Ключ не работает
+  на других API. Actor назначает сервер. Закрытие сессии и отзыв устройства
+  отзывают ключ. Grants и protected commands относятся к 0092. Схемы операций —
+  `src/shared/artifact-tools/schemas.ts`; произвольные URL/команды в tools запрещены.
 - **Git-команды только через `execFile`**, никогда `exec`/`shell: true` —
   избегает shell-инъекции по построению. Любой пользовательский ввод,
   идущий в `git`-аргументы (ref/base/from/to), обязан пройти
