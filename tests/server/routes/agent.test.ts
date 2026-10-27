@@ -929,7 +929,8 @@ test('GET /api/agent/sessions lists the active session so a reloaded page can re
       status: 'ready',
       reviewId: null,
       autoApprove: false,
-      error: null
+      error: null,
+      taskIds: []
     }
   ])
 })

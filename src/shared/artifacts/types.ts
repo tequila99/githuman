@@ -6,7 +6,10 @@ import type {
   ArtifactEventSchema,
   ArtifactListSchema,
   ArtifactHistorySchema,
-  ArtifactContentSchema
+  ArtifactContentSchema,
+  ArtifactRelationSchema,
+  ArtifactChangeSetSchema,
+  GraphIssueSchema
 } from './schemas.ts'
 
 export type ArtifactActor = Static<typeof ArtifactActorSchema>
@@ -16,3 +19,7 @@ export type ArtifactEvent = Static<typeof ArtifactEventSchema>
 export type ArtifactList = Static<typeof ArtifactListSchema>
 export type ArtifactHistory = Static<typeof ArtifactHistorySchema>
 export type ArtifactContent = Static<typeof ArtifactContentSchema>
+
+export type ArtifactRelation = Static<typeof ArtifactRelationSchema>
+export type ArtifactChangeSet = Static<typeof ArtifactChangeSetSchema>
+export type GraphIssue = Static<typeof GraphIssueSchema>

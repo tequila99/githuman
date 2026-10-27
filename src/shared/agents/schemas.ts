@@ -202,6 +202,12 @@ export const AgentSessionStatusSchema = Type.Union(
 export const AgentSessionInfoSchema = Type.Object(
   {
     id: Type.String({ description: 'Chat session id.' }),
+    taskIds: Type.Optional(
+      Type.Array(Type.String(), {
+        description:
+          'Persistent task identifiers assigned by the server registry.'
+      })
+    ),
     presetId: Type.String({ description: 'Preset of the agent.' }),
     name: Type.String({ description: 'Chat name in the UI.' }),
     status: AgentSessionStatusSchema,

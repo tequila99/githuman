@@ -1,0 +1,57 @@
+import {
+  ArtifactConflictError,
+  ArtifactInputError
+} from '../errors/artifacts.ts'
+
+export function artifactPage<T>(
+  items: T[],
+  options: {
+    storeId: string
+    epoch: number
+    query: string
+    limit?: number
+    cursor?: string
+  }
+) {
+  const { storeId, epoch, query, cursor } = options
+  const limit = options.limit ?? 50
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    throw new ArtifactInputError('Invalid page size.')
+  }
+  let offset = 0
+  if (cursor) {
+    let data: {
+      storeId?: unknown
+      epoch?: unknown
+      query?: unknown
+      offset?: unknown
+    }
+    try {
+      data = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'))
+    } catch {
+      throw new ArtifactInputError('Invalid page cursor.')
+    }
+    if (
+      !data ||
+      data.storeId !== storeId ||
+      data.query !== query ||
+      typeof data.offset !== 'number' ||
+      !Number.isSafeInteger(data.offset) ||
+      data.offset < 0
+    ) {
+      throw new ArtifactInputError('Invalid page cursor.')
+    }
+    if (data.epoch !== epoch) {
+      throw new ArtifactConflictError('Store changed. Restart pagination.')
+    }
+    offset = data.offset
+  }
+  const page = items.slice(offset, offset + limit)
+  const nextCursor =
+    offset + limit < items.length
+      ? Buffer.from(
+          JSON.stringify({ storeId, epoch, query, offset: offset + limit })
+        ).toString('base64url')
+      : null
+  return { storeId, storeEpoch: epoch, items: page, nextCursor }
+}

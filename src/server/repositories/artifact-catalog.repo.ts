@@ -1,3 +1,4 @@
+import { normalizeArtifact } from '../../shared/artifacts/normalize.ts'
 import { withTransaction, type SyncCallback } from '../db/transaction.ts'
 import { isSqliteBusyError } from '../db/sqlite-error.ts'
 import { randomUUID } from 'node:crypto'
@@ -112,7 +113,9 @@ export class ArtifactCatalogRepository {
         'SELECT snapshot_json FROM artifact_current WHERE store_id=? AND artifact_id=?'
       )
       .get(this.storeId, id) as { snapshot_json: string } | undefined
-    return row ? (JSON.parse(row.snapshot_json) as Artifact) : undefined
+    return row
+      ? normalizeArtifact(JSON.parse(row.snapshot_json) as Artifact)
+      : undefined
   }
 
   list(limit: number, after?: { createdAt: string; id: string }): Artifact[] {
@@ -128,7 +131,9 @@ export class ArtifactCatalogRepository {
         after?.id ?? '',
         limit
       ) as { snapshot_json: string }[]
-    return rows.map(row => JSON.parse(row.snapshot_json) as Artifact)
+    return rows.map(row =>
+      normalizeArtifact(JSON.parse(row.snapshot_json) as Artifact)
+    )
   }
 
   history(id: string, afterSeq: number, limit: number): ArtifactEvent[] {
@@ -270,7 +275,13 @@ export class ArtifactCatalogRepository {
         artifact.metadataVersion === 1 ? null : artifact.metadataVersion - 1,
       afterVersion: artifact.metadataVersion,
       createdAt: artifact.metadataUpdatedAt,
-      metadata: { title: artifact.title, tags: artifact.tags }
+      metadata: {
+        title: artifact.title,
+        tags: artifact.tags,
+        typeId: artifact.typeId,
+        taskIds: artifact.taskIds,
+        relations: artifact.relations
+      }
     }
     const snapshot = JSON.stringify(artifact)
     this.db
@@ -282,7 +293,7 @@ export class ArtifactCatalogRepository {
         requestId,
         snapshot
       )
-    const inserted = this.db
+    this.db
       .prepare(
         'INSERT INTO artifact_events(store_id,artifact_id,request_id,data_json) VALUES(?,?,?,?)'
       )
@@ -291,11 +302,30 @@ export class ArtifactCatalogRepository {
       .prepare(`INSERT INTO artifact_current VALUES(?,?,?,?) ON CONFLICT(store_id,artifact_id)
       DO UPDATE SET version=excluded.version,snapshot_json=excluded.snapshot_json`)
       .run(this.storeId, artifact.id, artifact.metadataVersion, snapshot)
+    this.recordChange('artifact', artifact.id, requestId)
+  }
+
+  recordChange(kind: string, id: string, requestId: string): void {
+    const inserted = this.db
+      .prepare(
+        'INSERT INTO artifact_store_changes(store_id,entity_kind,entity_id,request_id) VALUES(?,?,?,?)'
+      )
+      .run(this.storeId, kind, id, requestId)
     this.db
       .prepare(
         'UPDATE artifact_store_epochs SET store_epoch=? WHERE store_id=?'
       )
       .run(Number(inserted.lastInsertRowid), this.storeId)
+  }
+
+  all(): Artifact[] {
+    return (
+      this.db
+        .prepare(
+          'SELECT snapshot_json FROM artifact_current WHERE store_id=? ORDER BY artifact_id'
+        )
+        .all(this.storeId) as { snapshot_json: string }[]
+    ).map(row => normalizeArtifact(JSON.parse(row.snapshot_json) as Artifact))
   }
 
   rebuild(): void {
@@ -309,7 +339,7 @@ export class ArtifactCatalogRepository {
         FROM artifact_metadata_versions n WHERE n.store_id=v.store_id AND n.artifact_id=v.artifact_id)`)
         .run(this.storeId)
       this.db
-        .prepare(`INSERT INTO artifact_store_epochs VALUES(?,(SELECT COALESCE(MAX(seq),0) FROM artifact_events WHERE store_id=?))
+        .prepare(`INSERT INTO artifact_store_epochs VALUES(?,(SELECT COALESCE(MAX(seq),0) FROM artifact_store_changes WHERE store_id=?))
         ON CONFLICT(store_id) DO UPDATE SET store_epoch=excluded.store_epoch`)
         .run(this.storeId, this.storeId)
     })

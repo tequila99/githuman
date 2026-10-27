@@ -1,3 +1,11 @@
+import { ArtifactTypeService } from './artifact-type.service.ts'
+import { TaskService } from './task.service.ts'
+import { ArtifactGraphService } from './artifact-graph.service.ts'
+import { artifactIssues } from './artifact-graph-validation.ts'
+import { ArtifactGraphRepository } from '../repositories/artifact-graph.repo.ts'
+import { TaskRepository } from '../repositories/task.repo.ts'
+import { normalizeArtifact } from '../../shared/artifacts/normalize.ts'
+import { ArtifactGraphFields } from '../../shared/artifacts/schemas.ts'
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { stringify } from 'yaml'
@@ -8,7 +16,8 @@ import type {
   ArtifactContent,
   ArtifactHistory,
   ArtifactList,
-  ArtifactMetadataInput
+  ArtifactMetadataInput,
+  ArtifactRelation
 } from '../../shared/artifacts/types.ts'
 import {
   ArtifactActorSchema,
@@ -62,6 +71,7 @@ export interface CreateArtifactInput {
   requestId: string
   body: string
   metadata: ArtifactMetadataInput
+  revisionOf?: string[]
 }
 
 // Fix the property order so equal identities give equal payload hashes.
@@ -69,8 +79,47 @@ function canonicalActor(actor: ArtifactActor): ArtifactActor {
   return { kind: actor.kind, id: actor.id }
 }
 
+// Compare code units, not locale rules, so hashes do not depend on the locale.
+function compareText(left: string, right: string): number {
+  if (left === right) return 0
+  return left < right ? -1 : 1
+}
+
+// Task and relation lists are sets: their order must not change a request hash.
+function sortedTaskIds(taskIds: readonly string[]): string[] {
+  return [...taskIds].sort(compareText)
+}
+
+function sortedRelations(relations: readonly ArtifactRelation[]) {
+  return relations
+    .map(relation => ({ kind: relation.kind, targetId: relation.targetId }))
+    .sort((left, right) =>
+      compareText(
+        `${left.kind}:${left.targetId}`,
+        `${right.kind}:${right.targetId}`
+      )
+    )
+}
+
+function graphPayload(metadata: ArtifactMetadataInput) {
+  return {
+    ...(metadata.typeId === undefined ? {} : { typeId: metadata.typeId }),
+    ...(metadata.taskIds === undefined
+      ? {}
+      : { taskIds: sortedTaskIds(metadata.taskIds) }),
+    ...(metadata.relations === undefined
+      ? {}
+      : { relations: sortedRelations(metadata.relations) })
+  }
+}
+
 export class ArtifactStorageService {
   readonly files: ArtifactFilesRepository
+  readonly types: ArtifactTypeService
+  readonly tasks: TaskService
+  readonly graph: ArtifactGraphService
+  readonly graphRepository: ArtifactGraphRepository
+  readonly definitions: TaskRepository
   readonly catalog: ArtifactCatalogRepository
   private readonly owner = randomUUID()
   private readonly options: ArtifactStorageOptions
@@ -89,6 +138,17 @@ export class ArtifactStorageService {
       this.files.repositoryPath,
       options.prefix
     )
+    this.definitions = new TaskRepository(options.db, this.storeId)
+    const definitions = {
+      repository: this.definitions,
+      catalog: this.catalog,
+      onChange: () => this.pollChanges(),
+      now: this.now
+    }
+    this.types = new ArtifactTypeService(definitions)
+    this.tasks = new TaskService(definitions)
+    this.graphRepository = new ArtifactGraphRepository(options.db, this.catalog)
+    this.graph = new ArtifactGraphService(this)
     this.observedEpoch = this.catalog.epoch()
   }
 
@@ -141,10 +201,13 @@ export class ArtifactStorageService {
       status: artifact.status,
       created_at: artifact.createdAt,
       metadata_updated_at: artifact.createdAt,
-      task_ids: [],
+      task_ids: artifact.taskIds ?? [],
       tags: artifact.tags,
-      relations: [],
-      revision_of: []
+      relations: (artifact.relations ?? []).map(relation => ({
+        kind: relation.kind,
+        target_id: relation.targetId
+      })),
+      revision_of: artifact.revisionOf ?? []
     })
     return Buffer.from(`---\n${header}---\n${body}`, 'utf8')
   }
@@ -152,6 +215,9 @@ export class ArtifactStorageService {
   create(input: CreateArtifactInput, suppliedActor: ArtifactActor): Artifact {
     this.validate(input.requestId, input.metadata, suppliedActor)
     const actor = canonicalActor(suppliedActor)
+    if (!Value.Check(ArtifactGraphFields.revisionOf, input.revisionOf ?? [])) {
+      throw new ArtifactInputError('Invalid revision lineage.')
+    }
     if (typeof input.body !== 'string' || input.body.includes('\0')) {
       throw new ArtifactInputError(
         'Artifact body must be valid UTF-8 text without NUL.'
@@ -169,10 +235,15 @@ export class ArtifactStorageService {
         body: input.body,
         title: input.metadata.title,
         tags: input.metadata.tags,
+        ...graphPayload(input.metadata),
+        ...(input.revisionOf === undefined
+          ? {}
+          : { revisionOf: input.revisionOf }),
         actor
       })
     )
     const operation = this.catalog.transaction(() => {
+      this.definitions.assertArtifactRequest(input.requestId)
       const previous = this.catalog.operation(input.requestId)
       if (previous) {
         this.checkReplay(previous, payloadHash)
@@ -198,9 +269,13 @@ export class ArtifactStorageService {
         metadataUpdatedAt: now,
         title: input.metadata.title,
         tags: [...input.metadata.tags],
-        typeId: 'generic',
+        typeId: input.metadata.typeId ?? 'generic',
+        taskIds: [...(input.metadata.taskIds ?? [])],
+        relations: structuredClone(input.metadata.relations ?? []),
+        revisionOf: [...(input.revisionOf ?? [])],
         status: 'draft'
       }
+      this.validateGraph(artifact)
       const content = this.document(artifact, input.body)
       if (content.length > MAX_ARTIFACT_BYTES) throw new ArtifactTooLargeError()
       const headerBytes = content.length - Buffer.byteLength(input.body)
@@ -240,7 +315,7 @@ export class ArtifactStorageService {
         operation.data.artifact.sha256,
         operation.data.artifact.bytes
       )
-      return operation.data.artifact
+      return normalizeArtifact(operation.data.artifact)
     }
     this.checkpoint('reserved', operation.data)
     const content = this.document(operation.data.artifact, input.body)
@@ -311,8 +386,9 @@ export class ArtifactStorageService {
       this.catalog.assertOwner(operation.requestId, this.owner, this.now())
       this.files.verify(data.fileName, artifact.sha256, artifact.bytes)
       this.catalog.insertArtifact(data)
+      this.graphRepository.appendLineage(normalizeArtifact(artifact))
       this.catalog.appendMetadata(
-        artifact,
+        normalizeArtifact(artifact),
         operation.requestId,
         data.actor,
         'created'
@@ -327,7 +403,7 @@ export class ArtifactStorageService {
     this.checkpoint('after_commit', data)
     this.files.removeTemp(data.tempName)
     this.pollChanges()
-    return artifact
+    return normalizeArtifact(artifact)
   }
 
   recover(cleanupCommitted = true): {
@@ -599,14 +675,16 @@ export class ArtifactStorageService {
         expectedVersion: input.expectedVersion,
         title: input.metadata.title,
         tags: input.metadata.tags,
+        ...graphPayload(input.metadata),
         actor
       })
     )
     const result = this.catalog.transaction(() => {
+      this.definitions.assertArtifactRequest(input.requestId)
       const existing = this.catalog.operation(input.requestId)
       if (existing) {
         this.checkReplay(existing, payloadHash)
-        return existing.data.artifact
+        return normalizeArtifact(existing.data.artifact)
       }
       const previous = this.get(id)
       if (previous.metadataVersion !== input.expectedVersion) {
@@ -617,9 +695,26 @@ export class ArtifactStorageService {
         ...previous,
         title: input.metadata.title,
         tags: [...input.metadata.tags],
+        typeId: input.metadata.typeId ?? previous.typeId,
+        taskIds: [...(input.metadata.taskIds ?? previous.taskIds)],
+        relations: structuredClone(
+          input.metadata.relations ?? previous.relations
+        ),
         metadataVersion: previous.metadataVersion + 1,
         metadataUpdatedAt: new Date(this.now()).toISOString()
       }
+      if (
+        previous.status === 'accepted' &&
+        (JSON.stringify(sortedRelations(updated.relations)) !==
+          JSON.stringify(sortedRelations(previous.relations)) ||
+          JSON.stringify(sortedTaskIds(updated.taskIds)) !==
+            JSON.stringify(sortedTaskIds(previous.taskIds)))
+      ) {
+        throw new ArtifactConflictError(
+          'Active graph changes require a validated change set.'
+        )
+      }
+      this.validateGraph(updated, previous)
       this.catalog.reserve(
         {
           requestId: input.requestId,
@@ -650,6 +745,40 @@ export class ArtifactStorageService {
     })
     this.pollChanges()
     return result
+  }
+
+  // A missing reference in the request body is bad input, not a missing resource.
+  private reference<T>(read: () => T, kind: string, id: string): T {
+    try {
+      return read()
+    } catch (error) {
+      if (error instanceof ArtifactNotFoundError) {
+        throw new ArtifactInputError(`Unknown artifact ${kind} "${id}".`)
+      }
+      throw error
+    }
+  }
+
+  private validateGraph(artifact: Artifact, previous?: Artifact): void {
+    const type = this.reference(
+      () => this.types.get(artifact.typeId),
+      'type',
+      artifact.typeId
+    )
+    if (!type.active && (!previous || previous.typeId !== artifact.typeId)) {
+      throw new ArtifactInputError('Artifact type is inactive.')
+    }
+    for (const taskId of artifact.taskIds) {
+      this.reference(() => this.tasks.get(taskId), 'task', taskId)
+    }
+    const issues = artifactIssues(
+      artifact,
+      id => this.catalog.get(id),
+      this.storeId
+    )
+    if (issues.length) {
+      throw new ArtifactInputError(issues.map(issue => issue.message).join(' '))
+    }
   }
 
   private assertLimit(limit: number): void {

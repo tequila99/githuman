@@ -59,6 +59,7 @@ export interface AgentSessionOptions {
   nextEventId?: () => number
   /** How many events a session keeps for late subscribers. */
   bufferLimit?: number
+  taskIds?: (sessionId: string) => string[]
 }
 
 interface PendingPermission {
@@ -137,6 +138,9 @@ export class AgentSession {
   info(): AgentSessionInfo {
     return {
       id: this.id,
+      ...(this.#options.taskIds
+        ? { taskIds: this.#options.taskIds(this.id) }
+        : {}),
       presetId: this.presetId,
       name: this.name,
       status: this.#status,

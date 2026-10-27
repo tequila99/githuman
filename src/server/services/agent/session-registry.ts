@@ -27,6 +27,7 @@ export type AgentStreamMessage =
 export type AgentStreamListener = (message: AgentStreamMessage) => void
 
 export interface AgentSessionRegistry {
+  notifyTasksChanged: () => void
   listPresets: () => AgentPresetInfo[]
   /**
    * Registers a session and starts its agent in the background: the session is
@@ -53,6 +54,7 @@ export function createSessionRegistry(options: {
   repositoryPath: string
   /** Per-session event buffer size (tests shrink it to provoke gaps). */
   bufferLimit?: number
+  taskIds?: (sessionId: string) => string[]
 }): AgentSessionRegistry {
   const sessions = new Map<string, AgentSession>()
   const unsubscribeSession = new Map<string, () => void>()
@@ -81,6 +83,7 @@ export function createSessionRegistry(options: {
   }
 
   return {
+    notifyTasksChanged: () => broadcast({ type: 'sessions' }),
     listPresets: () => options.presets.map(describePreset),
     create(presetId, reviewId, name) {
       const preset = options.presets.find(p => p.id === presetId)
@@ -101,6 +104,7 @@ export function createSessionRegistry(options: {
         ),
         cwd: options.repositoryPath,
         reviewId,
+        ...(options.taskIds ? { taskIds: options.taskIds } : {}),
         nextEventId: () => ++lastEventId,
         ...(options.bufferLimit === undefined
           ? {}
@@ -121,7 +125,7 @@ export function createSessionRegistry(options: {
       return session
     },
     get: id => sessions.get(id),
-    list: () => [...sessions.values()].map(s => s.info()),
+    list: () => [...sessions.values()].map(session => session.info()),
     close(id) {
       const session = sessions.get(id)
       if (!session) {

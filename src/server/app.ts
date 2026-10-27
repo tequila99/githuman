@@ -1,3 +1,4 @@
+import { artifactDefinitionRoutes } from './routes/artifact-definitions.ts'
 import { DEFAULT_DB_PREFIX } from '../shared/app/storage-constants.ts'
 import { artifactRoutes } from './routes/artifacts.ts'
 import { ArtifactStorageService } from './services/artifact-storage.service.ts'
@@ -201,6 +202,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       eventBus
     })
   app.register(artifactRoutes, { service: artifacts })
+  app.register(artifactDefinitionRoutes, { storage: artifacts })
   const artifactMaintenance = new ArtifactMaintenanceService({
     storage: artifacts,
     onError: (error, phase) => {
@@ -245,12 +247,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
 
   if (options.agentPresets) {
+    const registry = createSessionRegistry({
+      presets: options.agentPresets,
+      repositoryPath,
+      taskIds: sessionId => artifacts.definitions.assignment(sessionId).taskIds
+    })
+    artifacts.tasks.attachSessions(registry)
     app.register(agentRoutes, {
       notes,
-      registry: createSessionRegistry({
-        presets: options.agentPresets,
-        repositoryPath
-      }),
+      registry,
       db,
       repositoryPath,
       eventBus,

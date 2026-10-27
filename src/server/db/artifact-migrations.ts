@@ -58,7 +58,14 @@ export function applyArtifactMigrations(db: DatabaseSync): void {
       expires_at INTEGER NOT NULL, PRIMARY KEY(store_id,request_id)
     );
   `)
-  for (const [table, keys] of Object.entries(IMMUTABLE_KEYS)) {
+  protectArtifactTables(db, IMMUTABLE_KEYS)
+}
+
+export function protectArtifactTables(
+  db: DatabaseSync,
+  tables: Record<string, string>
+): void {
+  for (const [table, keys] of Object.entries(tables)) {
     // REPLACE can bypass DELETE triggers when recursive triggers are disabled.
     // The rowid test stops REPLACE with an explicit rowid in tables without an
     // integer primary key. SQLite does not define NEW.rowid when it assigns the rowid.
