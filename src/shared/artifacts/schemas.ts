@@ -132,6 +132,9 @@ export const ArtifactChangeSetSchema = Type.Object(
     }),
     command: Type.Union(
       [
+        Type.Literal('submit_review'),
+        Type.Literal('return_to_draft'),
+        Type.Literal('reject'),
         Type.Literal('accept'),
         Type.Literal('archive'),
         Type.Literal('delete'),
@@ -860,7 +863,7 @@ export const ArtifactReviewDecisionBody = Type.Union(
   ],
   {
     description:
-      'Structured user decision; agent grants are implemented in stage 0092.'
+      'Structured scoped user decision; agent execution requires a separate grant.'
   }
 )
 
@@ -1121,5 +1124,222 @@ export const ArtifactReviewListSchema = Type.Object(
   {
     additionalProperties: false,
     description: 'Complete review thread page and blocker summary.'
+  }
+)
+
+// Lifecycle commands share contracts across HTTP, MCP and persisted validation history.
+export const ArtifactChangeSetProposeBody = Type.Object(
+  {
+    requestId: Type.String({
+      minLength: 1,
+      maxLength: 128,
+      description: 'Idempotent proposal request.'
+    }),
+    id: Type.Optional(ArtifactParams.properties.id),
+    expectedVersion: Type.Optional(
+      Type.Integer({ minimum: 1, description: 'Previous proposal version.' })
+    ),
+    changeSet: ArtifactChangeSetSchema
+  },
+  {
+    additionalProperties: false,
+    description: 'Create or revise an immutable change set proposal.'
+  }
+)
+export const ArtifactValidationPrepareBody = Type.Object(
+  {
+    changeSetId: ArtifactParams.properties.id,
+    version: Type.Integer({
+      minimum: 1,
+      description: 'Exact proposal version.'
+    })
+  },
+  {
+    additionalProperties: false,
+    description: 'Prepare a complete validation manifest.'
+  }
+)
+export const ArtifactValidationStartBody = Type.Object(
+  {
+    presetId: Type.String({
+      minLength: 1,
+      maxLength: 128,
+      description: 'Configured validator preset.'
+    })
+  },
+  {
+    additionalProperties: false,
+    description: 'Start a bounded validation job.'
+  }
+)
+export const ArtifactValidationFindingSchema = Type.Object(
+  {
+    artifactId: ArtifactParams.properties.id,
+    quote: Type.String({
+      maxLength: 65536,
+      description: 'Evidence quoted from the manifest text.'
+    }),
+    message: Type.String({
+      minLength: 1,
+      maxLength: 8000,
+      description: 'Finding explanation.'
+    })
+  },
+  { additionalProperties: false, description: 'A cited validation finding.' }
+)
+export const ArtifactValidationSubmitBody = Type.Object(
+  {
+    verdict: Type.Union(
+      [
+        Type.Literal('pass'),
+        Type.Literal('conflict'),
+        Type.Literal('incomplete')
+      ],
+      { description: 'Validator outcome.' }
+    ),
+    findings: Type.Array(ArtifactValidationFindingSchema, {
+      maxItems: 100,
+      description: 'Cited findings.'
+    }),
+    resolutions: Type.Array(
+      Type.String({ maxLength: 8000, description: 'Resolution explanation.' }),
+      { maxItems: 100, description: 'How issues were addressed.' }
+    ),
+    report: Type.Optional(
+      Type.String({
+        maxLength: 131072,
+        description: 'Optional standalone draft Markdown report.'
+      })
+    )
+  },
+  {
+    additionalProperties: false,
+    description:
+      'Submit an outcome for the server-assigned manifest and session.'
+  }
+)
+export const ArtifactLifecycleCommitBody = Type.Object(
+  {
+    version: Type.Integer({
+      minimum: 1,
+      description: 'Exact change set version.'
+    }),
+    validationId: ArtifactParams.properties.id,
+    authorizationId: ArtifactParams.properties.id,
+    requestId: Type.String({
+      minLength: 1,
+      maxLength: 128,
+      description: 'Idempotent commit request.'
+    })
+  },
+  {
+    additionalProperties: false,
+    description: 'Commit a validated and authorized package atomically.'
+  }
+)
+export const ArtifactAuthorizationRequestBody = Type.Union(
+  [
+    Type.Object(
+      {
+        kind: Type.Literal('lifecycle', {
+          description: 'Lifecycle authorization.'
+        }),
+        changeSetId: ArtifactParams.properties.id,
+        version: Type.Integer({ minimum: 1, description: 'Proposal version.' }),
+        validationId: ArtifactParams.properties.id
+      },
+      {
+        additionalProperties: false,
+        description: 'Request permission for a validated package.'
+      }
+    ),
+    Type.Object(
+      {
+        kind: Type.Literal('review', {
+          description: 'Scoped review authorization without validation.'
+        }),
+        threadId: ArtifactParams.properties.id,
+        input: ArtifactReviewDecisionBody
+      },
+      {
+        additionalProperties: false,
+        description: 'Request permission for one scoped review action.'
+      }
+    )
+  ],
+  { description: 'A concrete action proposed for user confirmation.' }
+)
+export const ArtifactAuthorizationApproveBody = Type.Object(
+  {
+    sourceUserRequestId: Type.String({
+      minLength: 1,
+      maxLength: 128,
+      description: 'Structured user confirmation request.'
+    })
+  },
+  {
+    additionalProperties: false,
+    description: 'Approve the exact pending action.'
+  }
+)
+export const ArtifactLifecycleResultSchema = Type.Record(
+  Type.String(),
+  Type.Unknown(),
+  {
+    description:
+      'Complete lifecycle result including digests, versions, manifest or history pagination.'
+  }
+)
+
+export const ArtifactValidationReadBody = Type.Object(
+  {
+    key: Type.String({
+      minLength: 1,
+      maxLength: 64,
+      description: 'Artifact ID or review:threadId from the manifest.'
+    }),
+    offset: Type.Optional(
+      Type.Integer({ minimum: 0, description: 'Sequential UTF-8 byte offset.' })
+    )
+  },
+  {
+    additionalProperties: false,
+    description: 'Read and receipt one complete context chunk.'
+  }
+)
+export const ArtifactValidationReportBody = Type.Object(
+  {
+    body: Type.String({
+      maxLength: 131072,
+      description: 'Isolated draft Markdown report body.'
+    })
+  },
+  {
+    additionalProperties: false,
+    description: 'Save a standalone report without changing the manifest.'
+  }
+)
+export const ArtifactReviewExecuteBody = Type.Object(
+  {
+    authorizationId: ArtifactParams.properties.id,
+    action: ArtifactAuthorizationRequestBody.anyOf[1]
+  },
+  {
+    additionalProperties: false,
+    description: 'Execute one authorized review action.'
+  }
+)
+export const ArtifactValidationReportQuery = Type.Object(
+  {
+    offset: Type.Optional(
+      Type.Integer({
+        minimum: 0,
+        description: 'UTF-8 byte offset in the complete structured report.'
+      })
+    )
+  },
+  {
+    additionalProperties: false,
+    description: 'Read a bounded structured report chunk.'
   }
 )

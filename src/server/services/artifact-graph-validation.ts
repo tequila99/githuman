@@ -11,6 +11,9 @@ import { sha256Hex } from '../utils/hash.ts'
 const COMMAND_STATUS: Partial<
   Record<ArtifactChangeSet['command'], Artifact['status']>
 > = {
+  submit_review: 'in_review',
+  return_to_draft: 'draft',
+  reject: 'rejected',
   accept: 'accepted',
   archive: 'archived',
   delete: 'deleted',
@@ -257,7 +260,8 @@ export function canonicalChangeSet(
 
 export function previewArtifactChangeSet(
   current: readonly Artifact[],
-  input: ArtifactChangeSet
+  input: ArtifactChangeSet,
+  previouslySuperseded: ReadonlySet<string> = new Set()
 ) {
   const canonical = canonicalChangeSet(input)
   const nodes = new Map(current.map(artifact => [artifact.id, artifact]))
@@ -376,6 +380,19 @@ export function previewArtifactChangeSet(
         'invalid_transition',
         [node.id],
         `Transition ${node.status} to ${change.status} is not allowed.`
+      )
+    }
+    if (
+      canonical.subjectIds.includes(node.id) &&
+      ((canonical.command === 'restore' &&
+        !['archived', 'deleted'].includes(node.status)) ||
+        (canonical.command === 'return_to_draft' &&
+          !['in_review', 'rejected'].includes(node.status)))
+    ) {
+      error(
+        'invalid_transition',
+        [node.id],
+        'The command does not apply to the current status.'
       )
     }
     node.status = change.status
@@ -535,8 +552,7 @@ export function previewArtifactChangeSet(
           'Incorporated is allowed only as part of acceptance.'
         )
       }
-      node.status = 'superseded'
-      retired.add(node.id)
+      node.status = 'archived'
       for (const targetId of canonical.subjectIds) {
         includedIn.push({ artifactId: id, targetId })
       }
@@ -547,7 +563,7 @@ export function previewArtifactChangeSet(
       error(
         'invalid_supersession',
         [target.artifactId],
-        'Supersession must result from an accepted replacement, lineage or incorporation.'
+        'Supersession must result from an accepted replacement or lineage.'
       )
     }
     if (post.get(target.artifactId)?.status !== target.status) {
@@ -571,6 +587,18 @@ export function previewArtifactChangeSet(
     if (node.status === 'accepted') {
       for (const relation of node.relations) {
         if (
+          relation.kind === 'replaces' &&
+          !['superseded', 'archived', 'deleted'].includes(
+            post.get(relation.targetId)?.status ?? ''
+          )
+        ) {
+          error(
+            'active_replacement_target',
+            [node.id, relation.targetId],
+            'An accepted replacement requires an inactive predecessor.'
+          )
+        }
+        if (
           relation.kind === 'supplements' &&
           post.get(relation.targetId)?.status !== 'accepted'
         ) {
@@ -581,6 +609,22 @@ export function previewArtifactChangeSet(
           )
         }
       }
+    }
+  }
+  const replacements = new Map<string, string>()
+  for (const node of post.values()) {
+    if (node.status !== 'accepted') continue
+    for (const relation of node.relations) {
+      if (relation.kind !== 'replaces') continue
+      const previous = replacements.get(relation.targetId)
+      if (previous && previous !== node.id) {
+        error(
+          'competing_replacements',
+          [previous, node.id, relation.targetId],
+          'An artifact cannot have two active replacements.'
+        )
+      }
+      replacements.set(relation.targetId, node.id)
     }
   }
   errors.push(...graphIssues([...post.values()], canonical.storeId))
@@ -649,7 +693,8 @@ export function previewArtifactChangeSet(
   // Superseded documents can never be restored by editing a proposed status.
   for (const node of post.values()) {
     if (
-      nodes.get(node.id)?.status === 'superseded' &&
+      (nodes.get(node.id)?.status === 'superseded' ||
+        previouslySuperseded.has(node.id)) &&
       ['draft', 'in_review', 'accepted'].includes(node.status)
     ) {
       error(
@@ -680,7 +725,7 @@ function allowedTransition(
   from: Artifact['status'],
   to: Artifact['status']
 ): boolean {
-  if (from === to) return true
+  if (from === to) return false
   const transitions: Record<string, string[]> = {
     draft: ['in_review', 'archived', 'deleted'],
     in_review: ['draft', 'rejected', 'accepted', 'archived', 'deleted'],

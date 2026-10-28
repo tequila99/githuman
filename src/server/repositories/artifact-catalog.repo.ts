@@ -354,6 +354,14 @@ export class ArtifactCatalogRepository {
       .run(Number(inserted.lastInsertRowid), this.storeId)
   }
 
+  supersededArtifactIds(): Set<string> {
+    const rows = this.db
+      .prepare(`SELECT DISTINCT artifact_id FROM artifact_metadata_versions
+        WHERE store_id=? AND json_extract(snapshot_json, '$.status')='superseded'`)
+      .all(this.storeId) as { artifact_id: string }[]
+    return new Set(rows.map(row => row.artifact_id))
+  }
+
   all(): Artifact[] {
     return (
       this.db

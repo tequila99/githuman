@@ -382,6 +382,8 @@ export async function agentRoutes(
               event: 'agent',
               data: message.envelope
             })
+          } else if (message.type === 'artifact-actions') {
+            safeSend(reply.sse, { event: 'artifact-actions', data: {} })
           } else if (message.type === 'gap') {
             safeSend(reply.sse, {
               event: 'gap',

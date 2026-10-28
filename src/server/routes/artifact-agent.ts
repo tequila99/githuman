@@ -1,3 +1,4 @@
+import { artifactSessionId } from '../services/artifact-lifecycle.service.ts'
 import type { FastifyInstance } from 'fastify'
 import type { Static, TSchema } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
@@ -42,6 +43,140 @@ export async function artifactAgentRoutes(
     (input: unknown, actor: ArtifactActor) => unknown
   >([
     [
+      'change_sets.propose',
+      checked(ArtifactToolSchemas['change_sets.propose'], (p, a) =>
+        storage.lifecycle.propose(p, a)
+      )
+    ],
+    [
+      'change_sets.get',
+      checked(ArtifactToolSchemas['change_sets.get'], p =>
+        storage.lifecycle.get(p.id)
+      )
+    ],
+    [
+      'change_sets.commit',
+      checked(ArtifactToolSchemas['change_sets.commit'], ({ id, ...p }, a) =>
+        storage.lifecycle.commit(id, p, a)
+      )
+    ],
+    [
+      'validations.prepare',
+      checked(ArtifactToolSchemas['validations.prepare'], p =>
+        storage.lifecycle.jobs.get(
+          storage.lifecycle.prepare(p.changeSetId, p.version).id
+        )
+      )
+    ],
+    [
+      'validations.start',
+      checked(ArtifactToolSchemas['validations.start'], (p, a) =>
+        storage.lifecycle.jobs.start(p.id, p.presetId, undefined, a.id)
+      )
+    ],
+    [
+      'validations.report',
+      checked(ArtifactToolSchemas['validations.report'], p =>
+        storage.lifecycle.jobs.report(p.id, p.offset)
+      )
+    ],
+    [
+      'validations.history',
+      checked(ArtifactToolSchemas['validations.history'], p =>
+        storage.lifecycle.jobs.history(p.id, p.afterSeq, p.limit)
+      )
+    ],
+    [
+      'validations.get',
+      checked(ArtifactToolSchemas['validations.get'], p =>
+        storage.lifecycle.jobs.get(p.id)
+      )
+    ],
+    [
+      'validations.manifest',
+      checked(ArtifactToolSchemas['validations.manifest'], p =>
+        storage.lifecycle.jobs.manifest(p.id, p.limit, p.cursor)
+      )
+    ],
+    [
+      'validations.read',
+      checked(ArtifactToolSchemas['validations.read'], (p, a) =>
+        storage.lifecycle.jobs.read(p.id, a.id, p.key, p.offset)
+      )
+    ],
+    [
+      'validations.submit',
+      checked(ArtifactToolSchemas['validations.submit'], ({ id, ...p }, a) =>
+        storage.lifecycle.jobs.submit(id, a.id, p)
+      )
+    ],
+    [
+      'validations.create_report',
+      checked(ArtifactToolSchemas['validations.create_report'], (p, a) =>
+        storage.lifecycle.jobs.createReport(p.id, a.id, p.body)
+      )
+    ],
+    [
+      'actions.request',
+      checked(ArtifactToolSchemas['actions.request'], (p, a) =>
+        storage.lifecycle.authorization.request(p, artifactSessionId(a))
+      )
+    ],
+    [
+      'reviews.resolve',
+      checked(
+        ArtifactToolSchemas['reviews.resolve'],
+        ({ id, authorizationId, ...input }, actor) =>
+          storage.lifecycle.executeReview(
+            {
+              kind: 'review',
+              threadId: id,
+              input: { ...input, kind: 'resolved' }
+            },
+            authorizationId,
+            actor
+          )
+      )
+    ],
+    [
+      'reviews.reopen',
+      checked(
+        ArtifactToolSchemas['reviews.reopen'],
+        ({ id, authorizationId, ...input }, actor) =>
+          storage.lifecycle.executeReview(
+            {
+              kind: 'review',
+              threadId: id,
+              input: { ...input, kind: 'reopened' }
+            },
+            authorizationId,
+            actor
+          )
+      )
+    ],
+    [
+      'reviews.set_blocking',
+      checked(
+        ArtifactToolSchemas['reviews.set_blocking'],
+        ({ id, authorizationId, ...input }, actor) =>
+          storage.lifecycle.executeReview(
+            {
+              kind: 'review',
+              threadId: id,
+              input: { ...input, kind: 'blocking_changed' }
+            },
+            authorizationId,
+            actor
+          )
+      )
+    ],
+    [
+      'reviews.execute',
+      checked(ArtifactToolSchemas['reviews.execute'], (p, a) =>
+        storage.lifecycle.executeReview(p.action, p.authorizationId, a)
+      )
+    ],
+    [
       'artifacts.create',
       checked(ArtifactToolSchemas['artifacts.create'], (p, a) =>
         storage.create(p, a)
@@ -59,8 +194,10 @@ export async function artifactAgentRoutes(
     ],
     [
       'artifacts.get_content',
-      checked(ArtifactToolSchemas['artifacts.get_content'], p =>
-        storage.readContent(p.id, p.offset, p.limit)
+      checked(ArtifactToolSchemas['artifacts.get_content'], (p, a) =>
+        storage.lifecycle.jobs.isValidator(a.id)
+          ? storage.lifecycle.jobs.contentForSession(a.id, p.id, p.offset)
+          : storage.readContent(p.id, p.offset, p.limit)
       )
     ],
     [
@@ -204,6 +341,11 @@ export async function artifactAgentRoutes(
       if (!sessionId) {
         throw new ForbiddenError('Artifact session access denied.')
       }
+      storage.lifecycle.jobs.assertOperation(
+        sessionId,
+        request.params.operation,
+        request.body
+      )
       const operation = operations.get(request.params.operation)
       if (!operation) {
         throw new ArtifactInputError('Artifact operation is unavailable.')

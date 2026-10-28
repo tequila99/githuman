@@ -725,7 +725,7 @@ test('full replacement requires explicit decisions for every active supplement',
   )
   assert.equal(
     result.postState.find(node => node.id === supplement.id)!.status,
-    'superseded'
+    'archived'
   )
   assert.deepEqual(
     result.postState.find(node => node.id === nested.id)!.relations,
@@ -1322,4 +1322,114 @@ test('incremental write validation agrees with the full graph check', () => {
     checked > 100 && withIssues > 20 && withIssues < checked,
     `${checked}/${withIssues}`
   )
+})
+
+test('0092: incorporated supplements archive with inclusion audit instead of becoming superseded', () => {
+  const base = fixture('accepted')
+  const supplement = fixture('accepted', {
+    relations: [{ kind: 'supplements', targetId: base.id }]
+  })
+  const candidate = fixture('in_review', {
+    relations: [{ kind: 'replaces', targetId: base.id }]
+  })
+  const nodes = [base, supplement, candidate],
+    input = change(nodes, candidate)
+  input.supplementDispositions = [
+    { artifactId: supplement.id, disposition: 'incorporated' }
+  ]
+  const result = previewArtifactChangeSet(nodes, input)
+  assert.deepEqual(result.errors, [])
+  assert.equal(
+    result.postState.find(item => item.id === supplement.id)?.status,
+    'archived'
+  )
+  assert.deepEqual(result.includedIn, [
+    { artifactId: supplement.id, targetId: candidate.id }
+  ])
+  assert.equal(supplement.status, 'accepted')
+})
+
+test('0092: accepting two replacements for the same base in one package is rejected', () => {
+  const base = fixture('accepted')
+  const first = fixture('in_review', {
+    relations: [{ kind: 'replaces', targetId: base.id }]
+  })
+  const second = fixture('in_review', {
+    relations: [{ kind: 'replaces', targetId: base.id }]
+  })
+  const nodes = [base, first, second]
+  const input: ArtifactChangeSet = {
+    ...change(nodes, first),
+    subjectIds: [first.id, second.id],
+    targetStatuses: [
+      { artifactId: first.id, status: 'accepted' },
+      { artifactId: second.id, status: 'accepted' }
+    ]
+  }
+  assert.ok(
+    codes(previewArtifactChangeSet(nodes, input)).includes(
+      'competing_replacements'
+    )
+  )
+})
+
+test('0092: retired history cannot be bypassed by superseded to archived to deleted to draft', t => {
+  const { storage, create } = setup(t)
+  const artifact = create('retired')
+  for (const status of [
+    'in_review',
+    'accepted',
+    'superseded',
+    'archived',
+    'deleted'
+  ] as const) {
+    storage.catalog.transaction(() => {
+      const previous = storage.get(artifact.id)
+      storage.catalog.appendMetadata(
+        { ...previous, status, metadataVersion: previous.metadataVersion + 1 },
+        randomUUID(),
+        ACTOR,
+        'metadata_updated'
+      )
+    })
+  }
+  const current = storage.get(artifact.id)
+  const input: ArtifactChangeSet = {
+    ...change([current], current),
+    command: 'restore',
+    targetStatuses: [{ artifactId: current.id, status: 'draft' }]
+  }
+  const before = storage.catalog.epoch()
+  assert.ok(
+    codes(storage.graph.previewChangeSet(input)).includes('invalid_restore')
+  )
+  assert.equal(storage.get(artifact.id).status, 'deleted')
+  assert.equal(storage.catalog.epoch(), before)
+})
+
+test('0092: review commands and restore have distinct source statuses', () => {
+  const cases: [
+    Artifact['status'],
+    ArtifactChangeSet['command'],
+    Artifact['status'],
+    boolean
+  ][] = [
+    ['draft', 'submit_review', 'in_review', true],
+    ['in_review', 'reject', 'rejected', true],
+    ['in_review', 'return_to_draft', 'draft', true],
+    ['rejected', 'return_to_draft', 'draft', true],
+    ['archived', 'restore', 'draft', true],
+    ['deleted', 'restore', 'draft', true],
+    ['in_review', 'restore', 'draft', false],
+    ['archived', 'return_to_draft', 'draft', false],
+    ['rejected', 'submit_review', 'in_review', false]
+  ]
+  for (const [status, command, target, valid] of cases) {
+    const node = fixture(status)
+    const input = change([node], node)
+    input.command = command
+    input.targetStatuses = [{ artifactId: node.id, status: target }]
+    const result = previewArtifactChangeSet([node], input)
+    assert.equal(result.errors.length === 0, valid, `${status}: ${command}`)
+  }
 })

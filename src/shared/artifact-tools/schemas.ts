@@ -1,5 +1,16 @@
 import { Type } from '@sinclair/typebox'
 import {
+  ArtifactValidationReportQuery,
+  ArtifactChangeSetProposeBody,
+  ArtifactValidationPrepareBody,
+  ArtifactValidationStartBody,
+  ArtifactValidationSubmitBody,
+  ArtifactValidationReadBody,
+  ArtifactValidationReportBody,
+  ArtifactLifecycleCommitBody,
+  ArtifactAuthorizationRequestBody,
+  ArtifactReviewExecuteBody,
+  ArtifactReviewDecisionBody,
   ArtifactParams,
   ArtifactMetadataInputSchema,
   ArtifactListQuery,
@@ -23,6 +34,111 @@ import { MAX_ARTIFACT_BODY_BYTES } from '../artifacts/constants.ts'
 
 // Keep HTTP and MCP input contracts identical, including rejection of actor overrides.
 export const ArtifactToolSchemas = {
+  'change_sets.propose': ArtifactChangeSetProposeBody,
+  'change_sets.get': ArtifactParams,
+  'change_sets.commit': Type.Object(
+    { ...ArtifactParams.properties, ...ArtifactLifecycleCommitBody.properties },
+    {
+      additionalProperties: false,
+      description: 'Commit an authorized validated package.'
+    }
+  ),
+  'validations.prepare': ArtifactValidationPrepareBody,
+  'validations.start': Type.Object(
+    { ...ArtifactParams.properties, ...ArtifactValidationStartBody.properties },
+    {
+      additionalProperties: false,
+      description: 'Start a separate bounded validator.'
+    }
+  ),
+  'validations.get': ArtifactParams,
+  'validations.report': Type.Object(
+    {
+      ...ArtifactParams.properties,
+      ...ArtifactValidationReportQuery.properties
+    },
+    {
+      additionalProperties: false,
+      description: 'Read the complete structured report in chunks.'
+    }
+  ),
+  'validations.history': Type.Object(
+    { ...ArtifactParams.properties, ...ArtifactHistoryQuery.properties },
+    {
+      additionalProperties: false,
+      description: 'Read validation state history without truncation.'
+    }
+  ),
+  'validations.manifest': Type.Object(
+    { ...ArtifactParams.properties, ...DefinitionQuery.properties },
+    {
+      additionalProperties: false,
+      description: 'Read all manifest pages without truncation.'
+    }
+  ),
+  'validations.read': Type.Object(
+    { ...ArtifactParams.properties, ...ArtifactValidationReadBody.properties },
+    {
+      additionalProperties: false,
+      description: 'Read assigned context sequentially.'
+    }
+  ),
+  'validations.submit': Type.Object(
+    {
+      ...ArtifactParams.properties,
+      ...ArtifactValidationSubmitBody.properties
+    },
+    {
+      additionalProperties: false,
+      description: 'Submit the assigned structured validation report.'
+    }
+  ),
+  'validations.create_report': Type.Object(
+    {
+      ...ArtifactParams.properties,
+      ...ArtifactValidationReportBody.properties
+    },
+    {
+      additionalProperties: false,
+      description: 'Create an isolated validation report draft.'
+    }
+  ),
+  'actions.request': ArtifactAuthorizationRequestBody,
+  'reviews.execute': ArtifactReviewExecuteBody,
+  'reviews.resolve': Type.Object(
+    {
+      ...ArtifactParams.properties,
+      ...Type.Omit(ArtifactReviewDecisionBody.anyOf[1], ['kind']).properties,
+      authorizationId: ArtifactParams.properties.id
+    },
+    {
+      additionalProperties: false,
+      description: 'Resolve one explicitly authorized review scope.'
+    }
+  ),
+  'reviews.reopen': Type.Object(
+    {
+      ...ArtifactParams.properties,
+      ...Type.Omit(ArtifactReviewDecisionBody.anyOf[2], ['kind']).properties,
+      authorizationId: ArtifactParams.properties.id
+    },
+    {
+      additionalProperties: false,
+      description: 'Reopen one explicitly authorized review scope.'
+    }
+  ),
+  'reviews.set_blocking': Type.Object(
+    {
+      ...ArtifactParams.properties,
+      ...Type.Omit(ArtifactReviewDecisionBody.anyOf[0], ['kind']).properties,
+      authorizationId: ArtifactParams.properties.id
+    },
+    {
+      additionalProperties: false,
+      description: 'Change blocking with one explicit scoped authorization.'
+    }
+  ),
+
   'artifacts.create': Type.Object(
     {
       requestId: TaskCreateBody.properties.requestId,

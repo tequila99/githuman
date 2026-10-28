@@ -1,3 +1,4 @@
+import { ArtifactLifecycleService } from './artifact-lifecycle.service.ts'
 import { takeWithinBytes } from '../utils/take-within-bytes.ts'
 import { ArtifactReviewService } from './artifact-review.service.ts'
 import { ArtifactReviewRepository } from '../repositories/artifact-review.repo.ts'
@@ -117,6 +118,7 @@ function graphPayload(metadata: ArtifactMetadataInput) {
 }
 
 export class ArtifactStorageService {
+  readonly lifecycle: ArtifactLifecycleService
   readonly files: ArtifactFilesRepository
   readonly types: ArtifactTypeService
   readonly tasks: TaskService
@@ -158,6 +160,7 @@ export class ArtifactStorageService {
       new ArtifactReviewRepository(options.db, this.catalog),
       this.now
     )
+    this.lifecycle = new ArtifactLifecycleService(this, options.db, this.now)
     this.observedEpoch = this.catalog.epoch()
   }
 

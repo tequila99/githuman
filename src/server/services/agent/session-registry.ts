@@ -34,6 +34,7 @@ export type AgentStreamMessage =
   | { type: 'state'; state: AgentSessionState }
   /** A session was opened or closed: re-read the list. */
   | { type: 'sessions' }
+  | { type: 'artifact-actions' }
 
 export type AgentStreamListener = (message: AgentStreamMessage) => void
 
@@ -43,6 +44,7 @@ export interface AgentSessionRegistry {
   ) => string | undefined
   trackArtifactRequest: (sessionId: string, close: () => void) => () => void
   notifyTasksChanged: () => void
+  notifyArtifactActionsChanged?: () => void
   listPresets: () => AgentPresetInfo[]
   /**
    * Registers a session and starts its agent in the background: the session is
@@ -180,6 +182,7 @@ export function createSessionRegistry(options: {
       }
     },
     notifyTasksChanged: () => broadcast({ type: 'sessions' }),
+    notifyArtifactActionsChanged: () => broadcast({ type: 'artifact-actions' }),
     listPresets: () => options.presets.map(describePreset),
     create(presetId, reviewId, name, deviceId) {
       const preset = options.presets.find(p => p.id === presetId)

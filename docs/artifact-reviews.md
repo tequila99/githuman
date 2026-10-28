@@ -57,8 +57,9 @@ hash, bodyStartLine, диапазон и точный quote, сохраняя CR
 - Ответ/правка/скрытие: `POST /api/artifact-threads/:id/events`,
   MCP `reviews.reply`, `reviews.edit`, `reviews.hide`.
 - Прямое решение пользователя: `POST /api/artifact-threads/:id/decisions`.
-  Scope и ожидаемая версия обязательны. MCP resolve/reopen/set_blocking ждут
-  интеграции разрешений этапа 0092.
+  Scope и ожидаемая версия обязательны. MCP `reviews.resolve`, `reviews.reopen`,
+  `reviews.set_blocking` требуют одноразового scoped grant; смысловой validation
+  pass для этих действий не нужен. [Порядок подтверждения](artifact-lifecycle.md).
 
 Агент может edit/hide только комментарии своей сессии. Новая сессия не получает
 права на старые комментарии агента. Пользователь может редактировать комментарии

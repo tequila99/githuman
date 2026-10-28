@@ -529,13 +529,16 @@ test(
       'reviews_hide',
       'reviews_history',
       'reviews_comments',
-      'reviews_summary'
+      'reviews_summary',
+      'reviews_resolve',
+      'reviews_reopen',
+      'reviews_set_blocking',
+      'change_sets_commit',
+      'validations_submit'
     ]) {
       assert.ok(names.includes(name), name)
     }
-    assert.ok(
-      !names.some(name => /resolve|reopen|set_blocking|authorize/.test(name))
-    )
+    assert.ok(!names.some(name => /authorize/.test(name)))
     const artifact = storage.list().items[0]
     const input = {
       id: artifact.id,

@@ -73,3 +73,16 @@ export type ArtifactReviewComments = Static<typeof ArtifactReviewCommentsSchema>
 export type ArtifactReviewCommentsOptions = Static<
   typeof ArtifactReviewCommentsQuery
 >
+
+export type ArtifactValidationReport = Static<
+  typeof import('./schemas.ts').ArtifactValidationSubmitBody
+>
+export type ArtifactAuthorizationRequest = Static<
+  typeof import('./schemas.ts').ArtifactAuthorizationRequestBody
+>
+export type ArtifactLifecycleCommit = Static<
+  typeof import('./schemas.ts').ArtifactLifecycleCommitBody
+>
+export type ArtifactChangeSetProposal = Static<
+  typeof import('./schemas.ts').ArtifactChangeSetProposeBody
+>

@@ -34,12 +34,7 @@ const app = acp
       const tools = await client.listTools()
       if (config.name === 'githuman_artifacts') {
         assert.ok(tools.tools.some(tool => tool.name === 'artifacts_create'))
-        assert.ok(
-          !tools.tools.some(
-            tool =>
-              tool.name.includes('authorize') || tool.name.includes('commit')
-          )
-        )
+        assert.ok(!tools.tools.some(tool => tool.name.includes('authorize')))
         const input = {
           requestId: 'http-probe',
           body: 'Текст 🧪\n"quoted"\t\\',

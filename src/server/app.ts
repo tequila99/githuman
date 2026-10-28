@@ -1,3 +1,4 @@
+import { artifactActionRoutes } from './routes/artifact-actions.ts'
 import { artifactReviewRoutes } from './routes/artifact-reviews.ts'
 import { addressUrl } from '../shared/network/address-url.ts'
 import { artifactAgentRoutes } from './routes/artifact-agent.ts'
@@ -237,6 +238,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       allowedHosts
     })
   })
+  app.register(artifactActionRoutes, {
+    service: artifacts.lifecycle,
+    recheckAccess: createAccessHook({ devices, allowedHosts })
+  })
+  app.addHook('onReady', async () => artifacts.lifecycle.jobs.recover())
+  app.addHook('onClose', async () => artifacts.lifecycle.jobs.close())
   app.register(artifactDefinitionRoutes, { storage: artifacts })
   const artifactMaintenance = new ArtifactMaintenanceService({
     storage: artifacts,
@@ -302,6 +309,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     agentRegistry = registry
     app.register(artifactAgentRoutes, { storage: artifacts, registry })
     artifacts.tasks.attachSessions(registry)
+    artifacts.lifecycle.attachSessions(registry)
     app.register(agentRoutes, {
       notes,
       registry,

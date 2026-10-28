@@ -71,7 +71,11 @@ export class ArtifactGraphService {
       throw new ArtifactInputError('Change set belongs to another store.')
     }
     return this.storage.catalog.readSnapshot(() => {
-      const result = previewArtifactChangeSet(this.storage.catalog.all(), input)
+      const result = previewArtifactChangeSet(
+        this.storage.catalog.all(),
+        input,
+        this.storage.catalog.supersededArtifactIds()
+      )
       for (const id of result.affectedIds) {
         const artifact = this.storage.catalog.get(id)
         if (artifact) {
