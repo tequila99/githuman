@@ -1,3 +1,4 @@
+import { takeWithinBytes } from './take-within-bytes.ts'
 import {
   ArtifactConflictError,
   ArtifactInputError
@@ -46,11 +47,16 @@ export function artifactPage<T>(
     }
     offset = data.offset
   }
-  const page = items.slice(offset, offset + limit)
+  const page = takeWithinBytes(items.slice(offset, offset + limit), limit)
   const nextCursor =
-    offset + limit < items.length
+    offset + page.length < items.length
       ? Buffer.from(
-          JSON.stringify({ storeId, epoch, query, offset: offset + limit })
+          JSON.stringify({
+            storeId,
+            epoch,
+            query,
+            offset: offset + page.length
+          })
         ).toString('base64url')
       : null
   return { storeId, storeEpoch: epoch, items: page, nextCursor }

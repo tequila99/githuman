@@ -496,3 +496,244 @@ test(
     assert.match(state.error ?? '', /need a TCP address/)
   }
 )
+
+test(
+  'review tools use actual MCP stdio with session actors, exact history and no protected commands',
+  { timeout: 120_000 },
+  async t => {
+    const { app, storage } = setup(t)
+    const { url, sessionId, authorization } = await startSession(app)
+    const client = new Client({ name: 'review-smoke', version: '1.0.0' })
+    t.after(() => client.close())
+    await client.connect(
+      new StdioClientTransport({
+        command: process.execPath,
+        args: [
+          process.env.GITHUMAN_TEST_MCP_ENTRY ?? CLI_ENTRY,
+          'mcp',
+          '--stdio'
+        ],
+        env: {
+          [ARTIFACT_AGENT_URL_ENV]: `${url}/`,
+          [ARTIFACT_AGENT_KEY_ENV]: authorization.slice('Bearer '.length)
+        },
+        stderr: 'pipe'
+      })
+    )
+    const names = (await client.listTools()).tools.map(tool => tool.name)
+    for (const name of [
+      'reviews_list',
+      'reviews_comment',
+      'reviews_reply',
+      'reviews_edit',
+      'reviews_hide',
+      'reviews_history',
+      'reviews_comments',
+      'reviews_summary'
+    ]) {
+      assert.ok(names.includes(name), name)
+    }
+    assert.ok(
+      !names.some(name => /resolve|reopen|set_blocking|authorize/.test(name))
+    )
+    const artifact = storage.list().items[0]
+    const input = {
+      id: artifact.id,
+      requestId: 'mcp-review',
+      text: 'Замечание 🧪',
+      blocking: true,
+      anchor: {
+        artifactId: artifact.id,
+        fileSha256: artifact.sha256,
+        bodyStartLine: artifact.bodyStartLine,
+        startLine: 1,
+        endLine: 1,
+        quote: 'Текст 🧪'
+      }
+    }
+    const created = await client.callTool({
+      name: 'reviews_comment',
+      arguments: input
+    })
+    assert.notEqual(created.isError, true, JSON.stringify(created.content))
+    const event = created.structuredContent as {
+      threadId: string
+      actor: { kind: string; id: string }
+    }
+    assert.deepEqual(event.actor, { kind: 'agent', id: sessionId })
+    const replay = await client.callTool({
+      name: 'reviews_comment',
+      arguments: input
+    })
+    assert.deepEqual(replay.structuredContent, created.structuredContent)
+    const reply = await client.callTool({
+      name: 'reviews_reply',
+      arguments: {
+        id: event.threadId,
+        requestId: 'reply-review',
+        expectedThreadVersion: 1,
+        text: 'Ответ'
+      }
+    })
+    assert.notEqual(reply.isError, true, JSON.stringify(reply.content))
+    const commentId = (
+      reply.structuredContent as { payload: { commentId: string } }
+    ).payload.commentId
+    const edited = await client.callTool({
+      name: 'reviews_edit',
+      arguments: {
+        id: event.threadId,
+        requestId: 'edit-review',
+        expectedThreadVersion: 2,
+        commentId,
+        text: 'Правка'
+      }
+    })
+    assert.notEqual(edited.isError, true, JSON.stringify(edited.content))
+    const hidden = await client.callTool({
+      name: 'reviews_hide',
+      arguments: {
+        id: event.threadId,
+        requestId: 'hide-review',
+        expectedThreadVersion: 3,
+        commentId
+      }
+    })
+    assert.notEqual(hidden.isError, true, JSON.stringify(hidden.content))
+    const history = await client.callTool({
+      name: 'reviews_history',
+      arguments: { id: event.threadId }
+    })
+    assert.deepEqual(
+      history.structuredContent,
+      storage.reviews.history(event.threadId)
+    )
+    const listed = await client.callTool({
+      name: 'reviews_list',
+      arguments: { id: artifact.id }
+    })
+    assert.deepEqual(
+      listed.structuredContent,
+      storage.reviews.list(artifact.id)
+    )
+    const state = await client.callTool({
+      name: 'reviews_summary',
+      arguments: { id: artifact.id }
+    })
+    assert.deepEqual(
+      state.structuredContent,
+      storage.reviews.summary(artifact.id)
+    )
+    assert.equal(storage.reviews.summary(artifact.id).blockerSummary.count, 1)
+    const fullComments = await client.callTool({
+      name: 'reviews_comments',
+      arguments: { id: event.threadId }
+    })
+    assert.deepEqual(
+      fullComments.structuredContent,
+      storage.reviews.comments(event.threadId)
+    )
+    const large = storage.reviews.createThread(
+      artifact.id,
+      { requestId: 'large-review', text: 'Root' },
+      { kind: 'agent', id: sessionId }
+    )
+    for (let version = 1; version <= 100; version++) {
+      storage.reviews.comment(
+        large.threadId,
+        {
+          requestId: `large-reply-${version}`,
+          expectedThreadVersion: version,
+          kind: 'replied',
+          text: 'x'.repeat(64 * 1024)
+        },
+        { kind: 'agent', id: sessionId }
+      )
+    }
+    const compact = await client.callTool({
+      name: 'reviews_list',
+      arguments: { id: artifact.id }
+    })
+    assert.notEqual(compact.isError, true, JSON.stringify(compact.content))
+    let afterIndex = 0,
+      count = 0
+    for (;;) {
+      const result = await client.callTool({
+        name: 'reviews_comments',
+        arguments: { id: large.threadId, afterIndex, limit: 100 }
+      })
+      assert.notEqual(result.isError, true, JSON.stringify(result.content))
+      const page = result.structuredContent as {
+        items: { id: string }[]
+        nextAfterIndex: number | null
+      }
+      count += page.items.length
+      if (page.nextAfterIndex === null) break
+      afterIndex = page.nextAfterIndex
+    }
+    assert.equal(count, 101)
+    const largeHistory = await client.callTool({
+      name: 'reviews_history',
+      arguments: { id: large.threadId, limit: 100 }
+    })
+    assert.notEqual(
+      largeHistory.isError,
+      true,
+      JSON.stringify(largeHistory.content)
+    )
+    const denied = await client.callTool({
+      name: 'reviews_resolve',
+      arguments: { id: event.threadId, authorized: true }
+    })
+    assert.equal(denied.isError, true)
+    const forged = await client.callTool({
+      name: 'reviews_reply',
+      arguments: {
+        id: event.threadId,
+        requestId: 'forged',
+        expectedThreadVersion: 4,
+        text: 'Forged',
+        actor: { kind: 'user', id: 'local' }
+      }
+    })
+    assert.equal(forged.isError, true)
+    const blockedBridge = await fetch(
+      `${url}/api/agent/artifacts/reviews.resolve`,
+      {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: '{}'
+      }
+    )
+    assert.equal(blockedBridge.status, 400)
+    await blockedBridge.arrayBuffer()
+    const blockedUserRoute = await app.inject({
+      method: 'POST',
+      url: `/api/artifact-threads/${event.threadId}/decisions`,
+      remoteAddress: '192.0.2.10',
+      headers: { authorization, host: 'localhost' },
+      payload: {
+        requestId: 'agent-decision',
+        expectedThreadVersion: 4,
+        kind: 'resolved',
+        scope: {
+          appliesToArtifactId: artifact.id,
+          includeRevisionDescendants: true
+        }
+      }
+    })
+    assert.ok(
+      blockedUserRoute.statusCode === 401 || blockedUserRoute.statusCode === 403
+    )
+    assert.equal(storage.reviews.history(event.threadId).items.length, 4)
+    await app.inject({
+      method: 'DELETE',
+      url: `/api/agent/sessions/${sessionId}`
+    })
+    const revoked = await client.callTool({
+      name: 'reviews_summary',
+      arguments: { id: artifact.id }
+    })
+    assert.equal(revoked.isError, true)
+  }
+)

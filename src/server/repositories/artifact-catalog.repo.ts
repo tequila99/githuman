@@ -1,3 +1,4 @@
+import { canonicalJson } from '../../shared/utils/canonical-json.ts'
 import { normalizeArtifact } from '../../shared/artifacts/normalize.ts'
 import { withTransaction, type SyncCallback } from '../db/transaction.ts'
 import { isSqliteBusyError } from '../db/sqlite-error.ts'
@@ -105,6 +106,16 @@ export class ArtifactCatalogRepository {
       .prepare('SELECT store_epoch FROM artifact_store_epochs WHERE store_id=?')
       .get(this.storeId) as { store_epoch: number } | undefined
     return row?.store_epoch ?? 0
+  }
+
+  validationEpoch(): number {
+    return (
+      this.db
+        .prepare(
+          'SELECT COALESCE(MAX(seq),0) epoch FROM artifact_store_changes WHERE store_id=? AND validation_relevant=1'
+        )
+        .get(this.storeId) as { epoch: number }
+    ).epoch
   }
 
   get(id: string): Artifact | undefined {
@@ -265,6 +276,7 @@ export class ArtifactCatalogRepository {
     actor: ArtifactActor,
     action: ArtifactEvent['action']
   ): void {
+    const previous = this.get(artifact.id)
     const event: Omit<ArtifactEvent, 'seq'> = {
       storeId: this.storeId,
       artifactId: artifact.id,
@@ -302,15 +314,39 @@ export class ArtifactCatalogRepository {
       .prepare(`INSERT INTO artifact_current VALUES(?,?,?,?) ON CONFLICT(store_id,artifact_id)
       DO UPDATE SET version=excluded.version,snapshot_json=excluded.snapshot_json`)
       .run(this.storeId, artifact.id, artifact.metadataVersion, snapshot)
-    this.recordChange('artifact', artifact.id, requestId)
+    const relevant = previous
+      ? canonicalJson([
+          previous.status,
+          previous.typeId,
+          previous.taskIds,
+          previous.relations,
+          previous.revisionOf
+        ]) !==
+        canonicalJson([
+          artifact.status,
+          artifact.typeId,
+          artifact.taskIds,
+          artifact.relations,
+          artifact.revisionOf
+        ])
+      : artifact.status !== 'draft' ||
+        artifact.taskIds.length > 0 ||
+        artifact.relations.length > 0 ||
+        artifact.revisionOf.length > 0
+    this.recordChange('artifact', artifact.id, requestId, relevant)
   }
 
-  recordChange(kind: string, id: string, requestId: string): void {
+  recordChange(
+    kind: string,
+    id: string,
+    requestId: string,
+    validationRelevant = true
+  ): void {
     const inserted = this.db
       .prepare(
-        'INSERT INTO artifact_store_changes(store_id,entity_kind,entity_id,request_id) VALUES(?,?,?,?)'
+        'INSERT INTO artifact_store_changes(store_id,entity_kind,entity_id,request_id,validation_relevant) VALUES(?,?,?,?,?)'
       )
-      .run(this.storeId, kind, id, requestId)
+      .run(this.storeId, kind, id, requestId, Number(validationRelevant))
     this.db
       .prepare(
         'UPDATE artifact_store_epochs SET store_epoch=? WHERE store_id=?'

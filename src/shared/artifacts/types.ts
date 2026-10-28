@@ -9,7 +9,25 @@ import type {
   ArtifactContentSchema,
   ArtifactRelationSchema,
   ArtifactChangeSetSchema,
-  GraphIssueSchema
+  GraphIssueSchema,
+  ArtifactSourceAnchorSchema,
+  ArtifactReviewScopeSchema,
+  ArtifactReviewEventPayloadSchema,
+  ArtifactReviewEventSchema,
+  ArtifactReviewHistorySchema,
+  ArtifactReviewCreateBody,
+  ArtifactReviewCommentEventBody,
+  ArtifactReviewDecisionBody,
+  ArtifactReviewCommentSchema,
+  ArtifactThreadCurrentSchema,
+  ArtifactThreadViewSchema,
+  ArtifactReviewStateSchema,
+  ArtifactReviewListSchema,
+  ArtifactReviewListQuery,
+  ArtifactThreadSummarySchema,
+  ArtifactReviewCommentPreviewSchema,
+  ArtifactReviewCommentsSchema,
+  ArtifactReviewCommentsQuery
 } from './schemas.ts'
 
 export type ArtifactActor = Static<typeof ArtifactActorSchema>
@@ -23,3 +41,35 @@ export type ArtifactContent = Static<typeof ArtifactContentSchema>
 export type ArtifactRelation = Static<typeof ArtifactRelationSchema>
 export type ArtifactChangeSet = Static<typeof ArtifactChangeSetSchema>
 export type GraphIssue = Static<typeof GraphIssueSchema>
+
+export type ArtifactSourceAnchor = Static<typeof ArtifactSourceAnchorSchema>
+export type ArtifactReviewScope = Static<typeof ArtifactReviewScopeSchema>
+export type ArtifactReviewEventPayload = Static<
+  typeof ArtifactReviewEventPayloadSchema
+>
+export type ArtifactReviewEvent = Static<typeof ArtifactReviewEventSchema>
+export type ArtifactReviewHistory = Static<typeof ArtifactReviewHistorySchema>
+
+export type ArtifactReviewCreateInput = Static<typeof ArtifactReviewCreateBody>
+export type ArtifactReviewCommentInput = Static<
+  typeof ArtifactReviewCommentEventBody
+>
+
+export type ArtifactReviewDecisionInput = Static<
+  typeof ArtifactReviewDecisionBody
+>
+export type ArtifactReviewComment = Static<typeof ArtifactReviewCommentSchema>
+export type ArtifactThreadCurrent = Static<typeof ArtifactThreadCurrentSchema>
+export type ArtifactThreadView = Static<typeof ArtifactThreadViewSchema>
+export type ArtifactReviewState = Static<typeof ArtifactReviewStateSchema>
+export type ArtifactReviewList = Static<typeof ArtifactReviewListSchema>
+export type ArtifactReviewListOptions = Static<typeof ArtifactReviewListQuery>
+
+export type ArtifactThreadSummary = Static<typeof ArtifactThreadSummarySchema>
+export type ArtifactReviewCommentPreview = Static<
+  typeof ArtifactReviewCommentPreviewSchema
+>
+export type ArtifactReviewComments = Static<typeof ArtifactReviewCommentsSchema>
+export type ArtifactReviewCommentsOptions = Static<
+  typeof ArtifactReviewCommentsQuery
+>

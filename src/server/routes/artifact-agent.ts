@@ -83,6 +83,56 @@ export async function artifactAgentRoutes(
       )
     ],
     [
+      'reviews.list',
+      checked(ArtifactToolSchemas['reviews.list'], ({ id, ...options }) =>
+        storage.reviews.list(id, options)
+      )
+    ],
+    [
+      'reviews.summary',
+      checked(ArtifactToolSchemas['reviews.summary'], p =>
+        storage.reviews.summary(p.id)
+      )
+    ],
+    [
+      'reviews.comment',
+      checked(
+        ArtifactToolSchemas['reviews.comment'],
+        ({ id, ...input }, actor) =>
+          storage.reviews.createThread(id, input, actor)
+      )
+    ],
+    [
+      'reviews.reply',
+      checked(ArtifactToolSchemas['reviews.reply'], ({ id, ...input }, actor) =>
+        storage.reviews.comment(id, { ...input, kind: 'replied' }, actor)
+      )
+    ],
+    [
+      'reviews.edit',
+      checked(ArtifactToolSchemas['reviews.edit'], ({ id, ...input }, actor) =>
+        storage.reviews.comment(id, { ...input, kind: 'content_edited' }, actor)
+      )
+    ],
+    [
+      'reviews.hide',
+      checked(ArtifactToolSchemas['reviews.hide'], ({ id, ...input }, actor) =>
+        storage.reviews.comment(id, { ...input, kind: 'hidden' }, actor)
+      )
+    ],
+    [
+      'reviews.comments',
+      checked(ArtifactToolSchemas['reviews.comments'], ({ id, ...options }) =>
+        storage.reviews.comments(id, options)
+      )
+    ],
+    [
+      'reviews.history',
+      checked(ArtifactToolSchemas['reviews.history'], p =>
+        storage.reviews.history(p.id, p.afterSeq, p.limit)
+      )
+    ],
+    [
       'tasks.list',
       checked(ArtifactToolSchemas['tasks.list'], p =>
         storage.tasks.list(p.limit, p.cursor)

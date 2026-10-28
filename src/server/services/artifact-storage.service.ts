@@ -1,3 +1,6 @@
+import { takeWithinBytes } from '../utils/take-within-bytes.ts'
+import { ArtifactReviewService } from './artifact-review.service.ts'
+import { ArtifactReviewRepository } from '../repositories/artifact-review.repo.ts'
 import { ArtifactTypeService } from './artifact-type.service.ts'
 import { TaskService } from './task.service.ts'
 import { ArtifactGraphService } from './artifact-graph.service.ts'
@@ -117,6 +120,7 @@ export class ArtifactStorageService {
   readonly files: ArtifactFilesRepository
   readonly types: ArtifactTypeService
   readonly tasks: TaskService
+  readonly reviews: ArtifactReviewService
   readonly graph: ArtifactGraphService
   readonly graphRepository: ArtifactGraphRepository
   readonly definitions: TaskRepository
@@ -149,6 +153,11 @@ export class ArtifactStorageService {
     this.tasks = new TaskService(definitions)
     this.graphRepository = new ArtifactGraphRepository(options.db, this.catalog)
     this.graph = new ArtifactGraphService(this)
+    this.reviews = new ArtifactReviewService(
+      this,
+      new ArtifactReviewRepository(options.db, this.catalog),
+      this.now
+    )
     this.observedEpoch = this.catalog.epoch()
   }
 
@@ -543,12 +552,21 @@ export class ArtifactStorageService {
     return artifact
   }
 
+  readVerifiedFile(id: string): { artifact: Artifact; content: Buffer } {
+    const artifact = this.get(id)
+    const content = this.files.verify(
+      this.fileName(id),
+      artifact.sha256,
+      artifact.bytes
+    )
+    return { artifact, content }
+  }
+
   readContent(
     id: string,
     offset = 0,
     limit = MAX_ARTIFACT_CHUNK_BYTES
   ): ArtifactContent {
-    const artifact = this.get(id)
     if (
       !Number.isSafeInteger(offset) ||
       offset < 0 ||
@@ -558,11 +576,7 @@ export class ArtifactStorageService {
     ) {
       throw new ArtifactInputError('Invalid content range.')
     }
-    const content = this.files.verify(
-      this.fileName(id),
-      artifact.sha256,
-      artifact.bytes
-    )
+    const { artifact, content } = this.readVerifiedFile(id)
     if (
       offset > content.length ||
       (offset < content.length && (content[offset] & 0xc0) === 0x80)
@@ -619,10 +633,10 @@ export class ArtifactStorageService {
       after = { createdAt: decoded.createdAt, id: decoded.id }
     }
     const rows = this.catalog.list(limit + 1, after)
-    const items = rows.slice(0, limit)
+    const items = takeWithinBytes(rows, limit)
     const last = items.at(-1)
     const nextCursor =
-      rows.length > limit && last
+      rows.length > items.length && last
         ? Buffer.from(
             JSON.stringify({
               storeId: this.storeId,
@@ -642,11 +656,11 @@ export class ArtifactStorageService {
       throw new ArtifactInputError('Invalid history sequence.')
     }
     const rows = this.catalog.history(id, afterSeq, limit + 1)
-    const items = rows.slice(0, limit)
+    const items = takeWithinBytes(rows, limit)
     return {
       storeId: this.storeId,
       items,
-      nextAfterSeq: rows.length > limit ? items.at(-1)!.seq : null
+      nextAfterSeq: rows.length > items.length ? items.at(-1)!.seq : null
     }
   }
 

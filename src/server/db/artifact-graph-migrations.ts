@@ -34,6 +34,18 @@ export function applyArtifactGraphMigrations(db: DatabaseSync): void {
  chat_title_snapshot TEXT NOT NULL,actor_json TEXT NOT NULL,created_at TEXT NOT NULL,
  UNIQUE(store_id,session_id,version),UNIQUE(store_id,request_id));
  `)
+  const columns = db
+    .prepare('PRAGMA table_info(artifact_store_changes)')
+    .all() as { name: string }[]
+  if (!columns.some(column => column.name === 'validation_relevant')) {
+    // Older changes conservatively invalidate validations after upgrade.
+    db.exec(
+      'ALTER TABLE artifact_store_changes ADD COLUMN validation_relevant INTEGER NOT NULL DEFAULT 1'
+    )
+  }
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS artifact_validation_changes ON artifact_store_changes(store_id,validation_relevant,seq)'
+  )
   // Copy an 0088 history once: the journal is empty only before the first copy.
   // Events that older code adds after this point are not copied.
   db.exec(`INSERT INTO artifact_store_changes(seq,store_id,entity_kind,entity_id,request_id)

@@ -5,7 +5,11 @@ import {
   ArtifactListQuery,
   ArtifactContentQuery,
   ArtifactHistoryQuery,
-  GraphPageQuery
+  GraphPageQuery,
+  ArtifactReviewCreateBody,
+  ArtifactReviewCommentEventBody,
+  ArtifactReviewListQuery,
+  ArtifactReviewCommentsQuery
 } from '../artifacts/schemas.ts'
 import {
   DefinitionQuery,
@@ -64,6 +68,79 @@ export const ArtifactToolSchemas = {
   'artifacts.ancestry': Type.Object(
     { ...ArtifactParams.properties, ...DefinitionQuery.properties },
     { additionalProperties: false, description: 'Read immutable ancestry.' }
+  ),
+  'reviews.list': Type.Object(
+    { ...ArtifactParams.properties, ...ArtifactReviewListQuery.properties },
+    {
+      additionalProperties: false,
+      description: 'Read a complete page of artifact threads and blockers.'
+    }
+  ),
+  'reviews.summary': ArtifactParams,
+  'reviews.comment': Type.Object(
+    { ...ArtifactParams.properties, ...ArtifactReviewCreateBody.properties },
+    {
+      additionalProperties: false,
+      description: 'Create a new anchored or general review thread.'
+    }
+  ),
+  'reviews.reply': Type.Object(
+    {
+      ...ArtifactParams.properties,
+      requestId: ArtifactReviewCreateBody.properties.requestId,
+      expectedThreadVersion:
+        ArtifactReviewCommentEventBody.anyOf[0].properties
+          .expectedThreadVersion,
+      text: ArtifactReviewCreateBody.properties.text
+    },
+    {
+      additionalProperties: false,
+      description: 'Reply to a versioned review thread.'
+    }
+  ),
+  'reviews.edit': Type.Object(
+    {
+      ...ArtifactParams.properties,
+      requestId: ArtifactReviewCreateBody.properties.requestId,
+      expectedThreadVersion:
+        ArtifactReviewCommentEventBody.anyOf[0].properties
+          .expectedThreadVersion,
+      commentId: ArtifactParams.properties.id,
+      text: ArtifactReviewCreateBody.properties.text
+    },
+    {
+      additionalProperties: false,
+      description: 'Edit comment text while retaining immutable history.'
+    }
+  ),
+  'reviews.hide': Type.Object(
+    {
+      ...ArtifactParams.properties,
+      requestId: ArtifactReviewCreateBody.properties.requestId,
+      expectedThreadVersion:
+        ArtifactReviewCommentEventBody.anyOf[0].properties
+          .expectedThreadVersion,
+      commentId: ArtifactParams.properties.id
+    },
+    {
+      additionalProperties: false,
+      description: 'Hide comment text without resolving or removing a blocker.'
+    }
+  ),
+  'reviews.comments': Type.Object(
+    { ...ArtifactParams.properties, ...ArtifactReviewCommentsQuery.properties },
+    {
+      additionalProperties: false,
+      description:
+        'Read complete visible comments by position, independent of unrelated store changes.'
+    }
+  ),
+  'reviews.history': Type.Object(
+    { ...ArtifactParams.properties, ...ArtifactHistoryQuery.properties },
+    {
+      additionalProperties: false,
+      description: 'Read a complete review history page.'
+    }
   ),
   'tasks.list': DefinitionQuery,
   'tasks.get': DefinitionParams,

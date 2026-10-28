@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import { ArtifactChangeSetPreviewSchema } from '../../shared/artifacts/schemas.ts'
 import {
@@ -19,7 +19,7 @@ import {
   TaskChatHistorySchema
 } from '../../shared/tasks/schemas.ts'
 import { ERROR_RESPONSES } from '../../shared/http/schemas.ts'
-import type { ArtifactActor } from '../../shared/artifacts/types.ts'
+import { artifactUserActor } from '../utils/artifact-actor.ts'
 import type { ArtifactStorageService } from '../services/artifact-storage.service.ts'
 import {
   ArtifactAncestrySchema,
@@ -27,17 +27,6 @@ import {
   GraphPageQuery,
   ArtifactChangeSetSchema
 } from '../../shared/artifacts/schemas.ts'
-
-// Only the authenticated transport assigns the actor, never the request body.
-function actor(request: FastifyRequest): ArtifactActor {
-  return {
-    kind: 'user',
-    id:
-      request.access?.device.status === 'device'
-        ? request.access.device.device.id
-        : 'local'
-  }
-}
 
 const response = (schema: typeof TaskSchema | typeof ArtifactTypeSchema) => ({
   200: schema,
@@ -87,7 +76,7 @@ export async function artifactDefinitionRoutes(
       storage.tasks.create(
         request.body.requestId,
         request.body.input,
-        actor(request)
+        artifactUserActor(request)
       )
   )
   typed.patch(
@@ -107,7 +96,7 @@ export async function artifactDefinitionRoutes(
         request.body.requestId,
         request.body.expectedVersion,
         request.body.input,
-        actor(request)
+        artifactUserActor(request)
       )
   )
   typed.get(
@@ -194,7 +183,7 @@ export async function artifactDefinitionRoutes(
       storage.tasks.assignSession(
         request.params.id,
         request.body,
-        actor(request)
+        artifactUserActor(request)
       )
   )
   typed.get(
@@ -236,7 +225,7 @@ export async function artifactDefinitionRoutes(
         request.body.requestId,
         request.body.id,
         request.body.input,
-        actor(request)
+        artifactUserActor(request)
       )
   )
   typed.patch(
@@ -256,7 +245,7 @@ export async function artifactDefinitionRoutes(
         request.body.requestId,
         request.body.expectedVersion,
         request.body.input,
-        actor(request)
+        artifactUserActor(request)
       )
   )
   typed.get(

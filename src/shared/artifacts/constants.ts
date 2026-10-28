@@ -8,3 +8,13 @@ export const MAX_ARTIFACT_METADATA_BYTES = 64 * 1024
 export const MAX_ARTIFACT_CHUNK_BYTES = 64 * 1024
 // Bound catalog and history pages.
 export const MAX_ARTIFACT_PAGE_SIZE = 100
+
+// Bound comment storage independently of document excerpts.
+export const MAX_ARTIFACT_REVIEW_TEXT_BYTES = 64 * 1024
+
+// Bound source excerpts independently of immutable document size.
+export const MAX_ARTIFACT_REVIEW_QUOTE_BYTES = 64 * 1024
+// Keep normal pages small; one complete large item can exceed this soft budget.
+export const MAX_ARTIFACT_REVIEW_PAGE_BYTES = 128 * 1024
+// Keep thread lists useful without returning full discussion text.
+export const MAX_ARTIFACT_REVIEW_PREVIEW_BYTES = 1024

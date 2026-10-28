@@ -196,3 +196,49 @@ test('the 0088 history is copied into the change journal once', t => {
     2
   )
 })
+
+test('validation relevance upgrades old journal rows conservatively and preserves later exclusions', t => {
+  const db = new DatabaseSync(':memory:')
+  t.after(() => db.close())
+  applyArtifactMigrations(db)
+  db.exec(`CREATE TABLE artifact_store_changes (
+    seq INTEGER PRIMARY KEY AUTOINCREMENT, store_id TEXT NOT NULL,
+    entity_kind TEXT NOT NULL, entity_id TEXT NOT NULL, request_id TEXT NOT NULL,
+    UNIQUE(store_id,entity_kind,request_id));
+    INSERT INTO artifact_store_changes VALUES(1,'store','artifact','a','a'),(2,'store','artifact','b','b');`)
+  applyArtifactGraphMigrations(db)
+  assert.deepEqual(
+    db
+      .prepare(
+        'SELECT validation_relevant FROM artifact_store_changes ORDER BY seq'
+      )
+      .all()
+      .map(row => row.validation_relevant),
+    [1, 1]
+  )
+  db.exec(
+    `INSERT INTO artifact_store_changes(store_id,entity_kind,entity_id,request_id,validation_relevant) VALUES('store','artifact','report','report',0)`
+  )
+  applyMigrations(db)
+  applyMigrations(db)
+  assert.equal(
+    db
+      .prepare(
+        'SELECT MAX(seq) epoch FROM artifact_store_changes WHERE validation_relevant=1'
+      )
+      .get()!.epoch,
+    2
+  )
+  assert.equal(
+    db
+      .prepare(
+        'SELECT validation_relevant FROM artifact_store_changes WHERE request_id=?'
+      )
+      .get('report')!.validation_relevant,
+    0
+  )
+  assert.throws(
+    () => db.exec('UPDATE artifact_store_changes SET validation_relevant=0'),
+    /immutable/
+  )
+})

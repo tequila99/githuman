@@ -1,3 +1,4 @@
+import { artifactReviewRoutes } from './routes/artifact-reviews.ts'
 import { addressUrl } from '../shared/network/address-url.ts'
 import { artifactAgentRoutes } from './routes/artifact-agent.ts'
 import type { AgentSessionRegistry } from './services/agent/session-registry.ts'
@@ -126,6 +127,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       ]
     }
   })
+  const allowedHosts = new AllowedHosts(options.allowedHosts)
   const repositoryPath = options.repositoryPath ?? process.cwd()
   const db = options.db ?? createTestDatabase()
   const eventBus = options.eventBus ?? createEventBus()
@@ -167,7 +169,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         'onRequest',
         createAccessHook({
           devices,
-          allowedHosts: new AllowedHosts(options.allowedHosts),
+          allowedHosts,
           authorizeArtifactAgent(request, reply) {
             const id = agentRegistry?.authenticateArtifactKey(
               request.headers.authorization
@@ -228,6 +230,13 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       eventBus
     })
   app.register(artifactRoutes, { service: artifacts })
+  app.register(artifactReviewRoutes, {
+    service: artifacts.reviews,
+    recheckAccess: createAccessHook({
+      devices,
+      allowedHosts
+    })
+  })
   app.register(artifactDefinitionRoutes, { storage: artifacts })
   const artifactMaintenance = new ArtifactMaintenanceService({
     storage: artifacts,
