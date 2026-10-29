@@ -2,6 +2,8 @@ import { UUID_PATTERN_SOURCE } from '../utils/is-uuid.ts'
 import { Type } from '@sinclair/typebox'
 import { Nullable } from '../utils/schemas.ts'
 import {
+  MAX_SEARCH_QUERY_CODEPOINTS,
+  MAX_SEARCH_TOKENS,
   MAX_ARTIFACT_CHUNK_BYTES,
   MAX_ARTIFACT_PAGE_SIZE,
   MAX_ARTIFACT_REVIEW_TEXT_BYTES,
@@ -1341,5 +1343,202 @@ export const ArtifactValidationReportQuery = Type.Object(
   {
     additionalProperties: false,
     description: 'Read a bounded structured report chunk.'
+  }
+)
+
+export const ArtifactSearchFiltersSchema = Type.Object(
+  {
+    statuses: Type.Optional(
+      Type.Array(ArtifactStatusSchema, {
+        maxItems: 7,
+        description: 'Explicit statuses; defaults to accepted.'
+      })
+    ),
+    typeIds: Type.Optional(
+      Type.Array(
+        Type.String({ maxLength: 128, description: 'Artifact type ID.' }),
+        { maxItems: 100, description: 'Allowed artifact types.' }
+      )
+    ),
+    taskIds: Type.Optional(
+      Type.Array(ArtifactParams.properties.id, {
+        maxItems: 100,
+        description: 'Match any selected task.'
+      })
+    ),
+    tags: Type.Optional(
+      Type.Array(
+        Type.String({ maxLength: 128, description: 'Required tag.' }),
+        { maxItems: 100, description: 'Require every selected tag.' }
+      )
+    )
+  },
+  {
+    additionalProperties: false,
+    description: 'Metadata filters applied before ranking and pagination.'
+  }
+)
+export const ArtifactSearchBody = Type.Object(
+  {
+    query: Type.Optional(
+      Type.String({
+        maxLength: MAX_SEARCH_QUERY_CODEPOINTS * 2,
+        description: `Literal text; coarse length cap ${MAX_SEARCH_QUERY_CODEPOINTS * 2}, service limit ${MAX_SEARCH_QUERY_CODEPOINTS} Unicode codepoints and ${MAX_SEARCH_TOKENS} tokens.`
+      })
+    ),
+    mode: Type.Optional(
+      Type.Union(
+        [Type.Literal('auto'), Type.Literal('exact'), Type.Literal('fuzzy')],
+        { description: 'Exact and/or bounded typo matching.' }
+      )
+    ),
+    filters: Type.Optional(ArtifactSearchFiltersSchema),
+    sort: Type.Optional(
+      Type.Union(
+        [
+          Type.Literal('relevance'),
+          Type.Literal('createdAt'),
+          Type.Literal('metadataUpdatedAt')
+        ],
+        { description: 'Stable order; timestamps sort newest first.' }
+      )
+    ),
+    limit: Type.Optional(
+      Type.Integer({
+        minimum: 1,
+        maximum: 100,
+        description: 'Maximum items in this page.'
+      })
+    ),
+    cursor: Type.Optional(
+      Type.String({
+        maxLength: 32768,
+        description: 'Cursor bound to query, filters and epochs.'
+      })
+    )
+  },
+  {
+    additionalProperties: false,
+    description: 'Search current artifact titles and original body text.'
+  }
+)
+export const ArtifactSearchQuery = Type.Object(
+  {
+    ...Type.Omit(ArtifactSearchBody, ['filters']).properties,
+    status: Type.Optional(ArtifactStatusSchema),
+    typeId: Type.Optional(
+      Type.String({ maxLength: 128, description: 'Artifact type filter.' })
+    ),
+    taskId: Type.Optional(ArtifactParams.properties.id),
+    tag: Type.Optional(
+      Type.String({ maxLength: 128, description: 'Required tag.' })
+    )
+  },
+  {
+    additionalProperties: false,
+    description: 'Read-only search query with single-value metadata filters.'
+  }
+)
+export const ArtifactSearchItemSchema = Type.Object(
+  {
+    storeId: ArtifactSchema.properties.storeId,
+    id: ArtifactParams.properties.id,
+    title: ArtifactSchema.properties.title,
+    status: ArtifactStatusSchema,
+    typeId: ArtifactSchema.properties.typeId,
+    taskIds: ArtifactSchema.properties.taskIds,
+    snippet: Type.String({
+      description: 'Plain-text excerpt from original text; never HTML.'
+    }),
+    source: Type.Union([Type.Literal('title'), Type.Literal('body')], {
+      description: 'Original field containing the excerpt.'
+    }),
+    matchKind: Type.Union(
+      [
+        Type.Literal('exact'),
+        Type.Literal('exact_normalized'),
+        Type.Literal('token'),
+        Type.Literal('fuzzy'),
+        Type.Literal('catalog')
+      ],
+      {
+        description:
+          'Fuzzy and normalized matches are explicitly distinguished.'
+      }
+    ),
+    highlights: Type.Array(
+      Type.Object(
+        {
+          start: Type.Integer({
+            minimum: 0,
+            description: 'UTF-16 start within snippet.'
+          }),
+          end: Type.Integer({
+            minimum: 0,
+            description: 'Exclusive UTF-16 end within snippet.'
+          })
+        },
+        { description: 'Highlight range in original plain text.' }
+      ),
+      { description: 'Original-text match ranges.' }
+    ),
+    anchor: Nullable(ArtifactSourceAnchorSchema)
+  },
+  { description: 'One ranked verified artifact search result.' }
+)
+export const ArtifactSearchSchema = Type.Object(
+  {
+    storeId: ArtifactSchema.properties.storeId,
+    storeEpoch: ArtifactListSchema.properties.storeEpoch,
+    indexEpoch: Type.Integer({
+      minimum: 0,
+      description: 'Derived index generation.'
+    }),
+    items: Type.Array(ArtifactSearchItemSchema, {
+      description: 'Filtered ranked complete results.'
+    }),
+    nextCursor: Nullable(
+      Type.String({
+        description: 'Continue this query while both epochs remain unchanged.'
+      })
+    ),
+    partial: Type.Boolean({
+      description: 'Fuzzy work reached its processing budget.'
+    }),
+    reason: Nullable(
+      Type.String({ description: 'Explicit partial-result reason.' })
+    )
+  },
+  { description: 'Bounded artifact search page.' }
+)
+
+export const ArtifactSearchDiagnosticsSchema = Type.Object(
+  {
+    available: Type.Boolean({
+      description: 'Whether both required FTS5 tokenizers are available.'
+    }),
+    documents: Type.Integer({
+      minimum: 0,
+      description: 'Indexed documents in this store.'
+    }),
+    suppressed: Type.Array(
+      Type.Object(
+        {
+          id: ArtifactParams.properties.id,
+          reason: Type.String({
+            description:
+              'Why this document was excluded from the derived index.'
+          })
+        },
+        { description: 'Suppressed artifact diagnostic.' }
+      ),
+      {
+        description: 'Documents suppressed after integrity verification failed.'
+      }
+    )
+  },
+  {
+    description:
+      'Availability and integrity diagnostics of the derived search index.'
   }
 )

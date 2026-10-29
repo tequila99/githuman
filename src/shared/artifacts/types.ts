@@ -86,3 +86,12 @@ export type ArtifactLifecycleCommit = Static<
 export type ArtifactChangeSetProposal = Static<
   typeof import('./schemas.ts').ArtifactChangeSetProposeBody
 >
+export type ArtifactSearchInput = Static<
+  typeof import('./schemas.ts').ArtifactSearchBody
+>
+export type ArtifactSearchItem = Static<
+  typeof import('./schemas.ts').ArtifactSearchItemSchema
+>
+export type ArtifactSearchResult = Static<
+  typeof import('./schemas.ts').ArtifactSearchSchema
+>

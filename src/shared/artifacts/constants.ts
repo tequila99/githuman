@@ -18,3 +18,12 @@ export const MAX_ARTIFACT_REVIEW_QUOTE_BYTES = 64 * 1024
 export const MAX_ARTIFACT_REVIEW_PAGE_BYTES = 128 * 1024
 // Keep thread lists useful without returning full discussion text.
 export const MAX_ARTIFACT_REVIEW_PREVIEW_BYTES = 1024
+
+// Bound the user query before normalization can expand its Unicode representation.
+export const MAX_SEARCH_QUERY_CODEPOINTS = 256
+// Keep token combinations and cursor validation bounded.
+export const MAX_SEARCH_TOKENS = 8
+// Include the original token alongside a small set of corrected alternatives.
+export const MAX_SEARCH_VARIANTS = 8
+// A candidate can add at most two codepoints to a maximum-length query token.
+export const MAX_SEARCH_WORD_CODEPOINTS = MAX_SEARCH_QUERY_CODEPOINTS + 2

@@ -1,6 +1,10 @@
 import type { FastifyInstance } from 'fastify'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import {
+  ArtifactSearchBody,
+  ArtifactSearchQuery,
+  ArtifactSearchSchema,
+  ArtifactSearchDiagnosticsSchema,
   ArtifactContentQuery,
   ArtifactContentSchema,
   ArtifactHistoryQuery,
@@ -18,6 +22,52 @@ export async function artifactRoutes(
   { service }: { service: ArtifactStorageService }
 ): Promise<void> {
   const typed = app.withTypeProvider<TypeBoxTypeProvider>()
+  typed.get(
+    '/api/artifacts/search',
+    {
+      schema: {
+        tags: ['artifacts'],
+        summary: 'Search verified artifact titles and body text',
+        querystring: ArtifactSearchQuery,
+        response: { 200: ArtifactSearchSchema, ...ERROR_RESPONSES }
+      }
+    },
+    request => {
+      const { status, typeId, taskId, tag, ...query } = request.query
+      return service.search.search({
+        ...query,
+        filters: {
+          ...(status ? { statuses: [status] } : {}),
+          ...(typeId ? { typeIds: [typeId] } : {}),
+          ...(taskId ? { taskIds: [taskId] } : {}),
+          ...(tag ? { tags: [tag] } : {})
+        }
+      })
+    }
+  )
+  typed.post(
+    '/api/artifacts/search',
+    {
+      schema: {
+        tags: ['artifacts'],
+        summary: 'Search with multiple metadata filters',
+        body: ArtifactSearchBody,
+        response: { 200: ArtifactSearchSchema, ...ERROR_RESPONSES }
+      }
+    },
+    request => service.search.search(request.body)
+  )
+  typed.get(
+    '/api/artifacts/search/diagnostics',
+    {
+      schema: {
+        tags: ['artifacts'],
+        summary: 'Read derived search index diagnostics',
+        response: { 200: ArtifactSearchDiagnosticsSchema, ...ERROR_RESPONSES }
+      }
+    },
+    () => service.search.diagnostics()
+  )
   typed.get(
     '/api/artifacts',
     {

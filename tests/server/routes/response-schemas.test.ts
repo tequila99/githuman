@@ -1,3 +1,4 @@
+import { ArtifactStorageService } from '../../../src/server/services/artifact-storage.service.ts'
 import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -525,4 +526,34 @@ test('device routes write every field of their schemas', async t => {
   const [trusted] = (await app.inject('/api/devices')).json()
   assert.deepEqual(approved.json(), trusted)
   assert.equal(trusted.state, 'trusted')
+})
+
+test('artifact search diagnostics serialize the complete service response', async t => {
+  const root = mkdtempSync(join(tmpdir(), 'ght-diagnostics-')),
+    db = createTestDatabase()
+  const storage = new ArtifactStorageService({
+    db,
+    repositoryPath: root,
+    prefix: 'ght-'
+  })
+  const app = buildApp({ db, repositoryPath: root, artifacts: storage })
+  t.after(async () => {
+    await app.close()
+    db.close()
+    rmSync(root, { recursive: true, force: true })
+  })
+  const artifact = storage.create(
+    {
+      requestId: 'diagnostic',
+      body: 'needle',
+      metadata: { title: 'Diagnostic', tags: [] }
+    },
+    { kind: 'user', id: 'local' }
+  )
+  writeFileSync(join(storage.files.root, `ght-${artifact.id}.md`), 'corrupt')
+  storage.search.search({ query: 'needle', filters: { statuses: ['draft'] } })
+  const response = await app.inject('/api/artifacts/search/diagnostics')
+  assert.equal(response.statusCode, 200, response.body)
+  assert.deepEqual(response.json(), json(storage.search.diagnostics()))
+  assert.equal(response.json().suppressed[0].id, artifact.id)
 })

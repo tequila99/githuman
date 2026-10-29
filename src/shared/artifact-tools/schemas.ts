@@ -1,5 +1,6 @@
 import { Type } from '@sinclair/typebox'
 import {
+  ArtifactSearchBody,
   ArtifactValidationReportQuery,
   ArtifactChangeSetProposeBody,
   ArtifactValidationPrepareBody,
@@ -34,6 +35,7 @@ import { MAX_ARTIFACT_BODY_BYTES } from '../artifacts/constants.ts'
 
 // Keep HTTP and MCP input contracts identical, including rejection of actor overrides.
 export const ArtifactToolSchemas = {
+  'artifacts.search': ArtifactSearchBody,
   'change_sets.propose': ArtifactChangeSetProposeBody,
   'change_sets.get': ArtifactParams,
   'change_sets.commit': Type.Object(

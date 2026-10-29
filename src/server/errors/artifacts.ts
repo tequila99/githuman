@@ -25,3 +25,8 @@ export const ArtifactTooLargeError = createError(
   'Artifact exceeds the storage limit.',
   413
 )
+export const ArtifactSearchUnavailableError = createError(
+  'GHT_ARTIFACT_SEARCH_UNAVAILABLE',
+  'Artifact search is unavailable: SQLite FTS5 unicode61 and trigram are required.',
+  503
+)

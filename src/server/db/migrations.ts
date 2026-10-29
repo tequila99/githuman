@@ -1,3 +1,4 @@
+import { applyArtifactSearchMigrations } from './artifact-search-migrations.ts'
 import { applyArtifactValidationMigrations } from './artifact-validation-migrations.ts'
 import { applyArtifactReviewMigrations } from './artifact-review-migrations.ts'
 import { applyArtifactGraphMigrations } from './artifact-graph-migrations.ts'
@@ -9,6 +10,7 @@ export function applyMigrations(db: DatabaseSync): void {
   applyArtifactGraphMigrations(db)
   applyArtifactReviewMigrations(db)
   applyArtifactValidationMigrations(db)
+  applyArtifactSearchMigrations(db)
   db.exec(`
     CREATE TABLE IF NOT EXISTS note_storages (
       id TEXT PRIMARY KEY,

@@ -1,3 +1,4 @@
+import { ArtifactSearchService } from './artifact-search.service.ts'
 import { ArtifactLifecycleService } from './artifact-lifecycle.service.ts'
 import { takeWithinBytes } from '../utils/take-within-bytes.ts'
 import { ArtifactReviewService } from './artifact-review.service.ts'
@@ -118,6 +119,7 @@ function graphPayload(metadata: ArtifactMetadataInput) {
 }
 
 export class ArtifactStorageService {
+  readonly search: ArtifactSearchService
   readonly lifecycle: ArtifactLifecycleService
   readonly files: ArtifactFilesRepository
   readonly types: ArtifactTypeService
@@ -144,6 +146,8 @@ export class ArtifactStorageService {
       this.files.repositoryPath,
       options.prefix
     )
+    this.search = new ArtifactSearchService(this, options.db)
+    this.catalog.onMetadata = artifact => this.search.index(artifact)
     this.definitions = new TaskRepository(options.db, this.storeId)
     const definitions = {
       repository: this.definitions,

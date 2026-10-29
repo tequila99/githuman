@@ -43,6 +43,12 @@ export async function artifactAgentRoutes(
     (input: unknown, actor: ArtifactActor) => unknown
   >([
     [
+      'artifacts.search',
+      checked(ArtifactToolSchemas['artifacts.search'], p =>
+        storage.search.search(p)
+      )
+    ],
+    [
       'change_sets.propose',
       checked(ArtifactToolSchemas['change_sets.propose'], (p, a) =>
         storage.lifecycle.propose(p, a)

@@ -68,6 +68,29 @@ const app = acp
         assert.ok(isRecord(content.structuredContent))
         assert.ok(typeof content.structuredContent.text === 'string')
         assert.ok(content.structuredContent.text.endsWith(input.body))
+        const searched = await client.callTool({
+          name: 'artifacts_search',
+          arguments: {
+            query: 'HTTP probe',
+            mode: 'exact',
+            filters: { statuses: ['draft'] }
+          }
+        })
+        assert.equal(searched.isError, false)
+        assert.ok(isRecord(searched.structuredContent))
+        assert.ok(Array.isArray(searched.structuredContent.items))
+        assert.ok(
+          searched.structuredContent.items.some(
+            item => isRecord(item) && item.id === artifact.id
+          )
+        )
+        const nulSearch = await client.callTool({
+          name: 'artifacts_search',
+          arguments: { query: 'abc\u0000def', mode: 'exact' }
+        })
+        assert.equal(nulSearch.isError, true)
+        assert.ok(isRecord(nulSearch.structuredContent))
+        assert.equal(nulSearch.structuredContent.statusCode, 400)
         const url = config.env.find(
           entry => entry.name === 'GITHUMAN_AGENT_URL'
         )?.value

@@ -38,6 +38,7 @@ interface OperationRow {
 }
 
 export class ArtifactCatalogRepository {
+  onMetadata?: (artifact: Artifact) => void
   readonly storeId: string
   private readonly db: DatabaseSync
 
@@ -334,6 +335,7 @@ export class ArtifactCatalogRepository {
         artifact.relations.length > 0 ||
         artifact.revisionOf.length > 0
     this.recordChange('artifact', artifact.id, requestId, relevant)
+    this.onMetadata?.(artifact)
   }
 
   recordChange(

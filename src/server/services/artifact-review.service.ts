@@ -1,3 +1,4 @@
+import { artifactBody } from '../utils/artifact-body.ts'
 import { reviewSources, isReviewThreadOpen } from './artifact-review-scope.ts'
 import { takeWithinBytes } from '../utils/take-within-bytes.ts'
 import { truncateUtf8Text } from '../utils/text.ts'
@@ -404,11 +405,7 @@ export class ArtifactReviewService {
         'Review anchor does not match the original artifact.'
       )
     }
-    const body = content
-      .toString('utf8')
-      .split('\n')
-      .slice(artifact.bodyStartLine - 1)
-      .join('\n')
+    const body = artifactBody(content.toString('utf8'), artifact.bodyStartLine)
     // Keep source line endings; a final terminator does not add an extra body line.
     const lines = body.match(/[^\n]*\n|[^\n]+$/g) ?? []
     if (anchor.endLine < anchor.startLine || anchor.endLine > lines.length) {
