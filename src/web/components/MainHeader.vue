@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiFullscreen, mdiFullscreenExit, mdiMenu } from '@mdi/js'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -68,9 +69,9 @@ const { enabled: agentEnabled, panelOpen: agentPanelOpen } =
         flat
         dense
         round
-        icon="menu"
+        :icon="mdiMenu"
         :aria-label="t('nav.menu')"
-        class="q-mr-sm"
+        class="app-icon-control q-mr-sm"
         @click="emit('toggle-drawer')"
       />
 
@@ -104,6 +105,7 @@ const { enabled: agentEnabled, panelOpen: agentPanelOpen } =
       <q-space />
       <template v-if="workspace.narrow.value">
         <q-btn
+          class="app-icon-control"
           v-for="application in launchers"
           :key="application.id"
           flat
@@ -114,10 +116,11 @@ const { enabled: agentEnabled, panelOpen: agentPanelOpen } =
         />
       </template>
       <q-btn
+        class="app-icon-control"
         v-if="AppFullscreen.isCapable"
         flat
         round
-        :icon="AppFullscreen.isActive ? 'fullscreen_exit' : 'fullscreen'"
+        :icon="AppFullscreen.isActive ? mdiFullscreenExit : mdiFullscreen"
         :aria-label="
           t(
             AppFullscreen.isActive
@@ -128,6 +131,7 @@ const { enabled: agentEnabled, panelOpen: agentPanelOpen } =
         @click="fullscreen"
       />
       <q-btn
+        class="app-icon-control"
         v-if="agentEnabled && !workspace.narrow.value"
         v-ripple
         flat

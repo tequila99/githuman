@@ -1,4 +1,16 @@
 <script setup lang="ts">
+import {
+  mdiArchiveOutline,
+  mdiCommentEditOutline,
+  mdiConsoleLine,
+  mdiEyeOutline,
+  mdiFileDocumentOutline,
+  mdiMonitorCellphone,
+  mdiPlus,
+  mdiSwapHorizontal,
+  mdiWeatherNight,
+  mdiWhiteBalanceSunny
+} from '@mdi/js'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
@@ -43,20 +55,28 @@ const { version } = storeToRefs(useAppInfoStore())
   >
     <div class="fit column no-wrap">
       <q-list class="col scroll">
-        <q-item v-ripple clickable :to="{ path: '/' }">
+        <q-item v-ripple clickable exact :to="{ path: '/' }">
           <q-item-section avatar>
-            <q-icon name="compare_arrows" />
+            <q-icon class="app-icon-neutral" :name="mdiSwapHorizontal" />
           </q-item-section>
           <q-item-section>{{ t('nav.changes') }}</q-item-section>
         </q-item>
 
         <q-item v-ripple clickable :to="{ path: '/notes' }">
-          <q-item-section avatar><q-icon name="description" /></q-item-section>
+          <q-item-section avatar
+            ><q-icon class="app-icon-neutral" :name="mdiFileDocumentOutline"
+          /></q-item-section>
           <q-item-section>{{ t('notes.title') }}</q-item-section>
+        </q-item>
+        <q-item v-ripple clickable :to="{ path: '/artifacts' }">
+          <q-item-section avatar
+            ><q-icon class="app-icon-neutral" :name="mdiArchiveOutline"
+          /></q-item-section>
+          <q-item-section>{{ t('artifacts.title') }}</q-item-section>
         </q-item>
         <q-item v-ripple clickable :to="{ path: '/reviews' }">
           <q-item-section avatar>
-            <q-icon name="rate_review" />
+            <q-icon class="app-icon-neutral" :name="mdiCommentEditOutline" />
           </q-item-section>
           <q-item-section>{{ t('nav.reviews') }}</q-item-section>
         </q-item>
@@ -67,12 +87,16 @@ const { version } = storeToRefs(useAppInfoStore())
           clickable
           @click="terminalStore.show"
         >
-          <q-item-section avatar><q-icon name="terminal" /></q-item-section>
+          <q-item-section avatar
+            ><q-icon class="app-icon-neutral" :name="mdiConsoleLine"
+          /></q-item-section>
           <q-item-section>{{ t('terminal.title') }}</q-item-section>
         </q-item>
 
         <q-item v-ripple clickable @click="previewStore.show">
-          <q-item-section avatar><q-icon name="visibility" /></q-item-section>
+          <q-item-section avatar
+            ><q-icon class="app-icon-neutral" :name="mdiEyeOutline"
+          /></q-item-section>
           <q-item-section>{{ t('windows.preview') }}</q-item-section>
         </q-item>
 
@@ -80,11 +104,12 @@ const { version } = storeToRefs(useAppInfoStore())
           v-if="agentEnabled"
           v-model="chatsOpen"
           expand-separator
-          :expand-icon-class="isDark ? 'text-grey-4' : 'text-grey-8'"
+          class="app-icon-expansion"
+          expand-icon-class="app-icon-neutral"
         >
           <template #header>
             <q-item-section avatar>
-              <q-icon :name="AGENT_ICON" />
+              <q-icon class="app-icon-neutral" :name="AGENT_ICON" />
             </q-item-section>
             <q-item-section>{{ t('agent.chats.title') }}</q-item-section>
             <q-item-section v-if="agentStore.canAddChat" side>
@@ -93,8 +118,8 @@ const { version } = storeToRefs(useAppInfoStore())
                 round
                 dense
                 size="sm"
-                icon="add"
-                :class="isDark ? 'text-grey-4' : 'text-grey-8'"
+                :icon="mdiPlus"
+                class="app-icon-control"
                 :aria-label="t('agent.chats.add')"
                 @click.stop="agentStore.openNewChatDialog()"
               >
@@ -138,12 +163,17 @@ const { version } = storeToRefs(useAppInfoStore())
           ></q-item
         >
         <q-item v-if="isLocal" v-ripple clickable @click="devicesOpen = true">
-          <q-item-section avatar><q-icon name="devices" /></q-item-section>
+          <q-item-section avatar
+            ><q-icon class="app-icon-neutral" :name="mdiMonitorCellphone"
+          /></q-item-section>
           <q-item-section>{{ t('devices.menu') }}</q-item-section>
         </q-item>
         <q-item v-ripple clickable @click="toggleTheme">
           <q-item-section avatar>
-            <q-icon :name="isDark ? 'light_mode' : 'dark_mode'" />
+            <q-icon
+              class="app-icon-neutral"
+              :name="isDark ? mdiWhiteBalanceSunny : mdiWeatherNight"
+            />
           </q-item-section>
           <q-item-section>
             {{ isDark ? t('theme.switchToLight') : t('theme.switchToDark') }}

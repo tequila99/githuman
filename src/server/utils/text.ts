@@ -33,3 +33,10 @@ export function decodeText(bytes: Uint8Array): string | null {
     return null
   }
 }
+
+export function truncateUtf8Text(text: string, maxBytes: number): string {
+  const bytes = Buffer.from(text)
+  let end = Math.min(maxBytes, bytes.length)
+  while (end < bytes.length && (bytes[end] & 0xc0) === 0x80) end--
+  return bytes.subarray(0, end).toString('utf8')
+}

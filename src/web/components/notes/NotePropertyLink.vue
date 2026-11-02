@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiOpenInNew } from '@mdi/js'
 import type { notePropertyLink } from '@/utils/notes/properties'
 defineProps<{
   link: NonNullable<ReturnType<typeof notePropertyLink>>
@@ -13,8 +14,9 @@ defineProps<{
     rel="noopener noreferrer"
     >{{ link.label
     }}<q-icon
+      class="app-icon-neutral"
       v-if="showExternalIcon && link.external"
-      name="open_in_new"
+      :name="mdiOpenInNew"
       size="13px"
   /></a>
 </template>

@@ -1,4 +1,12 @@
 <script setup lang="ts">
+import {
+  mdiCheckboxBlankOutline,
+  mdiCheckboxMultipleBlankOutline,
+  mdiClose,
+  mdiEyeOutline,
+  mdiFolderOpenOutline,
+  mdiWindowMinimize
+} from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import type { WindowPanEvent } from '@/composables/windows/use-window-geometry'
@@ -22,16 +30,18 @@ const { t } = useI18n()
       "
       class="window-header__title preview-title col ellipsis"
       @dblclick="!narrow && emit('toggleMaximized')"
-      ><q-icon size="16px" name="visibility" class="q-mr-sm" />{{
-        t('windows.preview')
-      }}</div
+      ><q-icon
+        size="16px"
+        :name="mdiEyeOutline"
+        class="app-icon-neutral q-mr-sm"
+      />{{ t('windows.preview') }}</div
     >
     <q-btn
       flat
       dense
       size="sm"
-      class="window-header__control"
-      icon="folder_open"
+      class="app-icon-control window-header__control"
+      :icon="mdiFolderOpenOutline"
       :aria-label="t('windows.openFile')"
       @click="emit('openFile')"
     >
@@ -43,8 +53,8 @@ const { t } = useI18n()
       flat
       dense
       size="sm"
-      class="window-header__control"
-      icon="minimize"
+      class="app-icon-control window-header__control"
+      :icon="mdiWindowMinimize"
       v-if="!narrow"
       :aria-label="t('windows.minimize')"
       @click="emit('minimize')"
@@ -56,8 +66,10 @@ const { t } = useI18n()
       flat
       dense
       size="sm"
-      class="window-header__control"
-      :icon="maximized ? 'filter_none' : 'crop_square'"
+      class="app-icon-control window-header__control"
+      :icon="
+        maximized ? mdiCheckboxMultipleBlankOutline : mdiCheckboxBlankOutline
+      "
       v-if="!narrow"
       :aria-label="t(maximized ? 'terminal.restore' : 'terminal.maximize')"
       @click="emit('toggleMaximized')"
@@ -70,8 +82,8 @@ const { t } = useI18n()
       flat
       dense
       size="sm"
-      class="window-header__control"
-      icon="close"
+      class="app-icon-control window-header__control"
+      :icon="mdiClose"
       :aria-label="t('windows.closeAll')"
       @click="emit('closeAll')"
     />

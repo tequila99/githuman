@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiClose, mdiPlus } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { mentionLabel } from '@/utils/mention-editor'
@@ -42,11 +43,12 @@ function tabLabel(tab: PreviewTab): string {
               tab.title
             }}</q-tooltip></span
           ><q-btn
+            class="app-icon-control"
             flat
             round
             dense
             size="xs"
-            icon="close"
+            :icon="mdiClose"
             :aria-label="t('windows.closeTab')"
             @click.stop="emit('requestClose', tab.id)"
         /></div>
@@ -57,8 +59,8 @@ function tabLabel(tab: PreviewTab): string {
       round
       dense
       size="sm"
-      icon="add"
-      class="q-mx-xs"
+      :icon="mdiPlus"
+      class="app-icon-control q-mx-xs"
       :aria-label="t('windows.openFile')"
       @click="emit('openFile')"
     >

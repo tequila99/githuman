@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiShieldAlertOutline, mdiShieldOutline } from '@mdi/js'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -19,9 +20,9 @@ const label = computed(() =>
     round
     dense
     size="sm"
-    :icon="enabled ? 'gpp_maybe' : 'shield'"
+    :icon="enabled ? mdiShieldAlertOutline : mdiShieldOutline"
     :color="enabled ? 'warning' : undefined"
-    :class="{ 'text-grey-6': !enabled }"
+    class="app-icon-control"
     :disable="disabled"
     :aria-pressed="enabled"
     :aria-label="label"

@@ -2,7 +2,6 @@
 import { computed, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { mdiFilter, mdiFilterOutline, mdiFilterRemoveOutline } from '@mdi/js'
-import { useAppTheme } from '@/composables/use-app-theme'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import type { NoteTagFilter } from '@/types/notes'
 import type { NoteEntry } from '../../../shared/notes/types.ts'
@@ -12,7 +11,6 @@ const props = defineProps<{ entries: NoteEntry[] }>()
 const filter = defineModel<NoteTagFilter>({ required: true })
 const open = shallowRef(false)
 const { t } = useI18n()
-const { isDark } = useAppTheme()
 const active = computed(() => filter.value.tags.length > 0)
 const options = computed(() => {
   const counts = new Map<string, number>()
@@ -26,31 +24,35 @@ const options = computed(() => {
   <div
     class="note-filters row no-wrap"
     role="group"
-    :aria-label="t('notes.filter')"
+    :aria-label="t('common.filters.title')"
   >
     <q-btn
+      class="app-icon-control"
       flat
       round
       dense
       :icon="active ? mdiFilter : mdiFilterOutline"
-      :color="active ? 'primary' : isDark ? 'grey-5' : 'grey-7'"
-      :aria-label="t('notes.filter')"
+      :color="active ? 'primary' : undefined"
+      :aria-label="t('common.filters.title')"
       :aria-pressed="active"
       @click="open = true"
     >
-      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{ t('notes.filter') }}</q-tooltip>
+      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
+        t('common.filters.title')
+      }}</q-tooltip>
     </q-btn>
     <q-btn
+      class="app-icon-control"
       v-if="active"
       flat
       round
       dense
       :icon="mdiFilterRemoveOutline"
-      :aria-label="t('notes.resetFilter')"
+      :aria-label="t('common.filters.reset')"
       @click="filter = { ...filter, tags: [] }"
     >
       <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
-        t('notes.resetFilter')
+        t('common.filters.reset')
       }}</q-tooltip>
     </q-btn>
     <NoteFilterDialog

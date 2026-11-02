@@ -1,3 +1,4 @@
+import { withTransaction } from '../db/transaction.ts'
 import { ValidationError } from '../errors/reviews.ts'
 import type { DatabaseSync } from 'node:sqlite'
 import type {
@@ -180,14 +181,14 @@ export async function createReview(
       updatedAt: nowIso
     }
 
-    db.exec('BEGIN')
     try {
-      created = insertReview(db, review)
-      insertReviewFiles(db, id, filePaths)
-      db.exec('COMMIT')
+      created = withTransaction(db, () => {
+        const inserted = insertReview(db, review)
+        insertReviewFiles(db, id, filePaths)
+        return inserted
+      })
       break
     } catch (error) {
-      db.exec('ROLLBACK')
       if (!(error instanceof UniqueNameError)) {
         throw error
       }

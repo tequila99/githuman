@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiCancel, mdiPencilOutline } from '@mdi/js'
 import { computed, onMounted, shallowRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useQuasar } from 'quasar'
@@ -6,6 +7,8 @@ import { useI18n } from 'vue-i18n'
 import { addressUrl, DEVICE_NAME_MAX_LENGTH, type Device } from '@/api/types'
 import { useDevicesStore } from '@/stores/devices-store'
 import { useNotifyError } from '@/composables/use-notify-error'
+import { formatDateTime } from '@/utils/date'
+import DialogHeader from '@/components/DialogHeader.vue'
 import QrCode from '@/components/devices/QrCode.vue'
 
 // Port of an http: page without an explicit port.
@@ -37,7 +40,7 @@ onMounted(async () => {
 
 function lastSeen(device: Device): string {
   return t('devices.lastSeen', {
-    time: new Date(device.lastSeenAt).toLocaleString(),
+    time: formatDateTime(device.lastSeenAt),
     address: device.address
   })
 }
@@ -77,12 +80,15 @@ function revoke(device: Device) {
 <template>
   <q-dialog :model-value="true" @hide="emit('close')">
     <q-card style="width: 480px; max-width: 90vw">
-      <q-card-section class="text-h6">{{ t('devices.title') }}</q-card-section>
+      <DialogHeader
+        :title="t('devices.title')"
+        :close-label="t('common.filters.close')"
+      />
 
       <q-card-section>
         <div class="text-subtitle2">{{ t('devices.connect') }}</div>
         <p class="text-caption">{{ t('devices.connectHint') }}</p>
-        <div v-if="url" class="column items-center q-gutter-sm">
+        <div v-if="url" class="devices-dialog__connection column items-center">
           <QrCode :value="url" :label="url" />
           <q-select
             v-if="urls.length > 1"
@@ -107,27 +113,37 @@ function revoke(device: Device) {
 
       <q-card-section>
         <div class="text-subtitle2">{{ t('devices.trusted') }}</div>
-        <q-list v-if="trusted.length > 0" dense>
-          <q-item v-for="device in trusted" :key="device.id">
+        <q-list v-if="trusted.length > 0" dense class="devices-dialog__trusted">
+          <q-item
+            v-for="device in trusted"
+            :key="device.id"
+            class="devices-dialog__device"
+          >
             <q-item-section>
-              <q-item-label>{{ device.name }}</q-item-label>
-              <q-item-label caption>{{ lastSeen(device) }}</q-item-label>
+              <q-item-label class="ellipsis" :title="device.name">{{
+                device.name
+              }}</q-item-label>
+              <q-item-label caption lines="2" :title="lastSeen(device)">{{
+                lastSeen(device)
+              }}</q-item-label>
             </q-item-section>
             <q-item-section side>
               <div class="row no-wrap">
                 <q-btn
+                  class="app-icon-control"
                   flat
                   round
                   dense
-                  icon="edit"
+                  :icon="mdiPencilOutline"
                   :aria-label="t('devices.rename')"
                   @click="rename(device)"
                 />
                 <q-btn
+                  class="app-icon-control"
                   flat
                   round
                   dense
-                  icon="block"
+                  :icon="mdiCancel"
                   color="negative"
                   :aria-label="t('devices.revoke')"
                   @click="revoke(device)"
@@ -143,6 +159,17 @@ function revoke(device: Device) {
 </template>
 
 <style scoped>
+.devices-dialog__connection {
+  gap: 24px;
+}
+.devices-dialog__trusted {
+  height: 144px;
+  overflow-y: auto;
+}
+.devices-dialog__device {
+  height: 72px;
+}
+
 .devices-dialog__address {
   width: 100%;
   font-family: var(--font-mono);

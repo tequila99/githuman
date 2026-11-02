@@ -1,5 +1,10 @@
 # https://pnpm.io/settings
 
+# Runtime matrix fixtures have independent dependency locks.
+packages:
+  - '**'
+  - '!tests/server/adapters/pi-acp/fixtures/runtimes/**'
+
 allowBuilds:
   '@parcel/watcher': true
   core-js: true

@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import {
+  mdiCheck,
+  mdiCheckboxBlankOutline,
+  mdiCheckboxMarked,
+  mdiChevronDown
+} from '@mdi/js'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -44,10 +50,10 @@ const current = computed(
     dense
     no-caps
     size="sm"
-    class="agent-cfg"
+    class="app-icon-control agent-cfg"
     :disable="disabled"
     :icon="
-      option.currentValue === true ? 'check_box' : 'check_box_outline_blank'
+      option.currentValue === true ? mdiCheckboxMarked : mdiCheckboxBlankOutline
     "
     :label="option.name"
     @click="emit('select', option.currentValue !== true)"
@@ -58,8 +64,8 @@ const current = computed(
     dense
     no-caps
     size="sm"
-    icon-right="expand_more"
-    class="agent-cfg"
+    :icon-right="mdiChevronDown"
+    class="app-icon-control agent-cfg"
     :disable="disabled"
     :label="current"
     :aria-label="`${option.name}: ${current}`"
@@ -96,7 +102,7 @@ const current = computed(
           <q-item-section avatar>
             <q-icon
               v-if="item.value === option.currentValue"
-              name="check"
+              :name="mdiCheck"
               size="16px"
               color="primary"
             />

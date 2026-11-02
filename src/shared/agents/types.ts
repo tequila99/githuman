@@ -8,6 +8,7 @@ import type {
   PermissionBody,
   AgentPresetInfoSchema,
   AgentSessionStatusSchema,
+  AgentSessionKindSchema,
   AgentSessionInfoSchema,
   AgentFileSearchResponseSchema
 } from './schemas.ts'
@@ -16,6 +17,8 @@ import type {
 export type AgentPresetInfo = Static<typeof AgentPresetInfoSchema>
 
 export type AgentSessionStatus = Static<typeof AgentSessionStatusSchema>
+
+export type AgentSessionKind = Static<typeof AgentSessionKindSchema>
 
 export type AgentSessionInfo = Static<typeof AgentSessionInfoSchema>
 

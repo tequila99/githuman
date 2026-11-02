@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiDownloadOutline } from '@mdi/js'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AgentContextItem } from '@/api/types'
@@ -24,7 +25,7 @@ const canDownload = computed(
     size="sm"
     :removable="removable"
     :clickable="canDownload"
-    :icon="canDownload ? 'download' : undefined"
+    :icon="canDownload ? mdiDownloadOutline : undefined"
     :label="label"
     @remove="emit('remove')"
     @click="canDownload && emit('download')"

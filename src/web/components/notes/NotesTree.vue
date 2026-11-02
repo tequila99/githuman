@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { mdiFileOutline, mdiFolderOpenOutline, mdiFolderOutline } from '@mdi/js'
 import { watch, nextTick, useTemplateRef, computed } from 'vue'
 import type { QTree } from 'quasar'
 import NoteContextMenu from './NoteContextMenu.vue'
+import SearchInput from '@/components/SearchInput.vue'
 import { useNoteDragDrop } from '@/composables/notes/use-note-drag-drop'
 import { useNotesTree } from '@/composables/notes/use-notes-tree'
 import { useI18n } from 'vue-i18n'
@@ -57,34 +59,35 @@ function select(path: string | null) {
 }
 </script>
 <template>
-  <aside class="notes-tree q-pa-md column no-wrap">
-    <div class="notes-tree-toolbar row items-center q-mb-sm">
-      <span
-        class="note-drop-zone"
-        :class="{ 'note-drop-active': drag.hovered.value === '' }"
-        @dragover="drag.over($event, '')"
-        @dragleave="drag.leave"
-        @drop="drag.drop($event, '')"
-        ><NotesRootButton @click="emit('folder', '')"
-      /></span>
-      <q-space />
-      <NewNoteButton @click="emit('create', false)" />
-      <NewNoteFolderButton @click="emit('create', true)" />
-      <NoteFilters v-model="filter" :entries="entries" />
+  <aside class="notes-tree column no-wrap">
+    <div class="q-pa-sm">
+      <div class="notes-tree-toolbar row items-center q-mb-sm">
+        <span
+          class="note-drop-zone"
+          :class="{ 'note-drop-active': drag.hovered.value === '' }"
+          @dragover="drag.over($event, '')"
+          @dragleave="drag.leave"
+          @drop="drag.drop($event, '')"
+          ><NotesRootButton @click="emit('folder', '')"
+        /></span>
+        <q-space />
+        <NewNoteButton @click="emit('create', false)" />
+        <NewNoteFolderButton @click="emit('create', true)" />
+        <NoteFilters v-model="filter" :entries="entries" />
+      </div>
+      <SearchInput
+        :dark="isDark"
+        v-model="query"
+        :placeholder="t('notes.search')"
+        :aria-label="t('notes.search')"
+        @clear="query = ''"
+      />
     </div>
-    <q-input
-      :dark="isDark"
-      v-model="query"
-      dense
-      outlined
-      clearable
-      :label="t('notes.search')"
-      @clear="query = ''"
-    />
+    <q-separator />
     <q-tree
       ref="tree"
       virtual-scroll
-      class="notes-tree-list col scroll q-mt-sm"
+      class="notes-tree-list col scroll q-px-md q-py-xs"
       :dark="isDark"
       :text-color="isDark ? 'grey-3' : 'dark'"
       :nodes="nodes"
@@ -111,11 +114,11 @@ function select(path: string | null) {
             :name="
               node.folder
                 ? expanded
-                  ? 'folder_open'
-                  : 'folder'
-                : 'insert_drive_file'
+                  ? mdiFolderOpenOutline
+                  : mdiFolderOutline
+                : mdiFileOutline
             "
-            :color="node.folder ? 'warning' : 'grey-6'"
+            class="app-icon-neutral"
             size="xs"
           />
           <span class="notes-tree-label ellipsis">{{ node.label }}</span>

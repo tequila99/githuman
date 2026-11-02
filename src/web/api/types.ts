@@ -75,3 +75,57 @@ export type {
   ProjectFileContext,
   ProjectFileMetadata
 } from '../../shared/project-files/types.ts'
+
+export type {
+  Artifact,
+  ArtifactContent,
+  ArtifactSearchInput,
+  ArtifactSearchItem,
+  ArtifactSearchResult
+} from '../../shared/artifacts/types.ts'
+
+export type { ArtifactSourceAnchor } from '../../shared/artifacts/types.ts'
+
+export type {
+  ArtifactEvent,
+  ArtifactHistory,
+  ArtifactRelation,
+  ArtifactGraphEdge,
+  ArtifactGraphPage,
+  ArtifactAncestry
+} from '../../shared/artifacts/types.ts'
+
+export type {
+  Task,
+  TaskList,
+  ArtifactType,
+  ArtifactTypeList
+} from '../../shared/tasks/types.ts'
+
+export type {
+  ArtifactStoredChangeSet,
+  ArtifactValidationView,
+  ArtifactReportChunk,
+  PendingArtifactAction,
+  ArtifactActionInspection,
+  ArtifactActionList,
+  ArtifactValidationInspection,
+  ArtifactChangeSetPreview,
+  ArtifactAuthorizationRequest,
+  ArtifactLifecycleCommit,
+  ArtifactValidationReport
+} from '../../shared/artifacts/types.ts'
+
+export type { ArtifactChangeSet } from '../../shared/artifacts/types.ts'
+
+export type {
+  SessionTaskAssignment,
+  SessionTaskRequest
+} from '../../shared/tasks/types.ts'
+
+export type {
+  ArtifactTransitionStage,
+  ArtifactTransitionOptions,
+  ArtifactTransitionPreview,
+  ArtifactTransitionOperation
+} from '../../shared/artifact-transitions/types.ts'

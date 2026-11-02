@@ -1,0 +1,18 @@
+.document-tags .q-chip {
+  background: #f4f0ff;
+  color: #9873f2;
+  font-size: 14px;
+  margin: 2px;
+  padding: 2px 8px;
+  height: auto;
+  min-height: 24px;
+}
+
+.document-tags .q-chip__icon {
+  color: inherit;
+}
+
+.body--dark .document-tags .q-chip {
+  background: #3a314d;
+  color: #c4aaff;
+}

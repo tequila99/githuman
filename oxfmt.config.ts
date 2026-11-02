@@ -4,6 +4,7 @@ export default defineConfig({
   $schema: './node_modules/oxfmt/configuration_schema.json',
 
   ignorePatterns: [
+    '.Codex/',
     '**/node_modules/',
     'dist/',
     'quasar.config.*.temporary.compiled*',

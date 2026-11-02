@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiSendOutline, mdiStopCircleOutline } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import type { AgentChatEntry } from '@/utils/agent-chat'
 defineProps<{ status: AgentChatEntry['chat']['status']; isEmpty: boolean }>()
@@ -13,8 +14,8 @@ const { t } = useI18n()
     flat
     size="sm"
     color="negative"
-    icon="stop_circle"
-    class="q-ma-xs"
+    :icon="mdiStopCircleOutline"
+    class="app-icon-control q-ma-xs"
     :aria-label="t('agent.cancel')"
     @click="emit('cancel')"
   />
@@ -25,8 +26,8 @@ const { t } = useI18n()
     flat
     size="sm"
     color="primary"
-    icon="send"
-    class="q-ma-xs"
+    :icon="mdiSendOutline"
+    class="app-icon-control q-ma-xs"
     :disable="status !== 'ready' || isEmpty"
     :aria-label="t('agent.send')"
     @click="emit('send')"

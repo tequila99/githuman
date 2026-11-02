@@ -278,3 +278,13 @@ test('markdown without tables renders without a table wrapper', () => {
     '<h1>A</h1>\n<p>text</p>\n<ul>\n<li>item</li>\n</ul>\n'
   )
 })
+
+test('artifact rendering blocks even managed note images', () => {
+  const source =
+    '![secret](/api/notes/assets/' +
+    'a'.repeat(64) +
+    '.png)\n![external](https://example.com/image.png)'
+  const html = renderMarkdown(source, { disableImages: true })
+  assert.equal(html.includes('<img'), false)
+  assert.ok(html.includes('secret'))
+})

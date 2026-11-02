@@ -1,8 +1,19 @@
+import { isLocalPiLaunch } from '../../adapters/pi-acp/launch.ts'
+import { isRecord } from '../../../shared/utils/guards.ts'
+import type {
+  TurnTaskContext,
+  ActivatedTaskContext
+} from './turn-task-context.ts'
 import {
   AgentSessionError,
   AgentSessionStateError,
   AgentConfigError
 } from '../../errors/agents.ts'
+import { ARTIFACT_TASK_PROMPT_HINT } from '../../../shared/artifact-tools/instructions.ts'
+import {
+  ARTIFACT_AGENT_KEY_ENV,
+  ARTIFACT_MCP_SERVER_NAME
+} from '../../../shared/artifacts/mcp-constants.ts'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { rm } from 'node:fs/promises'
@@ -24,6 +35,7 @@ import type {
   AgentPermissionOption,
   AgentPermissionRequest,
   AgentPreset,
+  AgentSessionKind,
   AgentSessionState,
   AgentPromptRequest,
   AgentSessionInfo,
@@ -42,13 +54,24 @@ export const MAX_BUFFERED_EVENTS = 5_000
 const STDERR_TAIL_CHARS = 2_000
 /** How long a closed connection waits for the `exit` event that carries the reason. */
 const EXIT_GRACE_MS = 500
+// Bound pending tool context retained only for server permission policies.
+const MAX_PERMISSION_TOOL_CALLS = 64
 
 export type AgentEventListener = (envelope: AgentChatEnvelope) => void
 
+export type AgentPermissionPolicy = (
+  request: RequestPermissionRequest,
+  previous?: acp.ToolCallUpdate
+) => { allow: boolean; reason: string }
+
 export interface AgentSessionOptions {
   preset: AgentPreset
+  /** Immutable server policy; takes precedence over the user auto-approve switch. */
+  permissionPolicy?: AgentPermissionPolicy
   /** What the chat is called in the UI. */
   name: string
+  /** Server-created session kind selects the agent execution profile. */
+  kind?: AgentSessionKind
   /** Working directory of the agent — the repository root. */
   cwd: string
   reviewId?: string | null
@@ -59,6 +82,10 @@ export interface AgentSessionOptions {
   nextEventId?: () => number
   /** How many events a session keeps for late subscribers. */
   bufferLimit?: number
+  taskIds?: (sessionId: string) => string[]
+  taskAssignment?: (sessionId: string) => { version: number; taskIds: string[] }
+  /** Trusted server configuration; never populated from an HTTP request. */
+  mcpServers?: acp.McpServer[] | ((sessionId: string) => acp.McpServer[])
 }
 
 interface PendingPermission {
@@ -90,12 +117,15 @@ export class AgentSession {
   readonly presetId: string
   readonly name: string
   readonly reviewId: string | null
+  readonly kind?: AgentSessionKind
 
+  #turnTaskContext: TurnTaskContext | undefined
   #status: AgentSessionStatus = 'starting'
   /** Set when the user (or the server) ends the session: its exit is no failure. */
   #closing = false
   #error: string | null = null
   #autoApprove = false
+  #permissionToolCalls = new Map<string, acp.ToolCallUpdate>()
   #child: ChildProcess | undefined
   #connection: acp.ClientConnection | undefined
   #acpSessionId: string | undefined
@@ -103,6 +133,8 @@ export class AgentSession {
   #image = false
   #config: AgentConfigOption[] = []
   #stderrTail = ''
+  #mcpSecrets: string[] = []
+  #hasArtifactMcp = false
   /** Settles when the agent process has exited. */
   #exited: Promise<unknown> = Promise.resolve()
   #ownEventId = 0
@@ -118,10 +150,44 @@ export class AgentSession {
     this.presetId = options.preset.id
     this.name = options.name
     this.reviewId = options.reviewId ?? null
+    this.kind = options.kind
   }
 
   get status(): AgentSessionStatus {
     return this.#status
+  }
+
+  get turnTaskContext(): TurnTaskContext | undefined {
+    return this.#turnTaskContext
+  }
+
+  prepareTaskActivation(
+    turnId: string,
+    assignmentVersion: number,
+    taskId: string,
+    requestId: string
+  ): { context: ActivatedTaskContext; apply: () => void } {
+    // Cancellation clears the context before the agent stops reporting busy.
+    if (!this.#turnTaskContext || this.#turnTaskContext.turnId !== turnId) {
+      throw new AgentSessionStateError(
+        'The response ended or its task context changed.'
+      )
+    }
+    const context: ActivatedTaskContext = Object.freeze({
+      sessionId: this.id,
+      turnId,
+      assignmentVersion,
+      taskIds: Object.freeze([taskId]),
+      source: 'turn_activation',
+      activationRequestId: requestId
+    })
+    // The caller commits and applies synchronously, without yielding to cancellation or another prompt.
+    return {
+      context,
+      apply: () => {
+        this.#turnTaskContext = context
+      }
+    }
   }
 
   /** Whether the agent advertised `promptCapabilities.embeddedContext`. */
@@ -137,8 +203,12 @@ export class AgentSession {
   info(): AgentSessionInfo {
     return {
       id: this.id,
+      ...(this.#options.taskIds
+        ? { taskIds: this.#options.taskIds(this.id) }
+        : {}),
       presetId: this.presetId,
       name: this.name,
+      ...(this.kind === undefined ? {} : { kind: this.kind }),
       status: this.#status,
       reviewId: this.reviewId,
       autoApprove: this.#autoApprove,
@@ -168,7 +238,7 @@ export class AgentSession {
     } catch (error) {
       // An exit during the start already reported itself (`#onExit`).
       if (this.#error === null && !this.#closing) {
-        const message = errorMessage(error)
+        const message = this.#redact(errorMessage(error))
         this.#error = message
         this.#emit({ type: 'error', message })
       }
@@ -178,16 +248,33 @@ export class AgentSession {
 
   async #start(): Promise<void> {
     const { preset, cwd } = this.#options
+    const localPi = isLocalPiLaunch(preset)
+    if (preset.id === 'pi' && this.kind === 'validation' && !localPi) {
+      throw new AgentSessionError(
+        'Pi validation requires the trusted local GitHuman pi launcher. The configured command is available for chat only.'
+      )
+    }
     const child = spawn(preset.command, preset.args, {
       cwd,
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, ...preset.env }
+      env: {
+        ...process.env,
+        ...preset.env,
+        ...(localPi
+          ? {
+              GITHUMAN_PI_PROFILE:
+                this.kind === 'validation' ? 'validator' : 'chat'
+            }
+          : {})
+      }
     })
     this.#child = child
     this.#exited = new Promise(resolve => child.once('exit', resolve))
     child.stderr.setEncoding('utf-8')
     child.stderr.on('data', (chunk: string) => {
-      this.#stderrTail = (this.#stderrTail + chunk).slice(-STDERR_TAIL_CHARS)
+      this.#stderrTail = this.#redact(this.#stderrTail + chunk).slice(
+        -STDERR_TAIL_CHARS
+      )
     })
     // Swallow stdin EPIPE after the agent died; the closed connection reports it.
     child.stdin.on('error', () => {})
@@ -259,13 +346,40 @@ export class AgentSession {
     this.#embeddedContext = prompt?.embeddedContext === true
     this.#image = prompt?.image === true
 
+    const mcpServers =
+      typeof this.#options.mcpServers === 'function'
+        ? this.#options.mcpServers(this.id)
+        : (this.#options.mcpServers ?? [])
+    this.#hasArtifactMcp = mcpServers.some(
+      server => server.name === ARTIFACT_MCP_SERVER_NAME
+    )
+    this.#mcpSecrets = mcpServers.flatMap(server =>
+      'env' in server
+        ? server.env
+            .filter(entry => entry.name === ARTIFACT_AGENT_KEY_ENV)
+            .map(entry => entry.value)
+        : []
+    )
     const created = await connection.agent.request(
       acp.methods.agent.session.new,
       {
         cwd: this.#options.cwd,
-        mcpServers: []
+        mcpServers
       }
     )
+    if (isLocalPiLaunch(this.#options.preset)) {
+      const ack = created['_meta']?.githumanBridge
+      if (
+        !isRecord(ack) ||
+        ack.version !== 1 ||
+        ack.profile !== (this.kind === 'validation' ? 'validator' : 'chat') ||
+        ack.registryGeneration !== 1
+      ) {
+        throw new AgentSessionError(
+          'Pi bridge did not confirm its launch profile and MCP registry.'
+        )
+      }
+    }
     this.#acpSessionId = created.sessionId
     this.#setConfig(mapConfigOptions(created.configOptions))
   }
@@ -312,7 +426,9 @@ export class AgentSession {
       )
       this.#setConfig(mapConfigOptions(response.configOptions))
     } catch (error) {
-      throw new AgentSessionError(errorMessage(error), { cause: error })
+      throw new AgentSessionError(this.#redact(errorMessage(error)), {
+        cause: error
+      })
     }
   }
 
@@ -352,8 +468,16 @@ export class AgentSession {
     this.#markClosed()
   }
 
+  // Hides the session key in errors and stderr. Messages that the agent itself writes stay as they are.
+  #redact(text: string): string {
+    for (const secret of this.#mcpSecrets) {
+      text = text.replaceAll(secret, '[redacted]')
+    }
+    return text
+  }
+
   #exitMessage(code: number | null, signal: NodeJS.Signals | null): string {
-    const tail = this.#stderrTail.trim()
+    const tail = this.#redact(this.#stderrTail.trim())
     return (
       `Agent exited (${signal ?? `code ${code}`})` +
       (tail === '' ? '' : `: ${tail.slice(-400)}`)
@@ -366,13 +490,30 @@ export class AgentSession {
    */
   prompt(blocks: ContentBlock[], display: AgentPromptRequest): void {
     const { connection, sessionId } = this.#readyChannel()
+    const assignment = this.#options.taskAssignment?.(this.id)
+    const turn = Object.freeze({
+      turnId: randomUUID(),
+      sessionId: this.id,
+      assignmentVersion: assignment?.version ?? 0,
+      source: 'turn_assignment' as const,
+      taskIds: Object.freeze([...(assignment?.taskIds ?? [])])
+    })
+    this.#turnTaskContext = turn
     this.#setStatus('busy')
     this.#emit({
       type: 'user',
       text: display.text,
       context: display.context ?? []
     })
-    void this.#runPrompt(connection, sessionId, blocks)
+    // Append the reminder without changing the user transcript or validator assignments.
+    const prompt =
+      this.#hasArtifactMcp && !this.#options.permissionPolicy
+        ? [
+            ...blocks,
+            { type: 'text' as const, text: ARTIFACT_TASK_PROMPT_HINT }
+          ]
+        : blocks
+    void this.#runPrompt(connection, sessionId, prompt, turn.turnId)
   }
 
   /**
@@ -399,15 +540,18 @@ export class AgentSession {
   async #runPrompt(
     connection: acp.ClientConnection,
     sessionId: string,
-    blocks: ContentBlock[]
+    blocks: ContentBlock[],
+    turnId: string
   ): Promise<void> {
     try {
       const response = await connection.agent.request(
         acp.methods.agent.session.prompt,
         { sessionId, prompt: blocks }
       )
+      this.#clearTurnTaskContext(turnId)
       this.#emit({ type: 'stop', stopReason: response.stopReason })
     } catch (error) {
+      this.#clearTurnTaskContext(turnId)
       // A failure of the transport comes before the `exit` event, and only
       // that event can say why the agent died: let it report first.
       if (!(error instanceof acp.RequestError)) {
@@ -417,15 +561,25 @@ export class AgentSession {
         ])
       }
       if (!this.#isClosed() && this.#error === null) {
-        this.#emit({ type: 'error', message: errorMessage(error) })
+        this.#emit({
+          type: 'error',
+          message: this.#redact(errorMessage(error))
+        })
       }
     } finally {
+      this.#clearTurnTaskContext(turnId)
       // A request still open once the turn is over (it ended in an error, say)
       // is dead: answering it later would still make the agent act on it.
       this.#cancelPendingPermissions()
       if (this.#status === 'busy') {
         this.#setStatus('ready')
       }
+    }
+  }
+
+  #clearTurnTaskContext(turnId: string): void {
+    if (this.#turnTaskContext?.turnId === turnId) {
+      this.#turnTaskContext = undefined
     }
   }
 
@@ -438,6 +592,8 @@ export class AgentSession {
     if (this.#status !== 'busy' || !this.#connection || !this.#acpSessionId) {
       return
     }
+    // Stop inheritance immediately; the agent may take time to finish cancellation.
+    this.#turnTaskContext = undefined
     try {
       await this.#connection.agent.notify(acp.methods.agent.session.cancel, {
         sessionId: this.#acpSessionId
@@ -445,7 +601,9 @@ export class AgentSession {
     } catch (error) {
       // The connection closed since the check above: the turn is over anyway.
       if (!this.#isClosed()) {
-        throw new AgentSessionError(errorMessage(error), { cause: error })
+        throw new AgentSessionError(this.#redact(errorMessage(error)), {
+          cause: error
+        })
       }
     }
   }
@@ -481,6 +639,11 @@ export class AgentSession {
   setAutoApprove(enabled: boolean): void {
     if (this.#status === 'closed') {
       throw new AgentSessionStateError('The session is closed')
+    }
+    if (enabled && this.#options.permissionPolicy) {
+      throw new AgentSessionStateError(
+        'This session uses a fixed permission policy.'
+      )
     }
     if (this.#autoApprove === enabled) {
       return
@@ -518,6 +681,9 @@ export class AgentSession {
     if (this.#status !== 'busy') {
       return Promise.resolve({ outcome: { outcome: 'cancelled' } })
     }
+    if (this.#options.permissionPolicy) {
+      return Promise.resolve(this.#policyPermission(params))
+    }
     const requestId = randomUUID()
     const request = mapPermissionRequest(requestId, params)
     if (this.#autoApprove) {
@@ -539,6 +705,42 @@ export class AgentSession {
     })
   }
 
+  #policyPermission(
+    params: RequestPermissionRequest
+  ): RequestPermissionResponse {
+    const previous = this.#permissionToolCalls.get(params.toolCall.toolCallId)
+    this.#permissionToolCalls.delete(params.toolCall.toolCallId)
+    let decision = {
+      allow: false,
+      reason: 'Permission policy could not verify this action.'
+    }
+    try {
+      decision = this.#options.permissionPolicy!(params, previous)
+    } catch {
+      // Policy failures must not create a manual prompt or grant an action.
+    }
+    const choice = decision.allow
+      ? params.options.find(option => option.kind === 'allow_once')
+      : undefined
+    if (choice) {
+      this.#emit({ type: 'auto-approved', title: decision.reason })
+      return { outcome: { outcome: 'selected', optionId: choice.optionId } }
+    }
+    this.#emit({
+      type: 'tool',
+      toolCallId: params.toolCall.toolCallId,
+      title: 'Validation permission denied',
+      status: 'failed',
+      output: decision.allow
+        ? 'Permission policy requires an allow_once option.'
+        : decision.reason
+    })
+    const reject = params.options.find(option => option.kind === 'reject_once')
+    return reject
+      ? { outcome: { outcome: 'selected', optionId: reject.optionId } }
+      : { outcome: { outcome: 'cancelled' } }
+  }
+
   #onUpdate(update: Parameters<typeof mapSessionUpdate>[0]): void {
     // Agents may speak outside a turn — pi greets with its version and skill
     // list right after session/new. That is noise in a chat transcript.
@@ -547,6 +749,27 @@ export class AgentSession {
       update.sessionUpdate === 'agent_message_chunk'
     ) {
       return
+    }
+    if (
+      this.#options.permissionPolicy &&
+      this.#status === 'busy' &&
+      (update.sessionUpdate === 'tool_call' ||
+        update.sessionUpdate === 'tool_call_update')
+    ) {
+      if (update.status === 'completed' || update.status === 'failed') {
+        this.#permissionToolCalls.delete(update.toolCallId)
+      } else {
+        const previous = this.#permissionToolCalls.get(update.toolCallId)
+        this.#permissionToolCalls.set(update.toolCallId, {
+          ...previous,
+          ...update
+        })
+        if (this.#permissionToolCalls.size > MAX_PERMISSION_TOOL_CALLS) {
+          this.#permissionToolCalls.delete(
+            this.#permissionToolCalls.keys().next().value!
+          )
+        }
+      }
     }
     const event = mapSessionUpdate(update)
     if (event?.type === 'config') {
@@ -605,6 +828,7 @@ export class AgentSession {
     if (this.#status === 'closed') {
       return
     }
+    this.#turnTaskContext = undefined
     this.#setStatus('closed', this.#error ?? undefined)
     void rm(this.attachmentDir, { recursive: true, force: true }).catch(
       () => {}
@@ -614,6 +838,7 @@ export class AgentSession {
   }
 
   #cancelPendingPermissions(): void {
+    this.#permissionToolCalls.clear()
     // Each resolver removes itself from the map, which Map iteration allows.
     for (const pending of this.#pendingPermissions.values()) {
       pending.resolve({ outcome: { outcome: 'cancelled' } })

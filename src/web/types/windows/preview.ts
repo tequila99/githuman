@@ -1,6 +1,7 @@
 export type PreviewSource =
   | { type: 'file'; path: string; ref: string }
   | { type: 'local'; id: string }
+  | { type: 'artifact'; storeId: string; artifactId: string }
   | { type: 'message'; sessionId: string; messageId: string }
 export interface PreviewTab {
   id: string

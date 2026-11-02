@@ -1,3 +1,5 @@
+import { ARTIFACT_TASK_PROMPT_HINT } from '../../../src/shared/artifact-tools/instructions.ts'
+import { ArtifactStorageService } from '../../../src/server/services/artifact-storage.service.ts'
 import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -345,7 +347,7 @@ test('full turn: prompt streams a reply and ends with stop, status goes busy →
     events => stream.stopped(events) && events.at(-1)?.event.type === 'status'
   )
 
-  assert.equal(stream.text(), 'echo:hello')
+  assert.equal(stream.text(), `echo:hello\n${ARTIFACT_TASK_PROMPT_HINT}`)
   const statuses = stream.events.flatMap(e =>
     e.event.type === 'status' ? [e.event.status] : []
   )
@@ -929,7 +931,8 @@ test('GET /api/agent/sessions lists the active session so a reloaded page can re
       status: 'ready',
       reviewId: null,
       autoApprove: false,
-      error: null
+      error: null,
+      taskIds: []
     }
   ])
 })
@@ -1103,3 +1106,103 @@ test('a new stream gets the state of every chat as its own frame, before the eve
   assert.equal(state.status, 'ready')
   assert.equal(state.config.find(o => o.id === 'model')?.currentValue, 'm2')
 })
+
+for (const embedded of ['1', '0']) {
+  test(
+    `artifact prompt resolves current data and related content over real MCP (embedded=${embedded})`,
+    { timeout: 30000 },
+    async t => {
+      const preset = {
+        ...fakePreset('artifact-context', { FAKE_EMBEDDED: embedded }),
+        args: [
+          join(
+            import.meta.dirname,
+            '../fixtures/fake-acp-artifact-context-agent.ts'
+          )
+        ]
+      }
+      const { app, db, fixture, address, createSession, post } = await setup(
+        t,
+        [preset]
+      )
+      const storage = new ArtifactStorageService({
+        db,
+        repositoryPath: fixture.dir,
+        prefix: 'ght-'
+      })
+      const user = { kind: 'user' as const, id: 'local' }
+      const related = storage.create(
+        {
+          requestId: 'context-related',
+          body: 'RELATED_SECRET_BODY',
+          metadata: { title: 'Related', tags: [] }
+        },
+        user
+      )
+      const artifact = storage.create(
+        {
+          requestId: 'context-main',
+          body: 'Main body',
+          metadata: {
+            title: 'Original',
+            tags: [],
+            relations: [{ kind: 'references', targetId: related.id }]
+          }
+        },
+        user
+      )
+      storage.updateMetadata(
+        artifact.id,
+        {
+          requestId: 'context-rename',
+          expectedVersion: 1,
+          metadata: {
+            title: 'Current',
+            tags: [],
+            relations: artifact.relations
+          }
+        },
+        user
+      )
+      const id = await createSession('artifact-context')
+      const stream = openEvents(t, address, id)
+      const response = await post(`/api/agent/sessions/${id}/prompt`, {
+        text: 'Read related context',
+        context: [
+          {
+            kind: 'artifact',
+            storeId: storage.storeId,
+            artifactId: artifact.id,
+            name: 'Original'
+          }
+        ]
+      })
+      assert.equal(response.status, 202, await response.text())
+      await stream.waitFor(stopped)
+      const text = stream.events
+        .flatMap(envelope =>
+          envelope.event.type === 'message' ? [envelope.event.text] : []
+        )
+        .join('')
+      assert.match(text, /MCP related content read successfully/)
+      assert.match(text, /Current title: Current/)
+      assert.ok(text.includes(`selectedId=${related.id}`))
+      const wrong = await app.inject({
+        method: 'POST',
+        url: `/api/agent/sessions/${id}/prompt`,
+        payload: {
+          text: 'Read',
+          context: [
+            {
+              kind: 'artifact',
+              storeId: 'another-store',
+              artifactId: artifact.id,
+              name: 'Wrong'
+            }
+          ]
+        }
+      })
+      assert.equal(wrong.statusCode, 400, wrong.body)
+    }
+  )
+}

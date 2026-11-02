@@ -22,7 +22,8 @@ const FILE_WITH_POSITION_PATTERN = /^[^/:]+:\d+(?::\d+)?(?:#.*)?$/
 // An http: or https: link, which can point to this server.
 const WEB_URL_PATTERN = /^https?:\/\//i
 // Routes of this application: they are not repository-relative links.
-const APP_ROUTE_PATTERN = /^\/(api|notes|reviews|access|files)(?:[/?]|$)/
+const APP_ROUTE_PATTERN =
+  /^\/(api|notes|reviews|access|files|artifacts)(?:[/?]|$)/
 // A ":line" or ":line:column" ending of a path.
 const POSITION_SUFFIX_PATTERN = /:(\d+)(?::(\d+))?$/
 

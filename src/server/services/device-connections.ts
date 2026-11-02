@@ -32,7 +32,16 @@ export class DeviceConnections {
     if (!access || access.local) return () => {}
     const id =
       access.device.status === 'device' ? access.device.device.id : undefined
-    if (id === undefined || !this.devices.isTrusted(id)) {
+    if (id === undefined) {
+      close()
+      return undefined
+    }
+    return this.trackDevice(id, close)
+  }
+
+  /** Register server-owned work without retaining the original HTTP request. */
+  trackDevice(id: string, close: () => void): (() => void) | undefined {
+    if (!this.devices.isTrusted(id)) {
       close()
       return undefined
     }

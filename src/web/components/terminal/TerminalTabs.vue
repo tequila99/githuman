@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiClose, mdiPlus } from '@mdi/js'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import type { TerminalInfo } from '../../../shared/terminal/types.ts'
 import { MAX_TERMINAL_SESSIONS } from '../../../shared/terminal/constants.ts'
@@ -48,8 +49,8 @@ const { t } = useI18n()
             round
             dense
             size="xs"
-            icon="close"
-            class="q-ml-xs"
+            :icon="mdiClose"
+            class="app-icon-control q-ml-xs"
             :disable="!connected"
             :aria-label="t('terminal.closeTab')"
             @click.stop.prevent="emit('requestClose', session.id)"
@@ -63,8 +64,8 @@ const { t } = useI18n()
       round
       dense
       size="sm"
-      icon="add"
-      class="q-mx-xs"
+      :icon="mdiPlus"
+      class="app-icon-control q-mx-xs"
       :loading="busy"
       :disable="!connected || sessions.length >= MAX_TERMINAL_SESSIONS"
       :aria-label="t('terminal.add')"

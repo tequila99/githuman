@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiFileUploadOutline } from '@mdi/js'
 import { PREVIEW_WINDOW_ID } from '@/constants/windows/constants'
 import { shallowRef } from 'vue'
 import { PREVIEW_FILE_ACCEPT } from '@/utils/windows/local-preview'
@@ -144,7 +145,11 @@ function maximize() {
       v-if="dragging"
       class="preview-drop-overlay column items-center justify-center"
     >
-      <q-icon name="upload_file" size="48px" />
+      <q-icon
+        class="app-icon-neutral"
+        :name="mdiFileUploadOutline"
+        size="48px"
+      />
       <div class="q-mt-sm">{{ t('windows.dropFiles') }}</div>
     </div>
     <PreviewContent

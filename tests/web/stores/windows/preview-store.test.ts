@@ -397,3 +397,64 @@ test('a line request is one-shot, repeats on reopen and is never persisted', () 
   store.close(id)
   assert.equal(store.lineRequests[id], undefined)
 })
+
+test('artifact previews read all verified chunks, strip frontmatter and reuse persisted locators', async () => {
+  const storeId = '11111111-1111-4111-8111-111111111111'
+  const artifactId = '22222222-2222-4222-8222-222222222222'
+  const header = '---\ntitle: Historical\n---\n'
+  const body = '# Artifact body\nПривет\n'
+  const bytes = new TextEncoder().encode(header + body).length
+  const headerBytes = new TextEncoder().encode(header).length
+  const saved = new Map<string, string>()
+  setStorageBackend({
+    getItem: key => saved.get(key),
+    setItem: (key, value) => saved.set(key, value),
+    removeItem: key => saved.delete(key)
+  })
+  const offsets: number[] = []
+  globalThis.fetch = async input => {
+    const url = input instanceof Request ? input.url : input.toString()
+    const metadata = {
+      storeId,
+      id: artifactId,
+      sha256: 'hash',
+      bytes,
+      bodyStartLine: 4,
+      title: 'Current title'
+    }
+    if (!url.includes('/content?')) return Response.json(metadata)
+    const offset = Number(
+      new URL(url, 'http://localhost').searchParams.get('offset')
+    )
+    offsets.push(offset)
+    return Response.json({
+      ...metadata,
+      totalBytes: bytes,
+      offset,
+      nextOffset: offset === 0 ? headerBytes : null,
+      text: offset === 0 ? header : body
+    })
+  }
+  const store = usePreviewStore()
+  const source = { type: 'artifact', storeId, artifactId } as const
+  const id = store.open('markdown', source, { title: 'Link label' })
+  await store.load(id)
+  assert.equal(store.data[id]?.text, body)
+  assert.equal(store.tabs[0]?.title, 'Current title')
+  assert.deepEqual(offsets, [0, headerBytes])
+  assert.equal(store.open('markdown', source, { title: 'Another link' }), id)
+  assert.equal(store.tabs.length, 1)
+  assert.ok(!saved.get('githuman:preview:v1')?.includes('Artifact body'))
+  setActivePinia(createPinia())
+  const restored = usePreviewStore()
+  assert.deepEqual(restored.tabs[0]?.source, source)
+  assert.equal(restored.data[id]?.text, '')
+  globalThis.fetch = async () =>
+    Response.json({
+      storeId: '33333333-3333-4333-8333-333333333333',
+      id: artifactId
+    })
+  await restored.load(id)
+  assert.match(restored.data[id]?.error ?? '', /another artifact store/)
+  assert.equal(restored.data[id]?.text, '')
+})

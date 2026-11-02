@@ -166,3 +166,25 @@ test('notes directory flag overrides environment and remains relative until serv
     }
   }
 })
+
+test('parseServeArgs rejects a --db-prefix that is unsafe in file names', () => {
+  for (const prefix of ['a/b', 'a\\b', 'a:b', 'x'.repeat(101), 'a\nb']) {
+    assert.throws(
+      () => parseServeArgs(['--db-prefix', prefix]),
+      /Invalid --db-prefix/
+    )
+  }
+})
+
+test('parseServeArgs rejects an unsafe GITHUMAN_DB_PREFIX', t => {
+  const previous = process.env.GITHUMAN_DB_PREFIX
+  process.env.GITHUMAN_DB_PREFIX = 'a/b'
+  t.after(() => {
+    if (previous === undefined) {
+      delete process.env.GITHUMAN_DB_PREFIX
+    } else {
+      process.env.GITHUMAN_DB_PREFIX = previous
+    }
+  })
+  assert.throws(() => parseServeArgs([]), /Invalid --db-prefix/)
+})

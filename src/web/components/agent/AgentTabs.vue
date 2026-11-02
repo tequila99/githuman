@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { mdiClose } from '@mdi/js'
+import AddButton from '@/components/buttons/AddButton.vue'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
@@ -65,8 +67,8 @@ function confirmClose(entry: AgentChatEntry) {
             round
             dense
             size="xs"
-            icon="close"
-            class="q-ml-xs"
+            :icon="mdiClose"
+            class="app-icon-control q-ml-xs"
             :aria-label="t('agent.chats.close')"
             @click.stop.prevent="confirmClose(entry)"
           />
@@ -74,21 +76,13 @@ function confirmClose(entry: AgentChatEntry) {
         </div>
       </q-tab>
     </q-tabs>
-    <q-btn
+    <AddButton
       v-if="store.canAddChat"
-      flat
-      round
-      dense
       size="sm"
-      icon="add"
       class="q-mx-xs"
-      :aria-label="t('agent.chats.add')"
+      :tooltip="t('agent.chats.add')"
       @click="store.openNewChatDialog()"
-    >
-      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
-        t('agent.chats.add')
-      }}</q-tooltip>
-    </q-btn>
+    />
   </div>
 </template>
 

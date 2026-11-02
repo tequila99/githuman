@@ -1,6 +1,6 @@
 {
   "name": "@tequila99/githuman",
-  "version": "0.11.2",
+  "version": "0.12.0",
   "description": "Review AI agent code changes before commit — Vue edition",
   "homepage": "https://github.com/tequila99/githuman#readme",
   "bugs": {
@@ -27,7 +27,7 @@
     "dev:server": "node --watch-path=src/server --watch-path=src/cli --watch-path=src/shared src/cli/index.ts serve --no-open --api-docs",
     "clean": "rm -rf dist",
     "build": "pnpm run build:server && pnpm run build:web",
-    "build:server": "tsc -p tsconfig.build.json && chmod +x dist/cli/index.js",
+    "build:server": "tsc -p tsconfig.build.json && node scripts/copy-pi-assets.mjs && chmod +x dist/cli/index.js",
     "build:web": "quasar build",
     "start": "node dist/cli/index.js serve",
     "test": "pnpm run test:server && pnpm run test:cli && pnpm run test:shared && pnpm run test:web && pnpm run test:lint-rules",
@@ -43,7 +43,8 @@
     "lint:check": "oxfmt --check && oxlint",
     "postinstall": "node -e \"require('node:fs').existsSync('quasar.config.ts')&&require('node:child_process').execSync('quasar prepare --silent',{stdio:'inherit'})\"",
     "prepublishOnly": "pnpm run build && pnpm run typecheck && pnpm test",
-    "test:shared": "node --test 'tests/shared/**/*.test.ts'"
+    "test:shared": "node --test 'tests/shared/**/*.test.ts'",
+    "test:pi-matrix": "node scripts/test-pi-matrix.mjs"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.5.1",
@@ -59,6 +60,7 @@
     "@fastify/type-provider-typebox": "^6.1.0",
     "@fastify/websocket": "11.3.3",
     "@lydell/node-pty": "1.2.0-beta.15",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@sinclair/typebox": "^0.34.52",
     "@xterm/addon-serialize": "0.14.0",
     "@xterm/headless": "6.0.0",

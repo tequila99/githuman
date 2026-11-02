@@ -1,3 +1,4 @@
+import { ARTIFACT_BRIDGE_ROUTE } from '../../../shared/artifacts/mcp-constants.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { DEVICE_IDLE_TTL_MS } from '../../../shared/devices/constants.ts'
 import { ForbiddenError, UnauthorizedError } from '../../errors/http.ts'
@@ -73,6 +74,10 @@ export function deviceSecret(
 export function createAccessHook(options: {
   devices: DeviceService
   allowedHosts: AllowedHosts
+  authorizeArtifactAgent?: (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ) => void
 }) {
   const { devices, allowedHosts } = options
   return async function requireAccess(
@@ -98,6 +103,13 @@ export function createAccessHook(options: {
       !sameOrigin(origin, host)
     ) {
       throw new ForbiddenError('The request Origin does not match the server.')
+    }
+    if (request.method === 'POST' && route === ARTIFACT_BRIDGE_ROUTE) {
+      if (!options.authorizeArtifactAgent) {
+        throw new ForbiddenError('Artifact agent access is unavailable.')
+      }
+      options.authorizeArtifactAgent(request, reply)
+      return
     }
     if (local) {
       request.access = { local: true, device: { status: 'none' } }

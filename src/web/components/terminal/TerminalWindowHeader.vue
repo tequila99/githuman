@@ -1,4 +1,12 @@
 <script setup lang="ts">
+import {
+  mdiCheckboxBlankOutline,
+  mdiCheckboxMultipleBlankOutline,
+  mdiClose,
+  mdiConsoleLine,
+  mdiDotsVertical,
+  mdiWindowMinimize
+} from '@mdi/js'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
@@ -34,15 +42,19 @@ const maximizeLabel = computed(() =>
       :class="{ 'terminal-header__drag--static': maximized }"
       @dblclick="!narrow && emit('toggleMaximized')"
     >
-      <q-icon size="16px" name="terminal" class="q-mr-sm" />
+      <q-icon
+        size="16px"
+        :name="mdiConsoleLine"
+        class="app-icon-neutral q-mr-sm"
+      />
       <span>{{ t('terminal.title') }}</span>
     </div>
     <q-btn
       flat
       dense
       size="sm"
-      class="window-header__control"
-      icon="more_vert"
+      class="app-icon-control window-header__control"
+      :icon="mdiDotsVertical"
       :aria-label="t('terminal.menu')"
     >
       <TerminalWindowMenu
@@ -60,8 +72,8 @@ const maximizeLabel = computed(() =>
       flat
       dense
       size="sm"
-      class="window-header__control"
-      icon="minimize"
+      class="app-icon-control window-header__control"
+      :icon="mdiWindowMinimize"
       v-if="!narrow"
       :aria-label="t('terminal.minimize')"
       @click="emit('minimize')"
@@ -74,8 +86,10 @@ const maximizeLabel = computed(() =>
       flat
       dense
       size="sm"
-      class="window-header__control"
-      :icon="maximized ? 'filter_none' : 'crop_square'"
+      class="app-icon-control window-header__control"
+      :icon="
+        maximized ? mdiCheckboxMultipleBlankOutline : mdiCheckboxBlankOutline
+      "
       v-if="!narrow"
       :aria-label="maximizeLabel"
       @click="emit('toggleMaximized')"
@@ -88,8 +102,8 @@ const maximizeLabel = computed(() =>
       flat
       dense
       size="sm"
-      class="window-header__control"
-      icon="close"
+      class="app-icon-control window-header__control"
+      :icon="mdiClose"
       :disable="!connected"
       :aria-label="t('terminal.closeAll')"
       @click="emit('closeAll')"

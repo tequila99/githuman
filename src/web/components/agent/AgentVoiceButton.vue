@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiMicrophoneOutline } from '@mdi/js'
 import { ref, useId, watch } from 'vue'
 import { useEventListener, useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
@@ -170,9 +171,9 @@ watch(
       :unelevated="listening || finishing"
       size="sm"
       :ripple="false"
-      class="q-ma-xs agent-voice__button"
+      class="app-icon-control q-ma-xs agent-voice__button"
       :color="listening || finishing ? 'primary' : undefined"
-      :icon="listening || finishing ? undefined : 'mic_none'"
+      :icon="listening || finishing ? undefined : mdiMicrophoneOutline"
       :disable="disabled"
       :aria-label="
         t(

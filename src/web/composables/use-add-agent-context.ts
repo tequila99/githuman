@@ -2,22 +2,30 @@ import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
 import { MAX_AGENT_SESSIONS, type AgentContextItem } from '@/api/types'
 import { useAgentStore } from '@/stores/agent-store'
+import { errorMessage } from '@/utils/error-message'
 
-/**
- * "Add to chat" for diffs, files and reviews: goes to the active chat, or
- * opens the new-chat dialog when there is none, or says why it can't.
- */
-export function useAddAgentContext(): (item: AgentContextItem) => void {
+export type AgentContextSource =
+  | AgentContextItem
+  | (() => AgentContextItem | Promise<AgentContextItem>)
+
+export function useAddAgentContext(): (
+  source: AgentContextSource
+) => Promise<void> {
   const { t } = useI18n()
   const $q = useQuasar()
   const store = useAgentStore()
 
-  return item => {
-    if (store.addContext(item) === 'limit') {
-      $q.notify({
-        type: 'warning',
-        message: t('agent.chats.limitReached', { max: MAX_AGENT_SESSIONS })
-      })
+  return async source => {
+    try {
+      const item = typeof source === 'function' ? await source() : source
+      if (store.addContext(item) === 'limit') {
+        $q.notify({
+          type: 'warning',
+          message: t('agent.chats.limitReached', { max: MAX_AGENT_SESSIONS })
+        })
+      }
+    } catch (error) {
+      $q.notify({ type: 'negative', message: errorMessage(error) })
     }
   }
 }

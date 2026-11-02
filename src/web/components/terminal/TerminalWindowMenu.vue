@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiCheckboxBlankOutline, mdiCheckboxMarked } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 
 defineProps<{
@@ -23,8 +24,9 @@ const { t } = useI18n()
       <q-item clickable @click="emit('toggleOriginalColors')">
         <q-item-section side class="q-pr-xs">
           <q-icon
+            class="app-icon-neutral"
             size="16px"
-            :name="originalColors ? 'check_box' : 'check_box_outline_blank'"
+            :name="originalColors ? mdiCheckboxMarked : mdiCheckboxBlankOutline"
           />
         </q-item-section>
         <q-item-section>{{ t('terminal.originalColors') }}</q-item-section>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiFileDocumentOutline, mdiFolderOutline } from '@mdi/js'
 import { computed, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useQuasar } from 'quasar'
@@ -58,9 +59,9 @@ watch(
         @click="emit('pick', i)"
       >
         <q-icon
-          :name="directory ? 'folder' : 'description'"
+          :name="directory ? mdiFolderOutline : mdiFileDocumentOutline"
           size="16px"
-          class="agent-mention-popup__icon"
+          class="app-icon-neutral agent-mention-popup__icon"
         />
         <span class="agent-mention-popup__name">{{ name }}</span>
         <span class="agent-mention-popup__dir">{{ parent }}</span>

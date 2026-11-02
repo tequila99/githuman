@@ -1,3 +1,4 @@
+import type { ArtifactStorageService } from '../services/artifact-storage.service.ts'
 import type { NotesService } from '../services/notes.service.ts'
 import type { DeviceConnections } from '../services/device-connections.ts'
 import { NotFoundError } from '../errors/http.ts'
@@ -55,6 +56,7 @@ const AGENT_ERROR_RESPONSES = {
 
 export interface AgentRoutesOptions {
   notes?: NotesService
+  artifacts?: ArtifactStorageService
   registry: AgentSessionRegistry
   db: DatabaseSync
   repositoryPath: string
@@ -135,7 +137,16 @@ export async function agentRoutes(
       }
 
       // The agent starts in the background; failure shows up as a closed session.
-      const session = registry.create(presetId, reviewId ?? null, name)
+      const deviceId =
+        request.access?.device.status === 'device'
+          ? request.access.device.device.id
+          : undefined
+      const session = registry.create(
+        presetId,
+        reviewId ?? null,
+        name,
+        deviceId
+      )
       reply.code(201)
       return session.info()
     }
@@ -205,6 +216,7 @@ export async function agentRoutes(
       session.assertCanPrompt()
       const blocks = await buildPromptBlocks(request.body, {
         notes: opts.notes,
+        artifacts: opts.artifacts,
         db,
         repositoryPath,
         embeddedContext: session.supportsEmbeddedContext,
@@ -373,6 +385,8 @@ export async function agentRoutes(
               event: 'agent',
               data: message.envelope
             })
+          } else if (message.type === 'artifact-actions') {
+            safeSend(reply.sse, { event: 'artifact-actions', data: {} })
           } else if (message.type === 'gap') {
             safeSend(reply.sse, {
               event: 'gap',

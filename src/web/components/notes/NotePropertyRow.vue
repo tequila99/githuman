@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiClose } from '@mdi/js'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { NoteProperty } from '../../../shared/notes/document.ts'
@@ -12,17 +13,19 @@ const icon = computed(() => notePropertyIcon(notePropertyType(props.property)))
 <template>
   <div class="note-property-row">
     <div class="note-property-key"
-      ><q-icon :name="icon" size="19px" /><span>{{ property.key }}</span></div
+      ><q-icon class="app-icon-neutral" :name="icon" size="19px" /><span>{{
+        property.key
+      }}</span></div
     >
     <slot />
     <q-btn
       v-if="removable"
-      class="note-property-remove"
+      class="app-icon-control note-property-remove"
       flat
       round
       dense
       size="xs"
-      icon="close"
+      :icon="mdiClose"
       :aria-label="t('notes.removeProperty') + ': ' + property.key"
       @click="emit('remove')"
     />
