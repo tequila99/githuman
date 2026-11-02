@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import {
+  ARTIFACT_MCP_SERVER_NAME,
   ARTIFACT_AGENT_BEARER_PATTERN,
   ARTIFACT_AGENT_KEY_BYTES,
   ARTIFACT_AGENT_KEY_ENV,
@@ -17,12 +18,13 @@ import { MAX_AGENT_SESSIONS } from '../../../shared/agents/constants.ts'
 import {
   type AgentPreset,
   type AgentPresetInfo,
+  type AgentSessionKind,
   type AgentSessionState,
   type AgentSessionInfo,
   type AgentStreamEnvelope
 } from '../../../shared/agents/types.ts'
 import { uniqueChatName } from '../../../shared/agents/chat-names.ts'
-import { AgentSession } from './agent-session.ts'
+import { AgentSession, type AgentPermissionPolicy } from './agent-session.ts'
 import { describePreset } from '../../config/agents.ts'
 
 /** What the registry's single stream carries (ADR 0024). */
@@ -54,7 +56,9 @@ export interface AgentSessionRegistry {
     presetId: string,
     reviewId: string | null,
     name?: string,
-    deviceId?: string
+    deviceId?: string,
+    permissionPolicy?: AgentPermissionPolicy,
+    kind?: AgentSessionKind
   ) => AgentSession
   get: (id: string) => AgentSession | undefined
   list: () => AgentSessionInfo[]
@@ -73,6 +77,7 @@ export function createSessionRegistry(options: {
   /** Per-session event buffer size (tests shrink it to provoke gaps). */
   bufferLimit?: number
   taskIds?: (sessionId: string) => string[]
+  taskAssignment?: (sessionId: string) => { version: number; taskIds: string[] }
   artifactUrl?: () => string | undefined
   connections?: DeviceConnections
 }): AgentSessionRegistry {
@@ -111,7 +116,7 @@ export function createSessionRegistry(options: {
     const extension = import.meta.url.endsWith('.ts') ? 'ts' : 'js'
     return [
       {
-        name: 'githuman_artifacts',
+        name: ARTIFACT_MCP_SERVER_NAME,
         command: process.execPath,
         args: [
           fileURLToPath(
@@ -184,7 +189,7 @@ export function createSessionRegistry(options: {
     notifyTasksChanged: () => broadcast({ type: 'sessions' }),
     notifyArtifactActionsChanged: () => broadcast({ type: 'artifact-actions' }),
     listPresets: () => options.presets.map(describePreset),
-    create(presetId, reviewId, name, deviceId) {
+    create(presetId, reviewId, name, deviceId, permissionPolicy, kind) {
       const preset = options.presets.find(p => p.id === presetId)
       if (!preset) {
         throw new UnknownAgentPresetError(`Unknown agent "${presetId}"`)
@@ -196,6 +201,7 @@ export function createSessionRegistry(options: {
       }
       const session = new AgentSession({
         preset,
+        permissionPolicy,
         mcpServers,
         // Open chats are told apart by name: a taken one gets "(1)", "(2)", …
         name: uniqueChatName(
@@ -204,7 +210,11 @@ export function createSessionRegistry(options: {
         ),
         cwd: options.repositoryPath,
         reviewId,
+        ...(kind === undefined ? {} : { kind }),
         ...(options.taskIds ? { taskIds: options.taskIds } : {}),
+        ...(options.taskAssignment
+          ? { taskAssignment: options.taskAssignment }
+          : {}),
         nextEventId: () => ++lastEventId,
         ...(options.bufferLimit === undefined
           ? {}

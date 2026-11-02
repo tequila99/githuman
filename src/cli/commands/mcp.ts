@@ -5,6 +5,8 @@ import {
   ListToolsRequestSchema
 } from '@modelcontextprotocol/sdk/types.js'
 import { Value } from '@sinclair/typebox/value'
+import { ARTIFACT_TASK_INSTRUCTIONS } from '../../shared/artifact-tools/instructions.ts'
+import { ARTIFACT_TOOL_DESCRIPTIONS } from '../../shared/artifact-tools/descriptions.ts'
 import { ArtifactToolSchemas } from '../../shared/artifact-tools/schemas.ts'
 import {
   ARTIFACT_AGENT_KEY_ENV,
@@ -22,7 +24,11 @@ const REQUEST_TIMEOUT_MS = 30_000
 const TOOLS = new Map(
   Object.entries(ArtifactToolSchemas).map(([operation, schema]) => [
     operation.replaceAll('.', '_'),
-    { operation, schema }
+    {
+      operation,
+      schema,
+      description: ARTIFACT_TOOL_DESCRIPTIONS[operation] ?? schema.description
+    }
   ])
 )
 
@@ -52,13 +58,13 @@ export async function runMcp(argv: string[]): Promise<void> {
   }
   const server = new Server(
     { name: 'githuman-artifacts', version: getAppVersion() },
-    { capabilities: { tools: {} } }
+    { capabilities: { tools: {} }, instructions: ARTIFACT_TASK_INSTRUCTIONS }
   )
   const active = new AbortController()
   server.setRequestHandler(ListToolsRequestSchema, () => ({
-    tools: [...TOOLS].map(([name, { schema }]) => ({
+    tools: [...TOOLS].map(([name, { schema, description }]) => ({
       name,
-      description: schema.description,
+      description,
       inputSchema: { ...schema, type: 'object' as const }
     }))
   }))

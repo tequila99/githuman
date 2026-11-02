@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiArrowLeft } from '@mdi/js'
 import { useTemplateRef, ref, watch } from 'vue'
 import { useWindowMotion } from '@/composables/windows/use-window-motion'
 import { useWindowStore } from '@/stores/windows/window-store'
@@ -64,9 +65,10 @@ useWindowMotion(props.windowId, state, element)
         class="row items-center no-wrap q-px-sm"
       >
         <q-btn
+          class="app-icon-control"
           flat
           round
-          icon="arrow_back"
+          :icon="mdiArrowLeft"
           :aria-label="t('workspace.back')"
           @click="workspace.back"
         />

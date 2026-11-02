@@ -1,3 +1,4 @@
+import { DEFAULT_ARTIFACT_PAGE_SIZE } from '../../shared/artifacts/constants.ts'
 import { Value } from '@sinclair/typebox/value'
 import {
   ArtifactChangeSetSchema,
@@ -29,21 +30,48 @@ export class ArtifactGraphService {
     if (!Value.Check(GraphPageQuery, options)) {
       throw new ArtifactInputError('Invalid graph page options.')
     }
-    return this.storage.catalog.readSnapshot(() => {
-      this.storage.get(id)
-      const direction = options.direction ?? 'outgoing'
-      return artifactPage(
-        this.storage.graphRepository.edges(id, direction, options.kind),
-        {
-          storeId: this.storage.storeId,
-          epoch: this.storage.catalog.epoch(),
-          query: `graph:${id}:${direction}:${options.kind ?? ''}`,
-          limit: options.limit,
-          cursor: options.cursor
-        }
-      )
-    })
+    return this.storage.catalog.readSnapshot(() =>
+      this.relationsSnapshot(id, options)
+    )
   }
+  private relationsSnapshot(
+    id: string,
+    options: {
+      limit?: number
+      cursor?: string
+      direction?: 'incoming' | 'outgoing'
+      kind?: ArtifactRelation['kind']
+    }
+  ) {
+    this.storage.get(id)
+    const direction = options.direction ?? 'outgoing'
+    return artifactPage(
+      this.storage.graphRepository.edges(id, direction, options.kind),
+      {
+        storeId: this.storage.storeId,
+        epoch: this.storage.catalog.epoch(),
+        query: `graph:v2:${id}:${direction}:${options.kind ?? ''}`,
+        limit: options.limit,
+        cursor: options.cursor
+      }
+    )
+  }
+  readDocumentContext(id: string) {
+    return this.storage.catalog.readSnapshot(() => ({
+      ...this.storage.readVerifiedFile(id),
+      storeId: this.storage.storeId,
+      storeEpoch: this.storage.catalog.epoch(),
+      outgoing: this.relationsSnapshot(id, {
+        direction: 'outgoing',
+        limit: DEFAULT_ARTIFACT_PAGE_SIZE
+      }),
+      incoming: this.relationsSnapshot(id, {
+        direction: 'incoming',
+        limit: DEFAULT_ARTIFACT_PAGE_SIZE
+      })
+    }))
+  }
+
   ancestry(id: string, limit = 50, cursor?: string) {
     return this.storage.catalog.readSnapshot(() => {
       this.storage.get(id)

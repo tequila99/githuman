@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiPencilOutline, mdiTrashCanOutline } from '@mdi/js'
 import { useAgentStore } from '@/stores/agent-store'
 import { ADD_TO_CHAT_ICON } from '@/utils/agent-icon'
 import { useDeleteNote } from '@/composables/notes/use-delete-note'
@@ -16,7 +17,7 @@ const agent = useAgentStore()
     <q-list dense style="min-width: 160px">
       <q-item clickable v-close-popup @click="emit('rename', path, folder)">
         <q-item-section side class="q-pr-sm"
-          ><q-icon name="edit" size="xs"
+          ><q-icon class="app-icon-neutral" :name="mdiPencilOutline" size="xs"
         /></q-item-section>
         <q-item-section>{{ t('notes.rename') }}</q-item-section>
       </q-item>
@@ -27,13 +28,16 @@ const agent = useAgentStore()
         @click="addToAgent(path)"
       >
         <q-item-section side class="q-pr-sm"
-          ><q-icon :name="ADD_TO_CHAT_ICON" size="xs"
+          ><q-icon class="app-icon-neutral" :name="ADD_TO_CHAT_ICON" size="xs"
         /></q-item-section>
         <q-item-section>{{ t('notes.addToAgent') }}</q-item-section>
       </q-item>
       <q-item v-if="!folder" clickable v-close-popup @click="deleteNote(path)">
         <q-item-section side class="q-pr-sm"
-          ><q-icon name="delete_outline" size="xs"
+          ><q-icon
+            class="app-icon-neutral"
+            :name="mdiTrashCanOutline"
+            size="xs"
         /></q-item-section>
         <q-item-section>{{ t('notes.delete') }}</q-item-section>
       </q-item>

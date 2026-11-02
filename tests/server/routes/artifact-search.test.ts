@@ -10,10 +10,12 @@ import { ArtifactStorageService } from '../../../src/server/services/artifact-st
 test('search HTTP serializes complete snippets/anchors and applies query/body filters', async t => {
   const root = mkdtempSync(join(tmpdir(), 'ght-search-http-')),
     db = createTestDatabase()
+  let now = Date.UTC(2026, 0, 1)
   const service = new ArtifactStorageService({
     db,
     repositoryPath: root,
-    prefix: 'ght-'
+    prefix: 'ght-',
+    now: () => now
   })
   const app = buildApp({ db, repositoryPath: root, artifacts: service })
   t.after(async () => {
@@ -29,6 +31,17 @@ test('search HTTP serializes complete snippets/anchors and applies query/body fi
     },
     { kind: 'user', id: 'local' }
   )
+  now += 86_400_000
+  const current = service.updateMetadata(
+    node.id,
+    {
+      requestId: 'http-search-update',
+      expectedVersion: node.metadataVersion,
+      metadata: { title: 'Updated source', tags: ['wanted', 'updated'] }
+    },
+    { kind: 'user', id: 'local' }
+  )
+  assert.notEqual(current.metadataUpdatedAt, node.createdAt)
   await app.ready()
   const input = {
     query: 'еж',
@@ -49,7 +62,21 @@ test('search HTTP serializes complete snippets/anchors and applies query/body fi
   assert.equal(get.statusCode, 200, get.body)
   assert.deepEqual(get.json(), expected)
   assert.equal(get.json().items[0].id, node.id)
+  assert.equal(get.json().items[0].createdAt, node.createdAt)
+  assert.deepEqual(get.json().items[0].tags, current.tags)
   assert.equal(get.json().items[0].anchor.quote, 'Исходный текст ёж 🧪\r\n')
+  const catalogInput = {
+    filters: { statuses: ['draft' as const] }
+  }
+  const catalog = await app.inject({
+    method: 'POST',
+    url: '/api/artifacts/search',
+    payload: catalogInput
+  })
+  assert.equal(catalog.statusCode, 200, catalog.body)
+  assert.deepEqual(catalog.json(), service.search.search(catalogInput))
+  assert.equal(catalog.json().items[0].createdAt, node.createdAt)
+  assert.deepEqual(catalog.json().items[0].tags, current.tags)
   assert.equal(
     (
       await app.inject(

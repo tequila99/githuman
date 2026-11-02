@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiShieldAlertOutline } from '@mdi/js'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { useI18n } from 'vue-i18n'
 import type { PendingPermission } from '@/utils/agent-chat'
@@ -24,7 +25,11 @@ const { t } = useI18n()
 <template>
   <div class="agent-permission">
     <div class="row no-wrap items-center agent-permission__head">
-      <q-icon name="gpp_maybe" color="warning" size="14px" class="q-mr-xs" />
+      <q-icon
+        :name="mdiShieldAlertOutline"
+        size="14px"
+        class="app-icon-warning q-mr-xs"
+      />
       <span>{{ t('agent.permission.title') }}</span>
     </div>
     <div class="agent-permission__title">
@@ -35,7 +40,7 @@ const { t } = useI18n()
       v-if="permission.diffs.length > 0"
       dense
       dense-toggle
-      class="agent-permission__changes"
+      class="app-icon-expansion agent-permission__changes"
       :label="t('agent.permission.showChanges')"
     >
       <AgentDiffView v-for="d in permission.diffs" :key="d.path" :diff="d" />

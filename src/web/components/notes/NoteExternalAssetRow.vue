@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiFilePdfBox, mdiImageOutline } from '@mdi/js'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ExternalAssetRow } from '@/composables/notes/use-note-external-assets'
@@ -32,9 +33,9 @@ const typeLabel = computed(() => {
         <img v-if="row.preview" :src="row.preview" alt="" />
         <q-icon
           v-else
-          :name="row.kind === 'pdf' ? 'picture_as_pdf' : 'image'"
+          :name="row.kind === 'pdf' ? mdiFilePdfBox : mdiImageOutline"
           size="40px"
-          color="grey"
+          class="app-icon-neutral"
         />
       </div>
       <div class="col" style="min-width: 0">

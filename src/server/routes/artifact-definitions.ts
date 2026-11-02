@@ -48,7 +48,12 @@ export async function artifactDefinitionRoutes(
         response: { 200: TaskListSchema, ...ERROR_RESPONSES }
       }
     },
-    request => storage.tasks.list(request.query.limit, request.query.cursor)
+    request =>
+      storage.tasks.list(
+        request.query.limit,
+        request.query.cursor,
+        request.query.search
+      )
   )
   typed.get(
     '/api/tasks/:id',
@@ -196,7 +201,12 @@ export async function artifactDefinitionRoutes(
         response: { 200: ArtifactTypeListSchema, ...ERROR_RESPONSES }
       }
     },
-    request => storage.types.list(request.query.limit, request.query.cursor)
+    request =>
+      storage.types.list(
+        request.query.limit,
+        request.query.cursor,
+        request.query.search
+      )
   )
   typed.get(
     '/api/artifact-types/:id',

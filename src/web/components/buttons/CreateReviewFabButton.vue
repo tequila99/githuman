@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiPlus } from '@mdi/js'
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import ReviewCreateDialog from '@/components/ReviewCreateDialog.vue'
@@ -50,7 +51,7 @@ function onCreated(review: Review) {
   <q-page-sticky position="bottom-right" :offset="fabPos">
     <q-fab
       v-model="openFab"
-      icon="add"
+      :icon="mdiPlus"
       color="accent"
       :disable="disabled || draggingFab"
       v-touch-pan.prevent.mouse="moveFab"

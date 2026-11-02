@@ -1,4 +1,6 @@
+import { migrateArtifactSourcePaths } from '../../../scripts/migrate-artifact-source-paths.ts'
 import assert from 'node:assert/strict'
+import { randomUUID } from 'node:crypto'
 import { test, type TestContext } from 'node:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -60,7 +62,12 @@ async function startSession(app: FastifyInstance) {
   return { url, sessionId, authorization }
 }
 
-function setup(t: TestContext, now?: () => number, allowedHosts?: string[]) {
+function setup(
+  t: TestContext,
+  now?: () => number,
+  allowedHosts?: string[],
+  preset = PRESET
+) {
   const root = mkdtempSync(join(tmpdir(), 'ght-http-mcp-'))
   const db = createTestDatabase()
   const storage = new ArtifactStorageService({
@@ -72,7 +79,7 @@ function setup(t: TestContext, now?: () => number, allowedHosts?: string[]) {
     repositoryPath: root,
     db,
     artifacts: storage,
-    agentPresets: [PRESET],
+    agentPresets: [preset],
     allowedHosts,
     now
   })
@@ -498,12 +505,15 @@ test(
 )
 
 test(
-  'review tools use actual MCP stdio with session actors, exact history and no protected commands',
-  { timeout: 120_000 },
+  'removed artifact reviews are absent from actual MCP tools and HTTP while code reviews remain',
+  { timeout: 30000 },
   async t => {
-    const { app, storage } = setup(t)
-    const { url, sessionId, authorization } = await startSession(app)
-    const client = new Client({ name: 'review-smoke', version: '1.0.0' })
+    const { app } = setup(t)
+    const { url, authorization } = await startSession(app)
+    const client = new Client({
+      name: 'without-artifact-reviews',
+      version: '1.0.0'
+    })
     t.after(() => client.close())
     await client.connect(
       new StdioClientTransport({
@@ -520,223 +530,350 @@ test(
         stderr: 'pipe'
       })
     )
-    const names = (await client.listTools()).tools.map(tool => tool.name)
-    for (const name of [
-      'reviews_list',
-      'reviews_comment',
-      'reviews_reply',
-      'reviews_edit',
-      'reviews_hide',
-      'reviews_history',
-      'reviews_comments',
-      'reviews_summary',
-      'reviews_resolve',
-      'reviews_reopen',
-      'reviews_set_blocking',
-      'change_sets_commit',
-      'validations_submit'
-    ]) {
-      assert.ok(names.includes(name), name)
-    }
-    assert.ok(!names.some(name => /authorize/.test(name)))
-    const artifact = storage.list().items[0]
-    const input = {
-      id: artifact.id,
-      requestId: 'mcp-review',
-      text: 'Замечание 🧪',
-      blocking: true,
-      anchor: {
-        artifactId: artifact.id,
-        fileSha256: artifact.sha256,
-        bodyStartLine: artifact.bodyStartLine,
-        startLine: 1,
-        endLine: 1,
-        quote: 'Текст 🧪'
-      }
-    }
-    const created = await client.callTool({
-      name: 'reviews_comment',
-      arguments: input
-    })
-    assert.notEqual(created.isError, true, JSON.stringify(created.content))
-    const event = created.structuredContent as {
-      threadId: string
-      actor: { kind: string; id: string }
-    }
-    assert.deepEqual(event.actor, { kind: 'agent', id: sessionId })
-    const replay = await client.callTool({
-      name: 'reviews_comment',
-      arguments: input
-    })
-    assert.deepEqual(replay.structuredContent, created.structuredContent)
-    const reply = await client.callTool({
-      name: 'reviews_reply',
-      arguments: {
-        id: event.threadId,
-        requestId: 'reply-review',
-        expectedThreadVersion: 1,
-        text: 'Ответ'
-      }
-    })
-    assert.notEqual(reply.isError, true, JSON.stringify(reply.content))
-    const commentId = (
-      reply.structuredContent as { payload: { commentId: string } }
-    ).payload.commentId
-    const edited = await client.callTool({
-      name: 'reviews_edit',
-      arguments: {
-        id: event.threadId,
-        requestId: 'edit-review',
-        expectedThreadVersion: 2,
-        commentId,
-        text: 'Правка'
-      }
-    })
-    assert.notEqual(edited.isError, true, JSON.stringify(edited.content))
-    const hidden = await client.callTool({
-      name: 'reviews_hide',
-      arguments: {
-        id: event.threadId,
-        requestId: 'hide-review',
-        expectedThreadVersion: 3,
-        commentId
-      }
-    })
-    assert.notEqual(hidden.isError, true, JSON.stringify(hidden.content))
-    const history = await client.callTool({
-      name: 'reviews_history',
-      arguments: { id: event.threadId }
-    })
-    assert.deepEqual(
-      history.structuredContent,
-      storage.reviews.history(event.threadId)
-    )
-    const listed = await client.callTool({
-      name: 'reviews_list',
-      arguments: { id: artifact.id }
-    })
-    assert.deepEqual(
-      listed.structuredContent,
-      storage.reviews.list(artifact.id)
-    )
-    const state = await client.callTool({
-      name: 'reviews_summary',
-      arguments: { id: artifact.id }
-    })
-    assert.deepEqual(
-      state.structuredContent,
-      storage.reviews.summary(artifact.id)
-    )
-    assert.equal(storage.reviews.summary(artifact.id).blockerSummary.count, 1)
-    const fullComments = await client.callTool({
-      name: 'reviews_comments',
-      arguments: { id: event.threadId }
-    })
-    assert.deepEqual(
-      fullComments.structuredContent,
-      storage.reviews.comments(event.threadId)
-    )
-    const large = storage.reviews.createThread(
-      artifact.id,
-      { requestId: 'large-review', text: 'Root' },
-      { kind: 'agent', id: sessionId }
-    )
-    for (let version = 1; version <= 100; version++) {
-      storage.reviews.comment(
-        large.threadId,
-        {
-          requestId: `large-reply-${version}`,
-          expectedThreadVersion: version,
-          kind: 'replied',
-          text: 'x'.repeat(64 * 1024)
-        },
-        { kind: 'agent', id: sessionId }
-      )
-    }
-    const compact = await client.callTool({
-      name: 'reviews_list',
-      arguments: { id: artifact.id }
-    })
-    assert.notEqual(compact.isError, true, JSON.stringify(compact.content))
-    let afterIndex = 0,
-      count = 0
-    for (;;) {
-      const result = await client.callTool({
-        name: 'reviews_comments',
-        arguments: { id: large.threadId, afterIndex, limit: 100 }
-      })
-      assert.notEqual(result.isError, true, JSON.stringify(result.content))
-      const page = result.structuredContent as {
-        items: { id: string }[]
-        nextAfterIndex: number | null
-      }
-      count += page.items.length
-      if (page.nextAfterIndex === null) break
-      afterIndex = page.nextAfterIndex
-    }
-    assert.equal(count, 101)
-    const largeHistory = await client.callTool({
-      name: 'reviews_history',
-      arguments: { id: large.threadId, limit: 100 }
-    })
-    assert.notEqual(
-      largeHistory.isError,
-      true,
-      JSON.stringify(largeHistory.content)
-    )
-    const denied = await client.callTool({
-      name: 'reviews_resolve',
-      arguments: { id: event.threadId, authorized: true }
-    })
-    assert.equal(denied.isError, true)
-    const forged = await client.callTool({
-      name: 'reviews_reply',
-      arguments: {
-        id: event.threadId,
-        requestId: 'forged',
-        expectedThreadVersion: 4,
-        text: 'Forged',
-        actor: { kind: 'user', id: 'local' }
-      }
-    })
-    assert.equal(forged.isError, true)
-    const blockedBridge = await fetch(
-      `${url}/api/agent/artifacts/reviews.resolve`,
-      {
-        method: 'POST',
-        headers: { authorization, 'content-type': 'application/json' },
-        body: '{}'
-      }
-    )
-    assert.equal(blockedBridge.status, 400)
-    await blockedBridge.arrayBuffer()
-    const blockedUserRoute = await app.inject({
-      method: 'POST',
-      url: `/api/artifact-threads/${event.threadId}/decisions`,
-      remoteAddress: '192.0.2.10',
-      headers: { authorization, host: 'localhost' },
-      payload: {
-        requestId: 'agent-decision',
-        expectedThreadVersion: 4,
-        kind: 'resolved',
-        scope: {
-          appliesToArtifactId: artifact.id,
-          includeRevisionDescendants: true
-        }
-      }
-    })
+    const tools = (await client.listTools()).tools
+    assert.ok(tools.some(tool => tool.name === 'change_sets_propose'))
+    assert.ok(!tools.some(tool => tool.name.startsWith('reviews_')))
     assert.ok(
-      blockedUserRoute.statusCode === 401 || blockedUserRoute.statusCode === 403
+      !JSON.stringify(
+        tools.find(tool => tool.name === 'change_sets_propose')!.inputSchema
+      ).includes('submit_review')
     )
-    assert.equal(storage.reviews.history(event.threadId).items.length, 4)
-    await app.inject({
+    const removed = await app.inject({
+      method: 'POST',
+      url: '/api/agent/artifacts/reviews.comment',
+      headers: { authorization },
+      payload: {}
+    })
+    assert.equal(removed.statusCode, 400, removed.body)
+    assert.match(removed.body, /unavailable/)
+    for (const path of [
+      '/api/artifact-threads/' + randomUUID() + '/comments',
+      '/api/artifact-review-actions'
+    ]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: path,
+        payload: {}
+      })
+      assert.equal(response.statusCode, 404, response.body)
+    }
+    const codeReviews = await app.inject('/api/reviews?branch=main')
+    assert.equal(codeReviews.statusCode, 200, codeReviews.body)
+  }
+)
+
+test(
+  'only the requesting live agent can retrieve its user-approved action grant',
+  { timeout: 30000 },
+  async t => {
+    const { app, storage } = setup(t)
+    const { authorization, sessionId } = await startSession(app)
+    const user = { kind: 'user' as const, id: 'local' }
+    const document = storage.create(
+      {
+        requestId: 'status-document',
+        body: 'Review',
+        metadata: { title: 'Status', tags: [] }
+      },
+      user
+    )
+    const proposal = storage.lifecycle.propose(
+      {
+        requestId: 'status-proposal',
+        changeSet: {
+          storeId: storage.storeId,
+          command: 'accept',
+          subjectIds: [document.id],
+          expectedVersions: [
+            { id: document.id, version: document.metadataVersion }
+          ],
+          relationChanges: [],
+          targetStatuses: [{ artifactId: document.id, status: 'accepted' }],
+          supplementDispositions: [],
+          reason: 'Grant ownership'
+        }
+      },
+      user
+    )
+    const prepared = storage.lifecycle.prepare(proposal.id, proposal.version)
+    storage.lifecycle.repository.appendValidation({
+      ...prepared,
+      state: 'pass'
+    })
+    const action = {
+      kind: 'lifecycle' as const,
+      changeSetId: proposal.id,
+      version: proposal.version,
+      validationId: prepared.id
+    }
+    const requested = await app.inject({
+      method: 'POST',
+      url: '/api/agent/artifacts/actions.request',
+      headers: { authorization },
+      payload: action
+    })
+    assert.equal(requested.statusCode, 200, requested.body)
+    const id = requested.json().id
+    const status = () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/agent/artifacts/actions.status',
+        headers: { authorization },
+        payload: { id }
+      })
+    assert.equal((await status()).json().authorizationId, null)
+    const approved = await app.inject({
+      method: 'POST',
+      url: `/api/artifact-actions/${id}/approve`,
+      payload: { sourceUserRequestId: 'explicit-status-approval' }
+    })
+    assert.equal(approved.statusCode, 200, approved.body)
+    const read = await status()
+    assert.equal(read.statusCode, 200, read.body)
+    assert.equal(read.json().state, 'authorized')
+    assert.equal(read.json().authorizationId, approved.json().authorizationId)
+    assert.throws(() =>
+      storage.lifecycle.authorization.status(id, 'another-session')
+    )
+    const inspection = await app.inject(`/api/artifact-actions/${id}`)
+    assert.equal(inspection.json().canExecute, false)
+    assert.equal(inspection.json().authorizationId, null)
+    const revoked = await app.inject({
       method: 'DELETE',
-      url: `/api/agent/sessions/${sessionId}`
+      url: `/api/artifact-actions/${id}`
     })
-    const revoked = await client.callTool({
-      name: 'reviews_summary',
-      arguments: { id: artifact.id }
+    assert.equal(revoked.statusCode, 200, revoked.body)
+    assert.equal((await status()).statusCode, 404)
+    assert.throws(() =>
+      storage.lifecycle.authorization.assert(
+        approved.json().authorizationId,
+        sessionId,
+        action
+      )
+    )
+  }
+)
+
+test('MCP updates metadata with server actor, version checks and intact original content', async t => {
+  const { app, storage } = setup(t)
+  const { url, authorization, sessionId } = await startSession(app)
+  const client = new Client({ name: 'metadata-test', version: '1.0.0' })
+  t.after(() => client.close())
+  await client.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: [CLI_ENTRY, 'mcp', '--stdio'],
+      env: {
+        [ARTIFACT_AGENT_URL_ENV]: `${url}/`,
+        [ARTIFACT_AGENT_KEY_ENV]: authorization.slice('Bearer '.length)
+      },
+      stderr: 'pipe'
     })
-    assert.equal(revoked.isError, true)
+  )
+  assert.ok(
+    (await client.listTools()).tools.some(
+      tool => tool.name === 'artifacts_update_metadata'
+    )
+  )
+  const first = storage.list().items[0]
+  const original = storage.readContent(first.id).text
+  const args = {
+    id: first.id,
+    requestId: 'metadata-mcp',
+    expectedVersion: first.metadataVersion,
+    metadata: {
+      title: 'Clean title',
+      tags: first.tags,
+      sourcePath: 'legacy/document.md'
+    }
+  }
+  const result = await client.callTool({
+    name: 'artifacts_update_metadata',
+    arguments: args
+  })
+  assert.notEqual(result.isError, true, JSON.stringify(result.content))
+  const current = storage.get(first.id)
+  assert.deepEqual(result.structuredContent, current)
+  assert.equal(current.title, args.metadata.title)
+  assert.equal(current.sourcePath, args.metadata.sourcePath)
+  assert.equal(current.sha256, first.sha256)
+  assert.equal(storage.readContent(first.id).text, original)
+  assert.deepEqual(storage.history(first.id).items.at(-1)!.actor, {
+    kind: 'agent',
+    id: sessionId
+  })
+  assert.deepEqual(
+    (await app.inject(`/api/artifacts/${first.id}`)).json(),
+    current
+  )
+  assert.equal(
+    (await app.inject(`/api/artifacts/${first.id}/history`)).json().items.at(-1)
+      .metadata.sourcePath,
+    args.metadata.sourcePath
+  )
+  assert.deepEqual(
+    (
+      await client.callTool({
+        name: 'artifacts_update_metadata',
+        arguments: args
+      })
+    ).structuredContent,
+    current
+  )
+  const conflict = await client.callTool({
+    name: 'artifacts_update_metadata',
+    arguments: { ...args, requestId: 'stale-metadata-mcp' }
+  })
+  assert.equal(conflict.isError, true)
+  assert.equal(
+    (conflict.structuredContent as { statusCode: number }).statusCode,
+    409
+  )
+  const imported = storage.create(
+    {
+      requestId: 'imported-source',
+      body: 'Imported body',
+      metadata: { title: 'Imported [old/file.md]', tags: [] }
+    },
+    { kind: 'user', id: 'test-import' }
+  )
+  const manifest = { documents: [{ path: 'old/file.md', artifact: imported }] }
+  assert.deepEqual(await migrateArtifactSourcePaths(client, manifest), {
+    total: 1,
+    pending: 1,
+    skipped: 0,
+    applied: 0
+  })
+  assert.equal(storage.get(imported.id).metadataVersion, 1)
+  await assert.rejects(
+    migrateArtifactSourcePaths(
+      client,
+      {
+        documents: [
+          ...manifest.documents,
+          {
+            path: 'different.md',
+            artifact: { ...first, title: 'Other [different.md]' }
+          }
+        ]
+      },
+      true
+    ),
+    /Title edited since import/
+  )
+  assert.equal(storage.get(imported.id).metadataVersion, 1)
+  assert.deepEqual(await migrateArtifactSourcePaths(client, manifest, true), {
+    total: 1,
+    pending: 1,
+    skipped: 0,
+    applied: 1
+  })
+  assert.deepEqual(await migrateArtifactSourcePaths(client, manifest, true), {
+    total: 1,
+    pending: 0,
+    skipped: 1,
+    applied: 0
+  })
+  const migrated = storage.get(imported.id)
+  assert.equal(migrated.title, 'Imported')
+  assert.equal(migrated.sourcePath, 'old/file.md')
+  assert.equal(migrated.sha256, imported.sha256)
+  const spoof = await client.callTool({
+    name: 'artifacts_update_metadata',
+    arguments: { ...args, actor: { kind: 'system', id: 'spoof' } }
+  })
+  assert.equal(spoof.isError, true)
+})
+
+test(
+  'ACP task activation selects this chat, inherits in the same response and keeps create-only and ambiguous requests unselected',
+  { timeout: 30000 },
+  async t => {
+    const { app, storage } = setup(t, undefined, undefined, {
+      ...PRESET,
+      args: [
+        join(
+          import.meta.dirname,
+          '../fixtures/fake-acp-task-activation-agent.ts'
+        )
+      ]
+    })
+    const { sessionId, authorization } = await startSession(app)
+    const original = storage.tasks.create(
+      'original',
+      { title: 'Original', externalUrl: null, state: 'open' },
+      { kind: 'user', id: 'local' }
+    )
+    const prompt = async (payload: Record<string, unknown>) => {
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/agent/sessions/${sessionId}/prompt`,
+        payload: { text: JSON.stringify(payload) }
+      })
+      assert.equal(res.statusCode, 202, res.body)
+      const deadline = Date.now() + 15000
+      let state
+      do {
+        await delay(20)
+        state = (await app.inject(`/api/agent/sessions/${sessionId}`)).json<{
+          status: string
+        }>()
+      } while (state.status === 'busy' && Date.now() < deadline)
+      assert.equal(state.status, 'ready')
+    }
+    await prompt({ requestId: 'activate-existing', taskId: original.id })
+    assert.deepEqual(storage.tasks.assignment(sessionId).taskIds, [original.id])
+    assert.deepEqual(
+      storage
+        .list()
+        .items.find(item => item.title === 'activate-existing-inherited')
+        ?.taskIds,
+      [original.id]
+    )
+    await prompt({ requestId: 'new-active', mode: 'create_and_activate' })
+    const selected = storage.tasks.assignment(sessionId)
+    const created = storage.tasks
+      .list()
+      .items.find(item => item.title === 'new-active')!
+    assert.deepEqual(selected.taskIds, [created.id])
+    assert.deepEqual(
+      storage.list().items.find(item => item.title === 'new-active-inherited')
+        ?.taskIds,
+      [created.id]
+    )
+    assert.deepEqual(
+      storage.list().items.find(item => item.title === 'new-active-general')
+        ?.taskIds,
+      []
+    )
+    const artifacts = storage.list().items.length
+    const taskCount = storage.tasks.list().items.length
+    await prompt({ requestId: 'backlog', mode: 'create_only' })
+    await prompt({ requestId: 'ambiguous', mode: 'ambiguous' })
+    assert.equal(storage.tasks.list().items.length, taskCount + 3)
+    assert.deepEqual(storage.tasks.assignment(sessionId), selected)
+    assert.equal(storage.list().items.length, artifacts)
+    for (const operation of [
+      'tasks.get_context',
+      'tasks.activate',
+      'tasks.create_and_activate'
+    ]) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/agent/artifacts/' + operation,
+        headers: { authorization },
+        payload: { actor: { kind: 'user', id: 'spoof' }, sessionId: 'foreign' }
+      })
+      assert.equal(response.statusCode, 400, operation)
+    }
+    const own = await app.inject({
+      method: 'POST',
+      url: '/api/agent/artifacts/tasks.get_context',
+      headers: { authorization },
+      payload: {}
+    })
+    assert.equal(own.statusCode, 200, own.body)
+    assert.equal(own.json().turnId, null)
+    assert.equal(own.json().sessionId, sessionId)
   }
 )

@@ -1,3 +1,4 @@
+import type { ArtifactStorageService } from '../services/artifact-storage.service.ts'
 import type { NotesService } from '../services/notes.service.ts'
 import type { DeviceConnections } from '../services/device-connections.ts'
 import { NotFoundError } from '../errors/http.ts'
@@ -55,6 +56,7 @@ const AGENT_ERROR_RESPONSES = {
 
 export interface AgentRoutesOptions {
   notes?: NotesService
+  artifacts?: ArtifactStorageService
   registry: AgentSessionRegistry
   db: DatabaseSync
   repositoryPath: string
@@ -214,6 +216,7 @@ export async function agentRoutes(
       session.assertCanPrompt()
       const blocks = await buildPromptBlocks(request.body, {
         notes: opts.notes,
+        artifacts: opts.artifacts,
         db,
         repositoryPath,
         embeddedContext: session.supportsEmbeddedContext,

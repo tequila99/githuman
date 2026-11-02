@@ -41,16 +41,26 @@ export class ArtifactDefinitionService<T extends Definition> {
     if (!result) throw new ArtifactNotFoundError()
     return result
   }
-  list(limit = 50, cursor?: string) {
+  list(limit = 50, cursor?: string, search = '') {
+    const needle = search.trim().toLocaleLowerCase()
     return this.options.catalog.readSnapshot(() =>
-      artifactPage(this.options.repository.all<T>(this.kind), {
+      artifactPage(this.matching(needle), {
         storeId: this.options.catalog.storeId,
         epoch: this.options.catalog.epoch(),
-        query: this.kind,
+        // The cursor carries the search text, so a cursor cannot cross searches.
+        query: needle ? `${this.kind}:search:${needle}` : this.kind,
         limit,
         cursor
       })
     )
+  }
+  private matching(needle: string): T[] {
+    const items = this.options.repository.all<T>(this.kind)
+    if (!needle) return items
+    return items.filter(item => {
+      const name = 'title' in item ? item.title : item.label
+      return `${name} ${item.id}`.toLocaleLowerCase().includes(needle)
+    })
   }
   history(id: string) {
     this.get(id)
@@ -92,6 +102,16 @@ export class ArtifactDefinitionService<T extends Definition> {
     actor: ArtifactActor,
     run: () => R
   ): R {
+    const command = this.commandWithReplay(requestId, payload, actor, run)
+    this.options.onChange()
+    return command.result
+  }
+  protected commandWithReplay<R>(
+    requestId: string,
+    payload: unknown,
+    actor: ArtifactActor,
+    run: () => R
+  ): { result: R; replayed: boolean } {
     if (
       typeof requestId !== 'string' ||
       !requestId.length ||
@@ -101,15 +121,13 @@ export class ArtifactDefinitionService<T extends Definition> {
     }
     assertDefinitionInput(ArtifactActorSchema, actor)
     const hash = sha256Hex(canonicalJson({ kind: this.kind, payload, actor }))
-    const { result } = this.options.catalog.transaction(() => {
+    return this.options.catalog.transaction(() => {
       const replay = this.options.repository.replay<R>(requestId, hash)
-      if (replay) return { result: replay.result }
+      if (replay) return { result: replay.result, replayed: true }
       const created = run()
       this.options.repository.record(requestId, hash, created)
-      return { result: created }
+      return { result: created, replayed: false }
     })
-    this.options.onChange()
-    return result
   }
   protected assertVersion(actual: number, expected: number): void {
     if (!Number.isSafeInteger(expected) || expected < 1) {

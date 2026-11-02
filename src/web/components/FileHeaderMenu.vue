@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import {
+  mdiCheckboxBlankOutline,
+  mdiCheckboxMarked,
+  mdiDotsVertical,
+  mdiEyeOutline
+} from '@mdi/js'
 import { computed } from 'vue'
 import { isMarkdownPath } from '@/utils/markdown-path'
 import { useI18n } from 'vue-i18n'
@@ -54,12 +60,13 @@ function addDiff() {
 
 <template>
   <q-btn
+    class="app-icon-control"
     v-ripple
     flat
     round
     dense
     size="sm"
-    icon="more_vert"
+    :icon="mdiDotsVertical"
     :aria-label="t('changes.fileActions')"
   >
     <q-menu>
@@ -72,13 +79,19 @@ function addDiff() {
         >
           <q-item-section side
             ><q-icon
-              :name="showFullFile ? 'check_box' : 'check_box_outline_blank'"
+              class="app-icon-neutral"
+              :name="
+                showFullFile ? mdiCheckboxMarked : mdiCheckboxBlankOutline
+              "
           /></q-item-section>
           <q-item-section>{{ t('changes.showFullFile') }}</q-item-section>
         </q-item>
         <q-item v-close-popup clickable @click="wrap = !wrap">
           <q-item-section side>
-            <q-icon :name="wrap ? 'check_box' : 'check_box_outline_blank'" />
+            <q-icon
+              class="app-icon-neutral"
+              :name="wrap ? mdiCheckboxMarked : mdiCheckboxBlankOutline"
+            />
           </q-item-section>
           <q-item-section>{{ t('changes.wrapLines') }}</q-item-section>
         </q-item>
@@ -88,20 +101,22 @@ function addDiff() {
           clickable
           @click="openPreview"
         >
-          <q-item-section side><q-icon name="visibility" /></q-item-section>
+          <q-item-section side
+            ><q-icon class="app-icon-neutral" :name="mdiEyeOutline"
+          /></q-item-section>
           <q-item-section>{{ t('changes.previewMarkdown') }}</q-item-section>
         </q-item>
         <template v-if="agent.enabled && path">
           <q-separator />
           <q-item v-if="diffSource" v-close-popup clickable @click="addDiff">
             <q-item-section side
-              ><q-icon :name="ADD_TO_CHAT_ICON"
+              ><q-icon class="app-icon-neutral" :name="ADD_TO_CHAT_ICON"
             /></q-item-section>
             <q-item-section>{{ t('agent.context.addDiff') }}</q-item-section>
           </q-item>
           <q-item v-close-popup clickable @click="addFile">
             <q-item-section side
-              ><q-icon :name="ADD_TO_CHAT_ICON"
+              ><q-icon class="app-icon-neutral" :name="ADD_TO_CHAT_ICON"
             /></q-item-section>
             <q-item-section>{{ t('agent.context.addFile') }}</q-item-section>
           </q-item>

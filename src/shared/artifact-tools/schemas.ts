@@ -10,23 +10,19 @@ import {
   ArtifactValidationReportBody,
   ArtifactLifecycleCommitBody,
   ArtifactAuthorizationRequestBody,
-  ArtifactReviewExecuteBody,
-  ArtifactReviewDecisionBody,
   ArtifactParams,
   ArtifactMetadataInputSchema,
   ArtifactListQuery,
   ArtifactContentQuery,
   ArtifactHistoryQuery,
-  GraphPageQuery,
-  ArtifactReviewCreateBody,
-  ArtifactReviewCommentEventBody,
-  ArtifactReviewListQuery,
-  ArtifactReviewCommentsQuery
+  GraphPageQuery
 } from '../artifacts/schemas.ts'
 import {
   DefinitionQuery,
   DefinitionParams,
   TaskCreateBody,
+  TaskActivationBody,
+  TaskCreateAndActivateBody,
   TaskUpdateBody,
   ArtifactTypeCreateBody,
   ArtifactTypeUpdateBody
@@ -106,41 +102,7 @@ export const ArtifactToolSchemas = {
     }
   ),
   'actions.request': ArtifactAuthorizationRequestBody,
-  'reviews.execute': ArtifactReviewExecuteBody,
-  'reviews.resolve': Type.Object(
-    {
-      ...ArtifactParams.properties,
-      ...Type.Omit(ArtifactReviewDecisionBody.anyOf[1], ['kind']).properties,
-      authorizationId: ArtifactParams.properties.id
-    },
-    {
-      additionalProperties: false,
-      description: 'Resolve one explicitly authorized review scope.'
-    }
-  ),
-  'reviews.reopen': Type.Object(
-    {
-      ...ArtifactParams.properties,
-      ...Type.Omit(ArtifactReviewDecisionBody.anyOf[2], ['kind']).properties,
-      authorizationId: ArtifactParams.properties.id
-    },
-    {
-      additionalProperties: false,
-      description: 'Reopen one explicitly authorized review scope.'
-    }
-  ),
-  'reviews.set_blocking': Type.Object(
-    {
-      ...ArtifactParams.properties,
-      ...Type.Omit(ArtifactReviewDecisionBody.anyOf[0], ['kind']).properties,
-      authorizationId: ArtifactParams.properties.id
-    },
-    {
-      additionalProperties: false,
-      description: 'Change blocking with one explicit scoped authorization.'
-    }
-  ),
-
+  'actions.status': ArtifactParams,
   'artifacts.create': Type.Object(
     {
       requestId: TaskCreateBody.properties.requestId,
@@ -161,6 +123,19 @@ export const ArtifactToolSchemas = {
       additionalProperties: false,
       description:
         'Create an immutable draft artifact with an idempotent request ID.'
+    }
+  ),
+  'artifacts.update_metadata': Type.Object(
+    {
+      ...ArtifactParams.properties,
+      requestId: TaskCreateBody.properties.requestId,
+      expectedVersion: TaskUpdateBody.properties.expectedVersion,
+      metadata: ArtifactMetadataInputSchema
+    },
+    {
+      additionalProperties: false,
+      description:
+        'Update versioned artifact metadata without rewriting the immutable original.'
     }
   ),
   'artifacts.get': ArtifactParams,
@@ -187,82 +162,18 @@ export const ArtifactToolSchemas = {
     { ...ArtifactParams.properties, ...DefinitionQuery.properties },
     { additionalProperties: false, description: 'Read immutable ancestry.' }
   ),
-  'reviews.list': Type.Object(
-    { ...ArtifactParams.properties, ...ArtifactReviewListQuery.properties },
-    {
-      additionalProperties: false,
-      description: 'Read a complete page of artifact threads and blockers.'
-    }
-  ),
-  'reviews.summary': ArtifactParams,
-  'reviews.comment': Type.Object(
-    { ...ArtifactParams.properties, ...ArtifactReviewCreateBody.properties },
-    {
-      additionalProperties: false,
-      description: 'Create a new anchored or general review thread.'
-    }
-  ),
-  'reviews.reply': Type.Object(
-    {
-      ...ArtifactParams.properties,
-      requestId: ArtifactReviewCreateBody.properties.requestId,
-      expectedThreadVersion:
-        ArtifactReviewCommentEventBody.anyOf[0].properties
-          .expectedThreadVersion,
-      text: ArtifactReviewCreateBody.properties.text
-    },
-    {
-      additionalProperties: false,
-      description: 'Reply to a versioned review thread.'
-    }
-  ),
-  'reviews.edit': Type.Object(
-    {
-      ...ArtifactParams.properties,
-      requestId: ArtifactReviewCreateBody.properties.requestId,
-      expectedThreadVersion:
-        ArtifactReviewCommentEventBody.anyOf[0].properties
-          .expectedThreadVersion,
-      commentId: ArtifactParams.properties.id,
-      text: ArtifactReviewCreateBody.properties.text
-    },
-    {
-      additionalProperties: false,
-      description: 'Edit comment text while retaining immutable history.'
-    }
-  ),
-  'reviews.hide': Type.Object(
-    {
-      ...ArtifactParams.properties,
-      requestId: ArtifactReviewCreateBody.properties.requestId,
-      expectedThreadVersion:
-        ArtifactReviewCommentEventBody.anyOf[0].properties
-          .expectedThreadVersion,
-      commentId: ArtifactParams.properties.id
-    },
-    {
-      additionalProperties: false,
-      description: 'Hide comment text without resolving or removing a blocker.'
-    }
-  ),
-  'reviews.comments': Type.Object(
-    { ...ArtifactParams.properties, ...ArtifactReviewCommentsQuery.properties },
-    {
-      additionalProperties: false,
-      description:
-        'Read complete visible comments by position, independent of unrelated store changes.'
-    }
-  ),
-  'reviews.history': Type.Object(
-    { ...ArtifactParams.properties, ...ArtifactHistoryQuery.properties },
-    {
-      additionalProperties: false,
-      description: 'Read a complete review history page.'
-    }
-  ),
   'tasks.list': DefinitionQuery,
   'tasks.get': DefinitionParams,
   'tasks.create': TaskCreateBody,
+  'tasks.get_context': Type.Object(
+    {},
+    {
+      additionalProperties: false,
+      description: 'Read the authenticated session task context.'
+    }
+  ),
+  'tasks.activate': TaskActivationBody,
+  'tasks.create_and_activate': TaskCreateAndActivateBody,
   'tasks.update': Type.Object(
     { ...DefinitionParams.properties, ...TaskUpdateBody.properties },
     { additionalProperties: false, description: 'Update a versioned task.' }

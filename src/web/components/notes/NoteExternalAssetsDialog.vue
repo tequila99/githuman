@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiCheckAll, mdiCheckboxMultipleBlankOutline } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import type { ExternalAssetRow } from '@/composables/notes/use-note-external-assets'
 import NoteExternalAssetRow from './NoteExternalAssetRow.vue'
@@ -34,10 +35,11 @@ const { t } = useI18n()
       }}</q-card-section>
       <q-card-section class="q-pb-none row q-gutter-x-sm">
         <q-btn
+          class="app-icon-control"
           flat
           round
           dense
-          icon="done_all"
+          :icon="mdiCheckAll"
           :disable="busy"
           :aria-label="t('notes.externalAssets.selectAll')"
           @click="emit('selectAll', true)"
@@ -45,10 +47,11 @@ const { t } = useI18n()
           <q-tooltip>{{ t('notes.externalAssets.selectAll') }}</q-tooltip>
         </q-btn>
         <q-btn
+          class="app-icon-control"
           flat
           round
           dense
-          icon="remove_done"
+          :icon="mdiCheckboxMultipleBlankOutline"
           :disable="busy"
           :aria-label="t('notes.externalAssets.selectNone')"
           @click="emit('selectAll', false)"

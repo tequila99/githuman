@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiArrowLeft, mdiSourceBranch } from '@mdi/js'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
@@ -102,7 +103,14 @@ function goBack() {
   <AppPage v-else class="review-detail-page column no-wrap q-pa-md">
     <div class="review-detail-page__header q-pa-sm">
       <div class="row items-center q-gutter-x-sm">
-        <q-btn flat dense round icon="arrow_back" @click="goBack" />
+        <q-btn
+          class="app-icon-control"
+          flat
+          dense
+          round
+          :icon="mdiArrowLeft"
+          @click="goBack"
+        />
         <div class="text-h6 ellipsis">
           {{ review.name ?? t('reviews.list.unnamed') }}
         </div>
@@ -115,7 +123,11 @@ function goBack() {
       </div>
       <div class="row items-center q-gutter-x-sm q-mt-xs">
         <span class="text-caption text-grey-6">
-          <q-icon name="account_tree" size="14px" />
+          <q-icon
+            class="app-icon-neutral"
+            :name="mdiSourceBranch"
+            size="14px"
+          />
           {{ review.branch ?? t('reviews.list.unknownBranch') }}
         </span>
         <q-space />

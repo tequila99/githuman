@@ -33,6 +33,101 @@ const agent = acp
     assert.ok(text && text.type === 'text')
     const id = /validation ID ([a-f0-9-]+)/.exec(text.text)?.[1]
     assert.ok(id)
+    let callIndex = 0
+    const permission = async (
+      request: Parameters<typeof client.callTool>[0],
+      allowed: boolean
+    ) => {
+      const toolCallId = `validation-tool-${++callIndex}`
+      const cursor = process.argv.includes('--cursor')
+      const codex = !cursor && callIndex % 2 === 0
+      if (codex || cursor) {
+        await ctx.client.notify(acp.methods.client.session.update, {
+          sessionId: ctx.params.sessionId,
+          update: {
+            sessionUpdate: 'tool_call',
+            title: 'MCP validation call',
+            toolCallId,
+            kind: cursor ? 'other' : 'execute',
+            rawInput: cursor
+              ? {
+                  providerIdentifier: 'githuman_artifacts',
+                  toolName: request.name,
+                  args: request.arguments
+                }
+              : {
+                  server: 'githuman_artifacts',
+                  tool: request.name,
+                  arguments: request.arguments
+                }
+          }
+        })
+      }
+      const response = await ctx.client.request<acp.RequestPermissionResponse>(
+        acp.methods.client.session.requestPermission,
+        {
+          sessionId: ctx.params.sessionId,
+          ...(codex ? { _meta: { is_mcp_tool_approval: true } } : {}),
+          toolCall: cursor
+            ? { toolCallId, kind: 'other', title: 'MCP permission' }
+            : codex
+              ? { toolCallId, kind: 'execute' }
+              : {
+                  toolCallId,
+                  name: `mcp__githuman_artifacts__${request.name}`,
+                  rawInput: request.arguments
+                },
+          options: [
+            { optionId: 'allow', name: 'Allow', kind: 'allow_once' },
+            { optionId: 'reject', name: 'Reject', kind: 'reject_once' }
+          ]
+        }
+      )
+      assert.deepEqual(response.outcome, {
+        outcome: 'selected',
+        optionId: allowed ? 'allow' : 'reject'
+      })
+    }
+    const callTool = async (request: Parameters<typeof client.callTool>[0]) => {
+      await permission(request, true)
+      return client.callTool(request)
+    }
+    await permission(
+      {
+        name: 'artifacts_create',
+        arguments: {
+          requestId: 'escape',
+          body: 'escape',
+          metadata: { title: 'escape', tags: [] }
+        }
+      },
+      false
+    )
+    await permission(
+      {
+        name: 'validations_get',
+        arguments: { id: '11111111-1111-4111-8111-111111111111' }
+      },
+      false
+    )
+    await permission(
+      {
+        name: 'artifacts_get_content',
+        arguments: { id: '11111111-1111-4111-8111-111111111111' }
+      },
+      false
+    )
+    await permission(
+      {
+        name: 'validations_read',
+        arguments: { id, key: '11111111-1111-4111-8111-111111111111' }
+      },
+      false
+    )
+    await permission(
+      { name: 'validations_manifest', arguments: { id, limit: -1 } },
+      false
+    )
     const denied = await client.callTool({
       name: 'artifacts_create',
       arguments: {
@@ -42,6 +137,42 @@ const agent = acp
       }
     })
     assert.equal(denied.isError, true)
+    const metadataUpdate = {
+      name: 'artifacts_update_metadata',
+      arguments: {
+        id,
+        requestId: 'validator-metadata-escape',
+        expectedVersion: 1,
+        metadata: { title: 'escape', tags: [] }
+      }
+    }
+    await permission(metadataUpdate, false)
+    assert.equal((await client.callTool(metadataUpdate)).isError, true)
+    for (const operation of [
+      { name: 'tasks_get_context', arguments: {} },
+      {
+        name: 'tasks_activate',
+        arguments: {
+          requestId: 'escape-activate',
+          turnId: '11111111-1111-4111-8111-111111111111',
+          assignmentVersion: 0,
+          taskId: '11111111-1111-4111-8111-111111111111'
+        }
+      },
+      {
+        name: 'tasks_create_and_activate',
+        arguments: {
+          requestId: 'escape-create-activate',
+          turnId: '11111111-1111-4111-8111-111111111111',
+          assignmentVersion: 0,
+          input: { title: 'escape', externalUrl: null, state: 'open' }
+        }
+      }
+    ]) {
+      await permission(operation, false)
+      const deniedActivation = await client.callTool(operation)
+      assert.equal(deniedActivation.isError, true)
+    }
     const nested = await client.callTool({
       name: 'validations_start',
       arguments: { id, presetId: 'validator' }
@@ -49,7 +180,7 @@ const agent = acp
     assert.equal(nested.isError, true)
     let cursor: string | undefined
     do {
-      const page = await client.callTool({
+      const page = await callTool({
         name: 'validations_manifest',
         arguments: { id, limit: 1, ...(cursor ? { cursor } : {}) }
       })
@@ -65,7 +196,7 @@ const agent = acp
           item.kind === 'review' ? `review:${String(item.id)}` : item.id
         let offset = 0
         for (;;) {
-          const chunk = await client.callTool({
+          const chunk = await callTool({
             name: 'validations_read',
             arguments: { id, key, offset }
           })
@@ -79,7 +210,25 @@ const agent = acp
       cursor =
         typeof value.nextCursor === 'string' ? value.nextCursor : undefined
     } while (cursor)
-    const submitted = await client.callTool({
+    assert.match(text.text, /never abbreviate IDs/)
+    await permission(
+      {
+        name: 'validations_submit',
+        arguments: {
+          id,
+          verdict: 'pass',
+          findings: [
+            { artifactId: '15100665', quote: 'Text', message: 'Finding' }
+          ],
+          resolutions: []
+        }
+      },
+      false
+    )
+    if (process.argv.includes('--invalid-submit')) {
+      return { stopReason: 'end_turn' as const }
+    }
+    const submitted = await callTool({
       name: 'validations_submit',
       arguments: {
         id,

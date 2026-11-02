@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiCheck, mdiMicrophoneOutline } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import { useSpeechLanguage } from '@/composables/use-speech-language'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
@@ -25,8 +26,8 @@ function languageName(code: string): string {
     dense
     no-caps
     size="sm"
-    icon="mic_none"
-    class="agent-speech-language"
+    :icon="mdiMicrophoneOutline"
+    class="app-icon-control agent-speech-language"
     :label="language.split('-')[0]?.toUpperCase()"
     aria-haspopup="listbox"
     :aria-label="t('agent.voice.language', { name: languageName(language) })"
@@ -47,7 +48,7 @@ function languageName(code: string): string {
           <q-item-section avatar>
             <q-icon
               v-if="code === language"
-              name="check"
+              :name="mdiCheck"
               size="16px"
               color="primary"
             />

@@ -10,8 +10,12 @@ import {
   createFileDatabase
 } from '../../../src/server/db/index.ts'
 import { applyMigrations } from '../../../src/server/db/migrations.ts'
-import { ArtifactStorageService } from '../../../src/server/services/artifact-storage.service.ts'
+import {
+  ArtifactStorageService,
+  type ArtifactStorageOptions
+} from '../../../src/server/services/artifact-storage.service.ts'
 import { ArtifactLifecycleService } from '../../../src/server/services/artifact-lifecycle.service.ts'
+import { artifactActionDigest } from '../../../src/server/services/artifact-authorization.service.ts'
 import type { AgentSessionRegistry } from '../../../src/server/services/agent/session-registry.ts'
 import type {
   Artifact,
@@ -21,7 +25,11 @@ import type {
 // A fixed user identity exercises the same structured action routes as the browser.
 const USER = { kind: 'user' as const, id: 'local' }
 
-async function setup(t: TestContext, file = false) {
+async function setup(
+  t: TestContext,
+  file = false,
+  checkpoint?: ArtifactStorageOptions['checkpoint']
+) {
   const root = mkdtempSync(join(tmpdir(), 'ght-lifecycle-'))
   const path = join(root, '.githuman/ght-reviews.db')
   const db = file ? createFileDatabase(path) : createTestDatabase()
@@ -30,6 +38,7 @@ async function setup(t: TestContext, file = false) {
     db,
     repositoryPath: root,
     prefix: 'ght-',
+    checkpoint,
     now: () => now
   })
   const sessions = new Map<
@@ -130,10 +139,7 @@ async function setup(t: TestContext, file = false) {
     const running = storage.lifecycle.jobs.start(prepared.id, 'test')
     const sessionId = running.validatorSessionId!
     if (readAll) {
-      for (const key of [
-        ...prepared.manifest.requiredContentIds,
-        ...prepared.manifest.threads.map(item => `review:${item.threadId}`)
-      ]) {
+      for (const key of prepared.manifest.requiredContentIds) {
         let offset = 0
         for (;;) {
           const chunk = storage.lifecycle.jobs.read(
@@ -203,9 +209,180 @@ async function setup(t: TestContext, file = false) {
   }
 }
 
+test('report draft and validation link roll back together and retry without duplicate events', async t => {
+  const { storage, create, propose, pass } = await setup(t)
+  const validation = pass(propose([create('draft')]))
+  const jobs = storage.lifecycle.jobs
+  const repository = storage.lifecycle.repository
+  const before = storage.catalog.all().length
+  const history = repository.history(validation.prepared.id)
+  const append = repository.appendValidation.bind(repository)
+  repository.appendValidation = () => {
+    throw new Error('Commit failed')
+  }
+  assert.throws(
+    () =>
+      jobs.createReport(
+        validation.prepared.id,
+        validation.sessionId,
+        '# Report'
+      ),
+    /Commit failed/
+  )
+  assert.equal(storage.catalog.all().length, before)
+  assert.deepEqual(repository.history(validation.prepared.id), history)
+  repository.appendValidation = append
+  const report = jobs.createReport(
+    validation.prepared.id,
+    validation.sessionId,
+    '# Report'
+  )
+  assert.equal(
+    repository.validation(validation.prepared.id).report?.reportArtifactId,
+    report.id
+  )
+  const committed = repository.history(validation.prepared.id)
+  assert.equal(
+    jobs.createReport(validation.prepared.id, validation.sessionId, '# Report')
+      .id,
+    report.id
+  )
+  assert.deepEqual(repository.history(validation.prepared.id), committed)
+  assert.throws(
+    () =>
+      jobs.createReport(
+        validation.prepared.id,
+        validation.sessionId,
+        '# Changed'
+      ),
+    /different operation/
+  )
+})
+
+test('inline report rejects invalid evidence before creation and rolls back a failed final result', async t => {
+  const { storage, create, propose, pass } = await setup(t)
+  const validation = pass(propose([create('draft')]))
+  const jobs = storage.lifecycle.jobs
+  const repository = storage.lifecycle.repository
+  const before = storage.catalog.all().length
+  const history = repository.history(validation.prepared.id)
+  assert.throws(
+    () =>
+      jobs.submit(validation.prepared.id, validation.sessionId, {
+        verdict: 'pass',
+        findings: [
+          {
+            artifactId: validation.prepared.manifest.requiredContentIds[0],
+            quote: 'Absent evidence',
+            message: 'Problem'
+          }
+        ],
+        resolutions: [],
+        report: '# Report'
+      }),
+    /exact manifest text/
+  )
+  assert.equal(storage.catalog.all().length, before)
+  const append = repository.appendValidation.bind(repository)
+  repository.appendValidation = (value, kind) => {
+    if (value.state === 'pass') throw new Error('Final result failed')
+    append(value, kind)
+  }
+  assert.throws(
+    () => validation.submit('pass', '# Report'),
+    /Final result failed/
+  )
+  assert.equal(storage.catalog.all().length, before)
+  assert.deepEqual(repository.history(validation.prepared.id), history)
+  repository.appendValidation = append
+  assert.equal(validation.submit('pass', '# Report').state, 'pass')
+  const committed = repository.history(validation.prepared.id)
+  assert.equal(validation.submit('pass', '# Report').state, 'pass')
+  assert.deepEqual(repository.history(validation.prepared.id), committed)
+  assert.throws(
+    () => validation.submit('conflict', '# Report'),
+    /different input/
+  )
+})
+
+for (const phase of ['published', 'after_commit'] as const) {
+  test(`report ${phase} interruption preserves safe recovery and replay`, async t => {
+    let interrupted = false
+    const { storage, create, propose, pass, advance } = await setup(
+      t,
+      false,
+      current => {
+        if (interrupted && current === phase) throw new Error('Interrupted')
+      }
+    )
+    const validation = pass(propose([create('draft')]))
+    const before = storage.catalog.all().length
+    interrupted = true
+    assert.throws(() => validation.submit('pass', '# Report'), /Interrupted/)
+    interrupted = false
+    const history = storage.lifecycle.repository.history(validation.prepared.id)
+    if (phase === 'published') {
+      assert.equal(storage.catalog.all().length, before)
+      advance(31_000)
+      const recovery = storage.recover()
+      assert.equal(recovery.awaitingRetry.length, 1)
+      assert.equal(storage.catalog.all().length, before)
+    }
+    assert.equal(validation.submit('pass', '# Report').state, 'pass')
+    assert.equal(storage.catalog.all().length, before + 1)
+    if (phase === 'after_commit') {
+      assert.deepEqual(
+        storage.lifecycle.repository.history(validation.prepared.id),
+        history
+      )
+    }
+  })
+}
+
+test('report commit rechecks a lease that expires after file publication', async t => {
+  const clock: { advance?: (ms: number) => void; armed: boolean } = {
+    armed: false
+  }
+  const { storage, create, propose, pass, advance } = await setup(
+    t,
+    false,
+    phase => {
+      if (clock.armed && phase === 'before_commit') clock.advance?.(11 * 60_000)
+    }
+  )
+  const validation = pass(propose([create('draft')]))
+  const before = storage.catalog.all().length
+  const history = storage.lifecycle.repository.history(validation.prepared.id)
+  clock.advance = advance
+  clock.armed = true
+  assert.throws(() => validation.submit('pass', '# Expired'), /expired/)
+  assert.equal(storage.catalog.all().length, before)
+  assert.deepEqual(
+    storage.lifecycle.repository.history(validation.prepared.id),
+    history
+  )
+})
+
+test('standalone report can be submitted with or without the same inline body', async t => {
+  const { storage, create, propose, pass } = await setup(t)
+  for (const inline of [false, true]) {
+    const validation = pass(propose([create('draft')]))
+    const report = storage.lifecycle.jobs.createReport(
+      validation.prepared.id,
+      validation.sessionId,
+      '# Report'
+    )
+    assert.equal(
+      validation.submit('pass', inline ? '# Report' : undefined).report
+        ?.reportArtifactId,
+      report.id
+    )
+  }
+})
+
 test('lifecycle: complete coverage + pass + structured user action commits and replays exactly', async t => {
   const { storage, create, propose, pass, authorize } = await setup(t)
-  const node = create()
+  const node = create('draft')
   const proposal = propose([node])
   const validation = pass(proposal)
   assert.equal(validation.submit('pass', '# Standalone report').state, 'pass')
@@ -274,8 +451,8 @@ test('lifecycle: forged grants, missing coverage, wrong session and conflicting 
   assert.equal(storage.get(node.id).status, 'in_review')
 })
 
-test('lifecycle: context metadata, new blockers and physical corruption invalidate prepared results', async t => {
-  for (const kind of ['metadata', 'blocker', 'file'] as const) {
+test('lifecycle: context metadata and physical corruption invalidate prepared results', async t => {
+  for (const kind of ['metadata', 'file'] as const) {
     const { storage, create, propose, pass, authorize, root } = await setup(t)
     const node = create()
     const proposal = propose([node])
@@ -290,13 +467,6 @@ test('lifecycle: context metadata, new blockers and physical corruption invalida
           expectedVersion: node.metadataVersion,
           metadata: { title: 'Changed', tags: [] }
         },
-        USER
-      )
-    }
-    if (kind === 'blocker') {
-      storage.reviews.createThread(
-        node.id,
-        { requestId: randomUUID(), text: 'Blocking', blocking: true },
         USER
       )
     }
@@ -456,103 +626,6 @@ test('lifecycle: schema rerun and projection rebuild preserve validation history
   )
 })
 
-test('lifecycle: review grants close scoped blockers without a validation pass and cannot authorize lifecycle', async t => {
-  const { storage, app, create, propose } = await setup(t)
-  const base = create('accepted')
-  const candidate = create('in_review', [
-    { kind: 'replaces', targetId: base.id }
-  ])
-  const thread = storage.reviews.createThread(
-    base.id,
-    { requestId: randomUUID(), text: 'Inherited blocker', blocking: true },
-    USER
-  )
-  const action = {
-    kind: 'review',
-    threadId: thread.threadId,
-    input: {
-      requestId: randomUUID(),
-      kind: 'resolved',
-      expectedThreadVersion: 1,
-      scope: {
-        appliesToArtifactId: candidate.id,
-        includeRevisionDescendants: true
-      }
-    }
-  }
-  const pending = await app.inject({
-    method: 'POST',
-    url: '/api/artifact-actions',
-    payload: action
-  })
-  assert.equal(pending.statusCode, 200, pending.body)
-  assert.equal(pending.json().manifestDigest, null)
-  const approve = await app.inject({
-    method: 'POST',
-    url: `/api/artifact-actions/${pending.json().id}/approve`,
-    payload: { sourceUserRequestId: randomUUID() }
-  })
-  assert.equal(approve.statusCode, 200, approve.body)
-  const grant = approve.json().authorizationId
-  const proposal = propose([candidate])
-  const prepared = storage.lifecycle.prepare(proposal.id, proposal.version)
-  assert.throws(() =>
-    storage.lifecycle.commit(
-      proposal.id,
-      {
-        version: 1,
-        validationId: prepared.id,
-        authorizationId: grant,
-        requestId: randomUUID()
-      },
-      USER
-    )
-  )
-  const resolved = await app.inject({
-    method: 'POST',
-    url: '/api/artifact-review-actions',
-    payload: { action, authorizationId: grant }
-  })
-  assert.equal(resolved.statusCode, 200, resolved.body)
-  assert.equal(storage.reviews.summary(candidate.id).blockerSummary.count, 0)
-  assert.equal(storage.reviews.summary(base.id).blockerSummary.count, 1)
-  const replay = await app.inject({
-    method: 'POST',
-    url: '/api/artifact-review-actions',
-    payload: { action, authorizationId: grant }
-  })
-  assert.deepEqual(replay.json(), resolved.json())
-})
-
-test('lifecycle: rootless replacement with transitive target blockers cannot obtain acceptance authorization', async t => {
-  const { storage, app, create, propose, pass } = await setup(t)
-  const original = create('superseded')
-  const base = create('accepted', [], [original.id])
-  const candidate = create('in_review', [
-    { kind: 'replaces', targetId: base.id }
-  ])
-  storage.reviews.createThread(
-    original.id,
-    { requestId: randomUUID(), text: 'Old unresolved blocker', blocking: true },
-    USER
-  )
-  const proposal = propose([candidate])
-  const validation = pass(proposal)
-  validation.submit()
-  const pending = await app.inject({
-    method: 'POST',
-    url: '/api/artifact-actions',
-    payload: {
-      kind: 'lifecycle',
-      changeSetId: proposal.id,
-      version: 1,
-      validationId: validation.prepared.id
-    }
-  })
-  assert.equal(pending.statusCode, 409, pending.body)
-  assert.equal(storage.get(candidate.id).revisionOf.length, 0)
-})
-
 test('lifecycle: expiry, explicit revocation and wrong caller invalidate grants without writes', async t => {
   for (const failure of ['expiry', 'revoke', 'caller'] as const) {
     const { storage, create, propose, pass, authorize, advance } =
@@ -695,4 +768,238 @@ test('lifecycle: another SQLite connection preserves a live owner and recovers a
     storage.lifecycle.jobs.get(running.prepared.id).state,
     'incomplete'
   )
+})
+
+test('0097: legacy blockers stay stored without participating in direct draft acceptance', async t => {
+  const { storage, db, create, propose, pass, authorize } = await setup(t, true)
+  const node = create('draft')
+  const threadId = randomUUID()
+  const snapshot = JSON.stringify({
+    threadId,
+    originArtifactId: node.id,
+    version: 1,
+    blocking: true,
+    comments: [],
+    decisions: []
+  })
+  db.prepare(
+    'INSERT INTO artifact_review_events(store_id,thread_id,origin_artifact_id,version,request_id,data_json) VALUES(?,?,?,?,?,?)'
+  ).run(storage.storeId, threadId, node.id, 1, randomUUID(), snapshot)
+  db.prepare('INSERT INTO artifact_thread_current VALUES(?,?,?,?,?)').run(
+    storage.storeId,
+    threadId,
+    node.id,
+    1,
+    snapshot
+  )
+  const original = db.prepare('SELECT * FROM artifact_review_events').all()
+  applyMigrations(db)
+  const proposal = propose([node])
+  const validation = pass(proposal)
+  assert.equal(validation.prepared.manifest.rulesVersion, 2)
+  assert.equal('threads' in validation.prepared.manifest, false)
+  const page = storage.lifecycle.jobs.manifest(validation.prepared.id)
+  assert.ok(page.items.every(item => item.kind !== 'review'))
+  assert.equal(
+    page.requiredContentCount,
+    validation.prepared.manifest.requiredContentIds.length
+  )
+  assert.throws(
+    () =>
+      storage.lifecycle.jobs.read(
+        validation.prepared.id,
+        validation.sessionId,
+        `review:${threadId}`
+      ),
+    /outside/
+  )
+  validation.submit()
+  const authorizationId = await authorize(proposal, validation.prepared.id)
+  storage.lifecycle.commit(
+    proposal.id,
+    {
+      version: proposal.version,
+      validationId: validation.prepared.id,
+      authorizationId,
+      requestId: randomUUID()
+    },
+    USER
+  )
+  assert.equal(storage.get(node.id).status, 'accepted')
+  assert.deepEqual(
+    db.prepare('SELECT * FROM artifact_review_events').all(),
+    original
+  )
+  assert.equal(
+    db
+      .prepare(
+        'SELECT snapshot_json FROM artifact_thread_current WHERE thread_id=?'
+      )
+      .get(threadId)?.snapshot_json,
+    snapshot
+  )
+  assert.throws(
+    () => db.exec('DELETE FROM artifact_review_events'),
+    /immutable/
+  )
+})
+
+test('0097: v1 manifests remain readable but cannot start, authorize, approve or commit', async t => {
+  const { storage, app, create, propose, pass, authorize } = await setup(t)
+  const proposal = propose([create('draft')])
+  const validation = pass(proposal)
+  validation.submit()
+  const grant = await authorize(proposal, validation.prepared.id)
+  const action = {
+    kind: 'lifecycle' as const,
+    changeSetId: proposal.id,
+    version: proposal.version,
+    validationId: validation.prepared.id
+  }
+  const pending = storage.lifecycle.authorization.request(action, 'user:local')
+  const current = storage.lifecycle.repository.validation(
+    validation.prepared.id
+  )
+  const manifest = { ...current.manifest, rulesVersion: 1, threads: [] }
+  storage.lifecycle.repository.appendValidation({
+    ...current,
+    manifest,
+    manifestDigest: artifactActionDigest(manifest)
+  })
+  assert.equal(storage.lifecycle.jobs.get(current.id).state, 'pass')
+  assert.ok(storage.lifecycle.jobs.history(current.id).items.length)
+  assert.ok(storage.lifecycle.jobs.report(current.id).text)
+  assert.throws(
+    () => storage.lifecycle.jobs.manifest(current.id),
+    /VALIDATION_STALE/
+  )
+  assert.throws(
+    () => storage.lifecycle.authorization.request(action, 'user:local'),
+    /VALIDATION_STALE/
+  )
+  const approval = await app.inject({
+    method: 'POST',
+    url: `/api/artifact-actions/${pending.id}/approve`,
+    payload: { sourceUserRequestId: randomUUID() }
+  })
+  assert.equal(approval.statusCode, 409, approval.body)
+  assert.throws(
+    () =>
+      storage.lifecycle.commit(
+        proposal.id,
+        {
+          version: proposal.version,
+          validationId: current.id,
+          authorizationId: grant,
+          requestId: randomUUID()
+        },
+        USER
+      ),
+    /VALIDATION_STALE/
+  )
+  storage.lifecycle.repository.appendValidation({
+    ...current,
+    manifest,
+    manifestDigest: artifactActionDigest(manifest),
+    state: 'prepared'
+  })
+  assert.throws(
+    () => storage.lifecycle.jobs.start(current.id, 'test'),
+    /VALIDATION_STALE/
+  )
+})
+
+test('0097: stale running validators cannot create report artifacts and cleanup still releases leases', async t => {
+  const { storage, create, propose, pass } = await setup(t)
+  const proposal = propose([create('draft')])
+  const validation = pass(proposal, false)
+  const current = storage.lifecycle.repository.validation(
+    validation.prepared.id
+  )
+  const manifest = { ...current.manifest, rulesVersion: 1, threads: [] }
+  storage.lifecycle.repository.appendValidation({
+    ...current,
+    manifest,
+    manifestDigest: artifactActionDigest(manifest)
+  })
+  const count = storage.catalog.all().length
+  const history = storage.lifecycle.repository.history(current.id)
+  assert.throws(
+    () =>
+      storage.lifecycle.jobs.createReport(
+        current.id,
+        validation.sessionId,
+        '# Stale'
+      ),
+    /VALIDATION_STALE/
+  )
+  assert.throws(
+    () =>
+      storage.lifecycle.jobs.submit(current.id, validation.sessionId, {
+        verdict: 'pass',
+        findings: [],
+        resolutions: [],
+        report: '# Stale'
+      }),
+    /VALIDATION_STALE/
+  )
+  assert.equal(storage.catalog.all().length, count)
+  assert.deepEqual(storage.lifecycle.repository.history(current.id), history)
+  storage.lifecycle.jobs.cancel(current.id)
+  assert.equal(storage.lifecycle.repository.lease(), undefined)
+  assert.equal(storage.lifecycle.jobs.get(current.id).state, 'cancelled')
+  const fresh = storage.lifecycle.prepare(proposal.id, proposal.version)
+  assert.equal(storage.lifecycle.jobs.start(fresh.id, 'test').state, 'running')
+})
+
+test('0097: new review commands and grants are rejected while stored submit_review proposals remain inspectable', async t => {
+  const { storage, app, create, propose } = await setup(t)
+  const proposal = propose([create('draft')])
+  const legacy = {
+    ...proposal,
+    id: randomUUID(),
+    requestId: randomUUID(),
+    changeSet: { ...proposal.changeSet, command: 'submit_review' as const }
+  }
+  storage.lifecycle.repository.appendProposal(legacy)
+  const read = await app.inject(`/api/artifact-change-sets/${legacy.id}`)
+  assert.equal(read.statusCode, 200, read.body)
+  assert.equal(read.json().changeSet.command, 'submit_review')
+  assert.ok(
+    storage.lifecycle
+      .preview(legacy.changeSet)
+      .errors.some(error => error.code === 'unsupported_command')
+  )
+  assert.throws(
+    () => storage.lifecycle.prepare(legacy.id, legacy.version),
+    /review was removed/
+  )
+  const prepared = storage.lifecycle.prepare(proposal.id, proposal.version)
+  storage.lifecycle.repository.appendValidation({
+    ...prepared,
+    changeSetId: legacy.id,
+    manifest: { ...prepared.manifest, changeSet: legacy.changeSet }
+  })
+  const inspection = await app.inject(
+    `/api/artifact-validations/${prepared.id}/check`
+  )
+  assert.equal(inspection.statusCode, 200, inspection.body)
+  assert.equal(inspection.json().ready, false)
+  assert.equal(inspection.json().preview.canonical.command, 'submit_review')
+  for (const url of [
+    '/api/artifact-change-sets',
+    '/api/artifacts/change-sets/preview'
+  ]) {
+    const payload = url.endsWith('preview')
+      ? legacy.changeSet
+      : { requestId: randomUUID(), changeSet: legacy.changeSet }
+    const response = await app.inject({ method: 'POST', url, payload })
+    assert.equal(response.statusCode, 400, response.body)
+  }
+  const grant = await app.inject({
+    method: 'POST',
+    url: '/api/artifact-actions',
+    payload: { kind: 'review', threadId: randomUUID(), input: {} }
+  })
+  assert.equal(grant.statusCode, 400, grant.body)
 })

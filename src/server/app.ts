@@ -1,5 +1,5 @@
 import { artifactActionRoutes } from './routes/artifact-actions.ts'
-import { artifactReviewRoutes } from './routes/artifact-reviews.ts'
+import { artifactTransitionRoutes } from './routes/artifact-transitions.ts'
 import { addressUrl } from '../shared/network/address-url.ts'
 import { artifactAgentRoutes } from './routes/artifact-agent.ts'
 import type { AgentSessionRegistry } from './services/agent/session-registry.ts'
@@ -231,19 +231,28 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       eventBus
     })
   app.register(artifactRoutes, { service: artifacts })
-  app.register(artifactReviewRoutes, {
-    service: artifacts.reviews,
-    recheckAccess: createAccessHook({
-      devices,
-      allowedHosts
-    })
-  })
   app.register(artifactActionRoutes, {
     service: artifacts.lifecycle,
     recheckAccess: createAccessHook({ devices, allowedHosts })
   })
-  app.addHook('onReady', async () => artifacts.lifecycle.jobs.recover())
-  app.addHook('onClose', async () => artifacts.lifecycle.jobs.close())
+  artifacts.lifecycle.transitions.setActorGuard(
+    actor => actor.id === 'local' || devices.isTrusted(actor.id)
+  )
+  artifacts.lifecycle.transitions.setErrorHandler(error =>
+    app.log.error({ err: error }, 'Artifact transition work failed')
+  )
+  app.register(artifactTransitionRoutes, {
+    service: artifacts.lifecycle.transitions,
+    recheckAccess: createAccessHook({ devices, allowedHosts })
+  })
+  app.addHook('onReady', async () => {
+    artifacts.lifecycle.jobs.recover()
+    artifacts.lifecycle.transitions.start()
+  })
+  app.addHook('onClose', async () => {
+    artifacts.lifecycle.transitions.stop()
+    artifacts.lifecycle.jobs.close()
+  })
   app.register(artifactDefinitionRoutes, { storage: artifacts })
   const artifactMaintenance = new ArtifactMaintenanceService({
     storage: artifacts,
@@ -304,13 +313,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         return `${addressUrl(WILDCARD_LOOPBACK[address.address] ?? address.address, address.port)}/`
       },
       repositoryPath,
-      taskIds: sessionId => artifacts.definitions.assignment(sessionId).taskIds
+      taskIds: sessionId => artifacts.definitions.assignment(sessionId).taskIds,
+      taskAssignment: sessionId => artifacts.definitions.assignment(sessionId)
     })
     agentRegistry = registry
     app.register(artifactAgentRoutes, { storage: artifacts, registry })
     artifacts.tasks.attachSessions(registry)
     artifacts.lifecycle.attachSessions(registry)
     app.register(agentRoutes, {
+      artifacts,
       notes,
       registry,
       db,

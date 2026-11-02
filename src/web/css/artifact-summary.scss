@@ -1,0 +1,22 @@
+// Catalog and history share typography; each view keeps its own layout and wrapping.
+.artifact-summary {
+  font-family: var(--font-agent);
+  font-weight: 400;
+  letter-spacing: normal;
+}
+.artifact-summary__title {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px !important;
+  letter-spacing: normal;
+}
+.artifact-summary__caption {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px !important;
+  letter-spacing: normal;
+  color: #757575;
+}
+.artifact-summary--dark .artifact-summary__caption {
+  color: var(--app-icon-neutral);
+}

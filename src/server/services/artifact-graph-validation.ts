@@ -1,17 +1,17 @@
 import type {
   Artifact,
-  ArtifactChangeSet,
+  ArtifactHistoricalChangeSet,
   ArtifactRelation,
   GraphIssue
 } from '../../shared/artifacts/types.ts'
 import { canonicalJson } from '../../shared/utils/canonical-json.ts'
 import { sha256Hex } from '../utils/hash.ts'
+import { allowedTransition } from '../../shared/artifact-transitions/transitions.ts'
 
 // Status that a lifecycle command gives to each of its subjects.
 const COMMAND_STATUS: Partial<
-  Record<ArtifactChangeSet['command'], Artifact['status']>
+  Record<ArtifactHistoricalChangeSet['command'], Artifact['status']>
 > = {
-  submit_review: 'in_review',
   return_to_draft: 'draft',
   reject: 'rejected',
   accept: 'accepted',
@@ -238,8 +238,8 @@ function relations(items: ArtifactRelation[]) {
 }
 
 export function canonicalChangeSet(
-  input: ArtifactChangeSet
-): ArtifactChangeSet {
+  input: ArtifactHistoricalChangeSet
+): ArtifactHistoricalChangeSet {
   return {
     ...input,
     subjectIds: [...input.subjectIds].sort(),
@@ -260,7 +260,7 @@ export function canonicalChangeSet(
 
 export function previewArtifactChangeSet(
   current: readonly Artifact[],
-  input: ArtifactChangeSet,
+  input: ArtifactHistoricalChangeSet,
   previouslySuperseded: ReadonlySet<string> = new Set()
 ) {
   const canonical = canonicalChangeSet(input)
@@ -271,6 +271,13 @@ export function previewArtifactChangeSet(
   const errors: GraphIssue[] = []
   const error = (code: string, artifactIds: string[], message: string) =>
     errors.push({ code, artifactIds, message })
+  if (canonical.command === 'submit_review') {
+    error(
+      'unsupported_command',
+      canonical.subjectIds,
+      'Artifact review was removed. Create a supported lifecycle proposal.'
+    )
+  }
   const affected = new Set(canonical.subjectIds)
   const retired = new Set<string>()
   for (const collection of [
@@ -629,20 +636,30 @@ export function previewArtifactChangeSet(
   }
   errors.push(...graphIssues([...post.values()], canonical.storeId))
   // Compute the component in the union of the old and proposed graphs.
+  // A references target enters the set for existence checks only. It does not expand the set.
+  const referenceTargets = new Set<string>()
   changed = true
   while (changed) {
     changed = false
-    const add = (id: string) => {
-      if (!affected.has(id) && nodes.has(id)) {
+    const add = (id: string, viaReference = false) => {
+      if (!nodes.has(id)) return
+      if (!affected.has(id)) {
         affected.add(id)
+        if (viaReference) referenceTargets.add(id)
+        changed = true
+      } else if (!viaReference && referenceTargets.delete(id)) {
         changed = true
       }
     }
+    const expands = (id: string) =>
+      affected.has(id) && !referenceTargets.has(id)
     const tasks = new Set(
-      [...affected].flatMap(id => [
-        ...(nodes.get(id)?.taskIds ?? []),
-        ...(post.get(id)?.taskIds ?? [])
-      ])
+      [...affected]
+        .filter(id => !referenceTargets.has(id))
+        .flatMap(id => [
+          ...(nodes.get(id)?.taskIds ?? []),
+          ...(post.get(id)?.taskIds ?? [])
+        ])
     )
     for (const node of [...current, ...post.values()]) {
       for (const target of [
@@ -651,14 +668,14 @@ export function previewArtifactChangeSet(
           .filter(r => r.kind !== 'references')
           .map(r => r.targetId)
       ]) {
-        if (affected.has(node.id)) add(target)
-        if (affected.has(target)) add(node.id)
+        if (expands(node.id)) add(target)
+        if (expands(target)) add(node.id)
       }
-      if (affected.has(node.id)) {
+      if (expands(node.id)) {
         for (const relation of node.relations.filter(
           r => r.kind === 'references'
         )) {
-          add(relation.targetId)
+          add(relation.targetId, true)
         }
       }
       if (
@@ -719,23 +736,6 @@ export function previewArtifactChangeSet(
       .sort((a, b) => a.id.localeCompare(b.id)),
     includedIn
   }
-}
-
-function allowedTransition(
-  from: Artifact['status'],
-  to: Artifact['status']
-): boolean {
-  if (from === to) return false
-  const transitions: Record<string, string[]> = {
-    draft: ['in_review', 'archived', 'deleted'],
-    in_review: ['draft', 'rejected', 'accepted', 'archived', 'deleted'],
-    rejected: ['draft', 'archived', 'deleted'],
-    accepted: ['archived', 'deleted'],
-    archived: ['draft', 'deleted'],
-    deleted: ['draft', 'archived'],
-    superseded: ['archived', 'deleted']
-  }
-  return transitions[from]?.includes(to) ?? false
 }
 
 function isAncestor(

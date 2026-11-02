@@ -17,6 +17,201 @@ export default {
     exitFullscreen: 'Exit fullscreen',
     fullscreenFailed: 'Could not enter fullscreen'
   },
+  artifacts: {
+    export: {
+      menu: 'Download artifact',
+      original: 'Original Markdown file',
+      history: 'Metadata and full history (JSON)'
+    },
+    addToAgent: 'Add document to agent chat',
+    content: {
+      loading: 'Reading the document…',
+      failed: 'Could not read the document text',
+      integrity: 'The stored document failed its integrity check',
+      hint: 'The metadata and the history stay available. Retry or Refresh reads the text again; background updates do not.',
+      retry: 'Retry',
+      verifying: 'Checking the document text',
+      blocked: 'Unavailable: the stored document failed its integrity check'
+    },
+    transition: {
+      button: 'Status: {status}. Change status',
+      menuTitle: 'Change status to',
+      none: 'No status changes available',
+      dialogTitle: 'Change status',
+      question: 'Change “{title}” from {from} to {to}?',
+      changes: 'Status changes',
+      change: '{title}: {from} → {to}',
+      loading: 'Loading consequences…',
+      blocked: 'This change cannot start',
+      blockedHint:
+        'Resolve the active supplements first. This screen cannot choose their decisions.',
+      validator: 'Validator',
+      validatorHint:
+        'The validator checks the change first. The status changes only after it passes.',
+      validatorNone: 'No validator agent is available.',
+      yes: 'Yes',
+      no: 'No',
+      refresh: 'Refresh consequences',
+      refreshed: 'The documents changed, so the consequences were refreshed.',
+      expired: 'This preview expired. Refresh the consequences.',
+      startFailed: 'Could not start the change',
+      stages: {
+        preparing: 'Preparing',
+        validating: 'Validating',
+        applying: 'Applying',
+        succeeded: 'Status changed',
+        failed: 'Not changed',
+        cancelled: 'Cancelled',
+        interrupted: 'Interrupted'
+      },
+      progressLabel: 'Status change to {to}',
+      cancel: 'Cancel',
+      cancelRequested: 'Cancelling…',
+      retry: 'Retry',
+      dismiss: 'Dismiss',
+      report: 'Open the validation report document',
+      loadFailed: 'Could not load the status menu',
+      loadingMenu: 'Loading status menu…',
+      reload: 'Reload',
+      result: 'Validation result',
+      resultLoading: 'Loading the validation result…',
+      resultFailed: 'Could not load the validation result',
+      resultEmpty: 'The validator saved no findings.',
+      findings: 'Findings',
+      resolutions: 'Resolutions',
+      close: 'Close'
+    },
+    actions: {
+      title: 'Artifact actions and validation',
+      close: 'Close actions',
+      pending: 'Pending requests',
+      proposal: 'ChangeSet and validation',
+      lifecycle: 'Lifecycle request',
+      empty: 'No pending requests.',
+      changeSetId: 'ChangeSet ID',
+      validationId: 'Validation ID (optional)',
+      invalidIds: 'Enter valid UUID identifiers.',
+      open: 'Open proposal',
+      version: 'Version {version}',
+      digest: 'Change digest',
+      proposedBy: 'Proposed by',
+      packageScope: 'Exact package scope',
+      subjects: 'Command subjects',
+      targetStatuses: 'Explicit target statuses',
+      replaceRelations: 'Replace complete relationship list',
+      noRelations: 'Remove all relationships',
+      expectedVersions: 'Expected metadata versions',
+      dispositions: 'Decisions for active supplements',
+      affected: 'Affected context: {count} documents',
+      validation: 'Validation',
+      verdict: 'Verdict',
+      readReport: 'Read full structured report',
+      reportArtifact: 'Open report document',
+      requestingSession: 'Requesting session',
+      expires: 'Expires at',
+      applied: 'This authorization was consumed.',
+      stale:
+        'The scope is stale, expired or still updating. Refresh before confirming.',
+      confirmScope:
+        'I reviewed this exact action, its affected documents and supplement decisions.',
+      approve: 'Authorize this action',
+      apply: 'Apply approved action',
+      revoke: 'Revoke request or grant',
+      awaitAgent:
+        'Authorized. The requesting agent must execute this exact action.',
+      prepare: 'Prepare new validation',
+      preset: 'Validator preset',
+      start: 'Start validation',
+      cancel: 'Cancel validation',
+      request: 'Request permission for this package',
+      states: {
+        prepared: 'Prepared',
+        running: 'Running',
+        pass: 'Pass',
+        conflict: 'Conflict',
+        incomplete: 'Incomplete',
+        cancelled: 'Cancelled'
+      },
+      commands: {
+        return_to_draft: 'Return to draft',
+        reject: 'Reject',
+        accept: 'Accept',
+        archive: 'Archive',
+        delete: 'Delete',
+        restore: 'Restore to draft',
+        update_relations: 'Update relationships'
+      }
+    },
+    definitions: {
+      task: 'Task',
+      type: 'Artifact type',
+      closed: 'Closed',
+      inactive: 'Inactive',
+      noMatches: 'No matching entries.',
+      unavailable: 'This definition is unavailable. Its ID is preserved.'
+    },
+    details: {
+      metadata: 'Current metadata',
+      currentTitle: 'Current title',
+      tasks: 'Tasks',
+      none: 'None',
+      version: 'Metadata version',
+      sourcePath: 'Original path (informational)',
+      created: 'Created at',
+      updated: 'Metadata updated at',
+      bytes: 'Original size (bytes)',
+      outgoing: 'Outgoing relationships',
+      incoming: 'Incoming relationships',
+      lineage: 'Revision ancestry',
+      history: 'Metadata history',
+      eventVersion: 'Version {version}',
+      recordedMetadata: 'Recorded metadata',
+      noHistory: 'No recorded metadata events.',
+      stale: 'These details are out of date. Refresh before reading more.',
+      kinds: {
+        parent: 'Parent',
+        replaces: 'Replaces',
+        supplements: 'Supplements',
+        references: 'References'
+      },
+      actions: { created: 'Created', metadata_updated: 'Metadata updated' }
+    },
+    title: 'Artifacts',
+    allStatuses: 'All statuses',
+    document: 'Document',
+    search: 'Search documents',
+    status: 'Status',
+    type: 'Type ID',
+    task: 'Task ID',
+    tag: 'Tag',
+    types: 'Artifact types',
+    createdFrom: 'Created from',
+    createdTo: 'Created to',
+    group: 'Group loaded results',
+    typos: 'Include typo matches',
+    refresh: 'Refresh',
+    more: 'Load more',
+    select: 'Select a document to read it.',
+    empty: 'No matching documents.',
+    agentCreates: 'Ask an agent to create a document.',
+    currentMetadata: 'Current metadata.',
+    identity: 'Document ID',
+    store: 'Store ID',
+    noTask: 'No task',
+    fuzzyMatch: 'Typo match',
+    stale: 'These results are out of date. Refresh the list.',
+    partial: 'The search budget was reached. Some typo matches may be missing.',
+    statuses: {
+      draft: 'Draft',
+      in_review: 'In review',
+      accepted: 'Accepted',
+      rejected: 'Rejected',
+      superseded: 'Superseded',
+      archived: 'Archived',
+      deleted: 'Deleted'
+    },
+    groups: { none: 'No grouping', type: 'Type', task: 'Task' }
+  },
   notes: {
     externalAssets: {
       title: 'Download external attachments',
@@ -101,12 +296,6 @@ export default {
       boolean: 'Checkbox',
       date: 'Date'
     },
-    filter: 'Filter',
-    tagMode: 'Match tags',
-    allTags: 'All',
-    anyTag: 'Any',
-    resetFilter: 'Reset filter',
-    noTags: 'No tags yet.',
     done: 'Done',
     newNote: 'New note',
     newFolder: 'New folder',
@@ -219,7 +408,18 @@ export default {
   success: 'Action was successful',
 
   common: {
-    copyPath: 'Copy file path'
+    copyPath: 'Copy file path',
+    filters: {
+      title: 'Filters',
+      reset: 'Reset filters',
+      done: 'Done',
+      close: 'Close',
+      tags: 'Tags',
+      tagMode: 'Match tags',
+      allTags: 'All tags',
+      anyTag: 'Any tag',
+      noTags: 'No tags yet.'
+    }
   },
 
   app: {
@@ -416,6 +616,22 @@ export default {
     }
   },
   agent: {
+    tasks: {
+      title: 'Tasks ({count})',
+      add: 'Add task',
+      retry: 'Retry',
+      inheritance:
+        'Selected task: {task}. New responses inherit it; MCP activation can also select a task for the current response. Explicit artifact tasks take precedence.',
+      noInheritance:
+        'No task selected for new responses. Without a response activation or explicit tasks, new artifacts will be general documents.',
+      ambiguousInheritance:
+        'Select exactly one task to inherit it automatically. Otherwise, artifacts without explicit tasks will be general documents.',
+      nextTurn:
+        'Manual assignment changes apply to the next message. Only explicit MCP activation changes the task of the current reply.',
+      reload: 'Reload assignment and discard draft',
+      changed:
+        'The assignment changed elsewhere. Load the latest selection before changing tasks.'
+    },
     title: 'Agent',
     unavailable: 'not installed',
     placeholder:
@@ -540,6 +756,7 @@ export default {
       needsAnswer: 'waiting for your answer'
     },
     context: {
+      artifact: 'Document: {name}',
       add: 'Add to agent chat',
       file: 'File: {path}',
       directory: 'Folder: {path}/',

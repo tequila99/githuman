@@ -1,5 +1,10 @@
 import createError from '@fastify/error'
 
+// @fastify/error matches instanceof by code, so a subclass cannot be told apart.
+// Markers keep the public code GHT_ARTIFACT_CONFLICT while callers still can.
+const BUSY = Symbol('artifact.busy')
+const LEASE_BUSY = Symbol('artifact.leaseBusy')
+
 export const ArtifactInputError = createError(
   'GHT_ARTIFACT_INVALID_INPUT',
   '%s',
@@ -15,6 +20,24 @@ export const ArtifactConflictError = createError(
   '%s',
   409
 )
+function marked(message: string, marker: symbol): Error {
+  return Object.assign(new ArtifactConflictError(message), { [marker]: true })
+}
+
+/** The database is locked by another writer; the same call can succeed later. */
+export function artifactBusyError(message: string): Error {
+  return marked(message, BUSY)
+}
+/** Another validation job holds the store lease; start again when it ends. */
+export function artifactLeaseBusyError(message: string): Error {
+  return marked(message, LEASE_BUSY)
+}
+export function isArtifactBusyError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && BUSY in error
+}
+export function isArtifactLeaseBusyError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && LEASE_BUSY in error
+}
 export const ArtifactIntegrityError = createError(
   'GHT_ARTIFACT_INTEGRITY',
   '%s',

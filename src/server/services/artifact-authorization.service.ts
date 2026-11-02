@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto'
 import type { FastifyRequest } from 'fastify'
 import type {
   ArtifactActor,
-  ArtifactAuthorizationRequest
+  ArtifactAuthorizationRequest,
+  PendingArtifactAction
 } from '../../shared/artifacts/types.ts'
 import { canonicalJson } from '../../shared/utils/canonical-json.ts'
 import { sha256Hex } from '../utils/hash.ts'
@@ -19,15 +20,9 @@ import type { ArtifactValidationRepository } from '../repositories/artifact-vali
 // Grants expire with the confirmed proposal and never survive this runtime.
 const AUTHORIZATION_TTL_MS = 15 * 60_000
 
-export interface PendingArtifactAction {
-  id: string
-  sessionId: string
-  action: ArtifactAuthorizationRequest
-  actionDigest: string
-  manifestDigest: string | null
-  expiresAt: number
-}
+export type { PendingArtifactAction } from '../../shared/artifacts/types.ts'
 interface Grant extends PendingArtifactAction {
+  pendingActionId: string
   user: ArtifactActor
   sourceUserRequestId: string
 }
@@ -121,7 +116,17 @@ export class ArtifactAuthorizationService {
     }
     const sourceUserRequestId = request.body.sourceUserRequestId
     const pending = this.pending.get(id)
-    if (!pending) throw new ArtifactNotFoundError()
+    if (!pending) {
+      const previous = [...this.grants.values()].find(
+        value =>
+          value.pendingActionId === id &&
+          value.sourceUserRequestId === sourceUserRequestId &&
+          canonicalJson(value.user) === canonicalJson(user)
+      )
+      if (!previous) throw new ArtifactNotFoundError()
+      this.assert(previous.id, previous.sessionId, previous.action)
+      return { authorizationId: previous.id, expiresAt: previous.expiresAt }
+    }
     if (pending.expiresAt <= this.now() || !this.live(pending.sessionId)) {
       throw new ForbiddenError('Pending action expired or was revoked.')
     }
@@ -135,7 +140,13 @@ export class ArtifactAuthorizationService {
     ) {
       throw new ArtifactConflictError('Pending action is stale.')
     }
-    const grant = { ...pending, id: randomUUID(), user, sourceUserRequestId }
+    const grant = {
+      ...pending,
+      pendingActionId: id,
+      id: randomUUID(),
+      user,
+      sourceUserRequestId
+    }
     this.repository.appendAuthorization(grant.id, grant)
     this.grants.set(grant.id, grant)
     this.pending.delete(id)
@@ -171,10 +182,52 @@ export class ArtifactAuthorizationService {
     }
     return grant
   }
+  describe(id: string) {
+    const pending = this.pending.get(id)
+    const grant = pending
+      ? undefined
+      : [...this.grants.values()].find(value => value.pendingActionId === id)
+    const value = pending ?? grant
+    if (
+      !value ||
+      value.expiresAt <= this.now() ||
+      !this.live(value.sessionId)
+    ) {
+      throw new ArtifactNotFoundError()
+    }
+    return {
+      pending: grant ? { ...grant, id: grant.pendingActionId } : value,
+      phase: grant
+        ? this.repository.consumed(grant.id)
+          ? ('consumed' as const)
+          : ('authorized' as const)
+        : ('pending' as const),
+      authorizationId: grant?.id ?? null
+    }
+  }
+  status(id: string, sessionId: string) {
+    const value = this.describe(id)
+    if (value.pending.sessionId !== sessionId) throw new ArtifactNotFoundError()
+    return {
+      id,
+      state: value.phase,
+      authorizationId: value.authorizationId,
+      expiresAt: value.pending.expiresAt
+    }
+  }
   consume(id: string): void {
     this.repository.authorizationEvent(id, 'consumed', { at: this.now() })
   }
   revoke(id: string): void {
+    const grant = [...this.grants.values()].find(
+      value => value.pendingActionId === id
+    )
+    if (grant) {
+      this.grants.delete(grant.id)
+      this.repository.authorizationEvent(grant.id, 'revoked', {
+        at: this.now()
+      })
+    }
     this.grants.delete(id)
     this.pending.delete(id)
     this.repository.authorizationEvent(id, 'revoked', { at: this.now() })

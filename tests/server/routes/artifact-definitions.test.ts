@@ -305,3 +305,39 @@ test('new read and write routes require the existing device access and same-orig
   })
   assert.equal(csrf.statusCode, 403, csrf.body)
 })
+
+test('definition lists search by name and identifier, and cursors stay bound to the search', async t => {
+  const { app, storage } = await setup(t)
+  for (const title of ['Alpha one', 'Alpha two', 'Beta']) {
+    storage.tasks.create(
+      `create-${title}`,
+      { title, externalUrl: null, state: 'open' },
+      { kind: 'user', id: 'local' }
+    )
+  }
+  const found = await app.inject('/api/tasks?search=ALPHA&limit=1')
+  assert.equal(found.statusCode, 200, found.body)
+  assert.equal(found.json().items.length, 1)
+  const cursor = found.json().nextCursor
+  assert.ok(cursor)
+  const next = await app.inject(
+    `/api/tasks?search=alpha&limit=1&cursor=${encodeURIComponent(cursor)}`
+  )
+  assert.deepEqual(
+    [...found.json().items, ...next.json().items]
+      .map((item: { title: string }) => item.title)
+      .sort(),
+    ['Alpha one', 'Alpha two']
+  )
+  assert.equal(next.json().nextCursor, null)
+  const other = await app.inject(
+    `/api/tasks?search=beta&limit=1&cursor=${encodeURIComponent(cursor)}`
+  )
+  assert.equal(other.statusCode, 400, other.body)
+  const all = await app.inject('/api/tasks')
+  assert.equal(all.json().items.length, 3)
+  const byId = await app.inject('/api/artifact-types?search=custom-missing')
+  assert.deepEqual(byId.json().items, [])
+  const types = await app.inject('/api/artifact-types?search=ADR')
+  assert.ok(types.json().items.length > 0)
+})

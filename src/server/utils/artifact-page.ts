@@ -1,3 +1,4 @@
+import { DEFAULT_ARTIFACT_PAGE_SIZE } from '../../shared/artifacts/constants.ts'
 import { takeWithinBytes } from './take-within-bytes.ts'
 import {
   ArtifactConflictError,
@@ -15,7 +16,7 @@ export function artifactPage<T>(
   }
 ) {
   const { storeId, epoch, query, cursor } = options
-  const limit = options.limit ?? 50
+  const limit = options.limit ?? DEFAULT_ARTIFACT_PAGE_SIZE
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
     throw new ArtifactInputError('Invalid page size.')
   }

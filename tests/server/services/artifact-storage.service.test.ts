@@ -942,3 +942,58 @@ test('INSERT OR REPLACE with an explicit rowid cannot overwrite a record', t => 
     assert.deepEqual(db.prepare(`SELECT rowid, * FROM ${table}`).all(), before)
   }
 })
+
+test('source paths survive creation, metadata edits, retries and history without rewriting originals', t => {
+  const { root, service } = setup(t)
+  const sourcePath = 'documents/план.md'
+  const create = { ...input(), metadata: { ...input().metadata, sourcePath } }
+  const first = service.create(create, ACTOR)
+  const path = join(root, '.githuman/artifacts', `ght-${first.id}.md`)
+  const bytes = readFileSync(path)
+  assert.equal(
+    parse(bytes.toString('utf8').slice(4).split('---\n')[0]).source_path,
+    sourcePath
+  )
+  assert.equal(first.sourcePath, sourcePath)
+  assert.deepEqual(service.create(create, ACTOR), first)
+  assert.throws(
+    () =>
+      service.create(
+        { ...create, metadata: { ...create.metadata, sourcePath: 'other.md' } },
+        ACTOR
+      ),
+    ArtifactConflictError
+  )
+  const edit = {
+    requestId: 'source-edit',
+    expectedVersion: 1,
+    metadata: { title: 'Clean title', tags: [] }
+  }
+  const second = service.updateMetadata(first.id, edit, ACTOR)
+  assert.equal(second.sourcePath, sourcePath)
+  const update = {
+    requestId: 'source-change',
+    expectedVersion: 2,
+    metadata: { title: second.title, tags: [], sourcePath: 'archive/план.md' }
+  }
+  const third = service.updateMetadata(first.id, update, ACTOR)
+  assert.deepEqual(service.updateMetadata(first.id, update, ACTOR), third)
+  assert.throws(
+    () =>
+      service.updateMetadata(
+        first.id,
+        { ...update, metadata: { ...update.metadata, sourcePath } },
+        ACTOR
+      ),
+    ArtifactConflictError
+  )
+  assert.equal(service.get(first.id).sourcePath, update.metadata.sourcePath)
+  assert.deepEqual(
+    service.history(first.id).items.map(event => event.metadata.sourcePath),
+    [sourcePath, sourcePath, update.metadata.sourcePath]
+  )
+  service.catalog.rebuild()
+  assert.equal(service.get(first.id).sourcePath, update.metadata.sourcePath)
+  assert.equal(third.sha256, first.sha256)
+  assert.deepEqual(readFileSync(path), bytes)
+})

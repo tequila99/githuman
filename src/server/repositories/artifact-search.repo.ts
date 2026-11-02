@@ -268,9 +268,20 @@ export class ArtifactSearchRepository {
     }
     if (filters.tags) {
       where.push(
-        "NOT EXISTS(SELECT 1 FROM json_each(?) f WHERE f.value NOT IN (SELECT value FROM json_each(c.snapshot_json,'$.tags')))"
+        filters.tagMode === 'any'
+          ? "EXISTS(SELECT 1 FROM json_each(c.snapshot_json,'$.tags') WHERE value IN (SELECT value FROM json_each(?)))"
+          : "NOT EXISTS(SELECT 1 FROM json_each(?) f WHERE f.value NOT IN (SELECT value FROM json_each(c.snapshot_json,'$.tags')))"
       )
       params.push(JSON.stringify(filters.tags))
+    }
+    // Stored timestamps are UTC ISO strings, so text comparison keeps time order.
+    if (filters.createdFrom) {
+      where.push("json_extract(c.snapshot_json,'$.createdAt') >= ?")
+      params.push(new Date(filters.createdFrom).toISOString())
+    }
+    if (filters.createdTo) {
+      where.push("json_extract(c.snapshot_json,'$.createdAt') <= ?")
+      params.push(new Date(filters.createdTo).toISOString())
     }
     const sort =
       input.sort === 'createdAt'

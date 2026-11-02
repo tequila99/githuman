@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiShieldAlertOutline } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 
 defineProps<{ title: string }>()
@@ -9,7 +10,7 @@ const { t } = useI18n()
   <div
     class="agent-item agent-auto-approved row no-wrap items-center text-grey-6"
   >
-    <q-icon name="gpp_maybe" color="warning" class="q-mr-xs" />
+    <q-icon :name="mdiShieldAlertOutline" class="app-icon-warning q-mr-xs" />
     <span class="ellipsis">{{
       t('agent.autoApprove.approved', { title })
     }}</span>

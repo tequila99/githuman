@@ -1,3 +1,5 @@
+import { artifactsApi } from '@/api/artifacts'
+import { loadArtifactBody } from '@/utils/artifact-content'
 import { PREVIEW_WINDOW_ID } from '@/constants/windows/constants'
 import { isNarrowWorkspace } from '@/utils/workspace-navigation'
 import { ref, computed, onScopeDispose } from 'vue'
@@ -302,7 +304,25 @@ export const usePreviewStore = defineStore('preview', () => {
     const controller = new AbortController()
     fileControllers.set(id, controller)
     try {
-      if (tab.source.type === 'local') {
+      if (tab.source.type === 'artifact') {
+        const metadata = await artifactsApi.get(
+          tab.source.artifactId,
+          controller.signal
+        )
+        if (
+          metadata.storeId !== tab.source.storeId ||
+          metadata.id !== tab.source.artifactId
+        ) {
+          throw new Error(
+            'This document belongs to another artifact store or identity.'
+          )
+        }
+        text = await loadArtifactBody(metadata, controller.signal)
+        if (tabs.value.includes(tab) && tab.kind === 'markdown') {
+          tab.title = metadata.title
+          remember()
+        }
+      } else if (tab.source.type === 'local') {
         const file = localFiles.get(tab.source.id)
         if (!file) {
           missing = 'file'

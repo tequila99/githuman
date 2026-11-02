@@ -15,7 +15,7 @@ export default defineConfig(ctx => {
     // 'pinia' must run before 'init-app', which reads from a Pinia store —
     // see src/web/boot/pinia.ts for why Pinia is installed manually here
     // instead of via sourceFiles.store.
-    boot: ['pinia', 'i18n', 'theme', 'init-app'],
+    boot: ['pinia', 'i18n', 'theme', 'icons', 'init-app'],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
     css: ['app.scss'],
@@ -30,8 +30,7 @@ export default defineConfig(ctx => {
       // 'line-awesome',
       // 'roboto-font-latin-ext', // this or either 'roboto-font', NEVER both!
 
-      'roboto-font', // optional, you are not bound to it
-      'material-icons' // optional, you are not bound to it
+      'roboto-font' // optional, you are not bound to it
     ],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#build

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiChevronRight } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import { computed } from 'vue'
 import { useQuasar } from 'quasar'
@@ -53,9 +54,9 @@ const narrow = computed(() => isNarrowWorkspace($q.screen.width))
     <FileCardHeader :path="path">
       <template #leading>
         <q-icon
-          name="chevron_right"
+          :name="mdiChevronRight"
           size="xs"
-          class="diff-file-card__chevron"
+          class="app-icon-neutral diff-file-card__chevron"
           :class="{ 'diff-file-card__chevron--expanded': expanded }"
         />
       </template>

@@ -1,3 +1,14 @@
+// Share lifecycle values between runtime schemas and frontend filters.
+export const ARTIFACT_STATUSES = [
+  'draft',
+  'in_review',
+  'accepted',
+  'rejected',
+  'superseded',
+  'archived',
+  'deleted'
+] as const
+
 // Bound document allocation before serialization and filesystem reads.
 export const MAX_ARTIFACT_BYTES = 2 * 1024 * 1024
 // Leave room for the immutable frontmatter.
@@ -6,18 +17,15 @@ export const MAX_ARTIFACT_BODY_BYTES = Math.floor(1.9 * 1024 * 1024)
 export const MAX_ARTIFACT_METADATA_BYTES = 64 * 1024
 // Keep content responses small enough for later MCP transport.
 export const MAX_ARTIFACT_CHUNK_BYTES = 64 * 1024
+// Use the same normal query size for document and definition pages.
+export const DEFAULT_ARTIFACT_PAGE_SIZE = 50
 // Bound catalog and history pages.
 export const MAX_ARTIFACT_PAGE_SIZE = 100
 
-// Bound comment storage independently of document excerpts.
-export const MAX_ARTIFACT_REVIEW_TEXT_BYTES = 64 * 1024
-
 // Bound source excerpts independently of immutable document size.
-export const MAX_ARTIFACT_REVIEW_QUOTE_BYTES = 64 * 1024
+export const MAX_ARTIFACT_SOURCE_QUOTE_BYTES = 64 * 1024
 // Keep normal pages small; one complete large item can exceed this soft budget.
-export const MAX_ARTIFACT_REVIEW_PAGE_BYTES = 128 * 1024
-// Keep thread lists useful without returning full discussion text.
-export const MAX_ARTIFACT_REVIEW_PREVIEW_BYTES = 1024
+export const MAX_ARTIFACT_PAGE_BYTES = 128 * 1024
 
 // Bound the user query before normalization can expand its Unicode representation.
 export const MAX_SEARCH_QUERY_CODEPOINTS = 256

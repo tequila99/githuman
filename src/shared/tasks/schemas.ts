@@ -66,6 +66,13 @@ export const DefinitionQuery = Type.Object(
     ),
     cursor: Type.Optional(
       Type.String({ maxLength: 2048, description: 'Store revision cursor.' })
+    ),
+    search: Type.Optional(
+      Type.String({
+        maxLength: 256,
+        description:
+          'Case-insensitive text matched against the name and the identifier.'
+      })
     )
   },
   { additionalProperties: false, description: 'Definition page options.' }
@@ -188,6 +195,104 @@ export const SessionTaskSchema = Type.Object(
   },
   { description: 'Current task assignment for a live session.' }
 )
+export const TaskActivationBody = Type.Object(
+  {
+    requestId: TaskCreateBody.properties.requestId,
+    turnId: Type.String({
+      pattern: UUID_PATTERN_SOURCE,
+      description:
+        'Expected active response identifier, read with tasks.get_context.'
+    }),
+    assignmentVersion: Type.Integer({
+      minimum: 0,
+      description: 'Expected current session assignment version.'
+    }),
+    taskId: Type.String({
+      pattern: UUID_PATTERN_SOURCE,
+      description: 'Existing task to select exclusively.'
+    })
+  },
+  {
+    additionalProperties: false,
+    description: 'Activate an existing task for the current response and chat.'
+  }
+)
+export const TaskCreateAndActivateBody = Type.Object(
+  {
+    requestId: TaskActivationBody.properties.requestId,
+    turnId: TaskActivationBody.properties.turnId,
+    assignmentVersion: TaskActivationBody.properties.assignmentVersion,
+    input: TaskInputSchema
+  },
+  {
+    additionalProperties: false,
+    description:
+      'Atomically create a task and activate it for the current response and chat.'
+  }
+)
+export const TaskContextSchema = Type.Object(
+  {
+    storeId: Type.String({ description: 'Owning artifact store.' }),
+    sessionId: Type.String({ description: 'Authenticated agent session.' }),
+    turnId: Nullable(
+      Type.String({
+        description:
+          'Active response identifier; null after cancellation or while idle.'
+      })
+    ),
+    assignment: SessionTaskSchema,
+    taskIds: Type.Array(Type.String(), {
+      description:
+        'Effective tasks for the current response, or an empty list while idle.'
+    }),
+    source: Nullable(
+      Type.Union(
+        [Type.Literal('turn_assignment'), Type.Literal('turn_activation')],
+        { description: 'Source of the current response task context.' }
+      )
+    )
+  },
+  {
+    additionalProperties: false,
+    description: 'Own session task context and latest persisted assignment.'
+  }
+)
+export const TaskActivationResultSchema = Type.Object(
+  {
+    task: TaskSchema,
+    assignment: SessionTaskSchema,
+    activation: Type.Object(
+      {
+        sessionId: Type.String({
+          description: 'Session whose response was activated.'
+        }),
+        turnId: Type.String({
+          description: 'Response in which activation occurred.'
+        }),
+        assignmentVersion: Type.Integer({
+          description: 'Assignment version committed by this activation.'
+        }),
+        taskId: Type.String({
+          description: 'Task selected by the original operation.'
+        }),
+        requestId: TaskCreateBody.properties.requestId
+      },
+      {
+        description:
+          'Immutable receipt of the original activation, not a claim about the current selection.'
+      }
+    ),
+    replayed: Type.Boolean({
+      description:
+        'True for an idempotent repeat; no activation is applied again.'
+    })
+  },
+  {
+    additionalProperties: false,
+    description: 'Task and persisted activation receipt.'
+  }
+)
+
 export function definitionHistorySchema(
   snapshot: typeof TaskSchema | typeof ArtifactTypeSchema
 ) {

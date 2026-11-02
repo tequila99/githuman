@@ -25,7 +25,7 @@ import {
 } from '../../shared/artifacts/search.ts'
 import { canonicalJson } from '../../shared/utils/canonical-json.ts'
 import { sha256Hex } from '../utils/hash.ts'
-import { artifactBody } from '../utils/artifact-body.ts'
+import { artifactBody } from '../../shared/utils/artifact-body.ts'
 import { takeWithinBytes } from '../utils/take-within-bytes.ts'
 import { ArtifactSearchRepository } from '../repositories/artifact-search.repo.ts'
 import type { ArtifactStorageService } from './artifact-storage.service.ts'
@@ -133,6 +133,14 @@ export class ArtifactSearchService {
       throw new ArtifactInputError(
         `Search accepts at most ${MAX_SEARCH_QUERY_CODEPOINTS} characters and ${MAX_SEARCH_TOKENS} tokens.`
       )
+    }
+    for (const bound of [
+      input.filters?.createdFrom,
+      input.filters?.createdTo
+    ]) {
+      if (bound !== undefined && Number.isNaN(Date.parse(bound))) {
+        throw new ArtifactInputError('Invalid creation time filter.')
+      }
     }
     if (query.includes('\u0000')) {
       throw new ArtifactInputError('Search query must not contain NUL.')
@@ -425,6 +433,8 @@ export class ArtifactSearchService {
       storeId: artifact.storeId,
       id: artifact.id,
       title: artifact.title,
+      createdAt: artifact.createdAt,
+      tags: artifact.tags,
       status: artifact.status,
       typeId: artifact.typeId,
       taskIds: artifact.taskIds,

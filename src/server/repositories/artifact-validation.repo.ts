@@ -1,32 +1,23 @@
 import type { DatabaseSync } from 'node:sqlite'
 import type {
   Artifact,
-  ArtifactActor,
-  ArtifactChangeSet,
-  ArtifactValidationReport
+  ArtifactHistoricalChangeSet,
+  ArtifactValidationReport,
+  ArtifactStoredChangeSet
 } from '../../shared/artifacts/types.ts'
 import {
-  ArtifactConflictError,
+  artifactLeaseBusyError,
   ArtifactNotFoundError
 } from '../errors/artifacts.ts'
 
-export interface StoredChangeSet {
-  id: string
-  version: number
-  requestId: string
-  changeSet: ArtifactChangeSet
-  changeDigest: string
-  requestDigest: string
-  actor: ArtifactActor
-}
+export type StoredChangeSet = ArtifactStoredChangeSet
 export interface ValidationManifest {
   rulesVersion: number
   validationEpoch: number
   changeDigest: string
-  changeSet: ArtifactChangeSet
+  changeSet: ArtifactHistoricalChangeSet
   artifacts: Artifact[]
   requiredContentIds: string[]
-  threads: { threadId: string; version: number }[]
 }
 export interface StoredValidation {
   id: string
@@ -51,6 +42,7 @@ export interface StoredValidation {
     reportArtifactId?: string
   }
   reason?: string
+  submissionDigest?: string
   eventKind?: string
   readCoverage?: { key: string; bytes: number }[]
 }
@@ -69,6 +61,15 @@ export class ArtifactValidationRepository {
         'SELECT payload_json FROM artifact_change_set_events WHERE store_id=? AND id=? ORDER BY version DESC LIMIT 1'
       )
       .get(this.storeId, id) as { payload_json: string } | undefined
+    if (!row) throw new ArtifactNotFoundError()
+    return JSON.parse(row.payload_json) as StoredChangeSet
+  }
+  proposalVersion(id: string, version: number): StoredChangeSet {
+    const row = this.db
+      .prepare(
+        'SELECT payload_json FROM artifact_change_set_events WHERE store_id=? AND id=? AND version=?'
+      )
+      .get(this.storeId, id, version) as { payload_json: string } | undefined
     if (!row) throw new ArtifactNotFoundError()
     return JSON.parse(row.payload_json) as StoredChangeSet
   }
@@ -161,7 +162,7 @@ export class ArtifactValidationRepository {
   }
   claim(id: string, owner: string, now: number, ttl: number): void {
     if (this.lease()) {
-      throw new ArtifactConflictError('Another validation job is active.')
+      throw artifactLeaseBusyError('Another validation job is active.')
     }
     this.db
       .prepare('INSERT INTO artifact_validation_leases VALUES(?,?,?,?,?)')
@@ -173,6 +174,36 @@ export class ArtifactValidationRepository {
         'DELETE FROM artifact_validation_leases WHERE store_id=? AND validation_id=? AND owner=?'
       )
       .run(this.storeId, id, owner)
+  }
+  /** Records that `owner` is alive; old rows of dead owners are dropped. */
+  beat(owner: string, now: number, keepMs: number): void {
+    this.db
+      .prepare(
+        `INSERT INTO artifact_owner_heartbeats VALUES(?,?,?)
+         ON CONFLICT(store_id,owner) DO UPDATE SET beat_at=excluded.beat_at`
+      )
+      .run(this.storeId, owner, now)
+    this.db
+      .prepare(
+        'DELETE FROM artifact_owner_heartbeats WHERE store_id=? AND beat_at<?'
+      )
+      .run(this.storeId, now - keepMs)
+  }
+  forget(owner: string): void {
+    this.db
+      .prepare(
+        'DELETE FROM artifact_owner_heartbeats WHERE store_id=? AND owner=?'
+      )
+      .run(this.storeId, owner)
+  }
+  /** Time of the last heartbeat, or undefined when the owner never wrote one. */
+  heartbeat(owner: string): number | undefined {
+    const row = this.db
+      .prepare(
+        'SELECT beat_at FROM artifact_owner_heartbeats WHERE store_id=? AND owner=?'
+      )
+      .get(this.storeId, owner) as { beat_at: number } | undefined
+    return row?.beat_at
   }
   appendAuthorization(id: string, data: unknown): void {
     this.db

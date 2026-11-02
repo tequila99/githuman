@@ -63,8 +63,8 @@ export class ArtifactGraphRepository {
           }))
       )
       .sort((a, b) =>
-        `${a.sourceId}:${a.kind}:${a.targetId}`.localeCompare(
-          `${b.sourceId}:${b.kind}:${b.targetId}`
+        `${a.kind}:${a.sourceId}:${a.targetId}`.localeCompare(
+          `${b.kind}:${b.sourceId}:${b.targetId}`
         )
       )
   }

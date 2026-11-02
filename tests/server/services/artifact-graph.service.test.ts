@@ -863,7 +863,7 @@ test('preview never writes snapshots, status, events or epoch', t => {
   const before = db.prepare('SELECT * FROM artifact_events').all()
   const epoch = storage.catalog.epoch()
   const preview = storage.graph.previewChangeSet(input)
-  assert.ok(preview.errors.some(issue => issue.code === 'invalid_transition'))
+  assert.deepEqual(preview.errors, [])
   assert.equal(storage.get(artifact.id).status, 'draft')
   assert.deepEqual(db.prepare('SELECT * FROM artifact_events').all(), before)
   assert.equal(storage.catalog.epoch(), epoch)
@@ -1407,14 +1407,15 @@ test('0092: retired history cannot be bypassed by superseded to archived to dele
   assert.equal(storage.catalog.epoch(), before)
 })
 
-test('0092: review commands and restore have distinct source statuses', () => {
+test('0097: direct acceptance and legacy transitions have distinct source statuses', () => {
   const cases: [
     Artifact['status'],
     ArtifactChangeSet['command'],
     Artifact['status'],
     boolean
   ][] = [
-    ['draft', 'submit_review', 'in_review', true],
+    ['draft', 'accept', 'accepted', true],
+    ['draft', 'update_relations', 'in_review', false],
     ['in_review', 'reject', 'rejected', true],
     ['in_review', 'return_to_draft', 'draft', true],
     ['rejected', 'return_to_draft', 'draft', true],
@@ -1422,7 +1423,7 @@ test('0092: review commands and restore have distinct source statuses', () => {
     ['deleted', 'restore', 'draft', true],
     ['in_review', 'restore', 'draft', false],
     ['archived', 'return_to_draft', 'draft', false],
-    ['rejected', 'submit_review', 'in_review', false]
+    ['rejected', 'accept', 'accepted', false]
   ]
   for (const [status, command, target, valid] of cases) {
     const node = fixture(status)
@@ -1432,4 +1433,96 @@ test('0092: review commands and restore have distinct source statuses', () => {
     const result = previewArtifactChangeSet([node], input)
     assert.equal(result.errors.length === 0, valid, `${status}: ${command}`)
   }
+})
+
+test('incoming relationships stay grouped across pages and reject cursors for the former ordering', t => {
+  const { storage, create } = setup(t)
+  const target = create('group-target')
+  for (let index = 0; index < 4; index++) {
+    create(`group-source-${index}`, {
+      relations: [
+        { kind: 'references', targetId: target.id },
+        { kind: 'supplements', targetId: target.id }
+      ]
+    })
+  }
+  const items: { kind: string; sourceId: string }[] = []
+  let cursor: string | undefined
+  do {
+    const page = storage.graph.relations(target.id, {
+      direction: 'incoming',
+      limit: 3,
+      cursor
+    })
+    items.push(...page.items)
+    cursor = page.nextCursor ?? undefined
+  } while (cursor)
+  assert.deepEqual(
+    items.map(item => item.kind),
+    [...Array(4).fill('references'), ...Array(4).fill('supplements')]
+  )
+  assert.equal(
+    new Set(items.map(item => `${item.kind}:${item.sourceId}`)).size,
+    8
+  )
+  const oldCursor = Buffer.from(
+    JSON.stringify({
+      storeId: storage.storeId,
+      epoch: storage.catalog.epoch(),
+      query: `graph:${target.id}:incoming:`,
+      offset: 3
+    })
+  ).toString('base64url')
+  assert.throws(
+    () =>
+      storage.graph.relations(target.id, {
+        direction: 'incoming',
+        cursor: oldCursor
+      }),
+    /Invalid page cursor/
+  )
+})
+
+test('0110: references targets join the set but do not expand it', () => {
+  const far = fixture('draft')
+  const farSupplement = fixture('draft', {
+    relations: [{ kind: 'supplements', targetId: far.id }]
+  })
+  const middle = fixture('draft', {
+    relations: [{ kind: 'references', targetId: far.id }]
+  })
+  const unrelated = fixture('draft')
+  const subject = fixture('draft', {
+    relations: [{ kind: 'references', targetId: middle.id }]
+  })
+  const nodes = [far, farSupplement, middle, unrelated, subject]
+  const result = previewArtifactChangeSet(
+    nodes,
+    change([subject, middle], subject)
+  )
+  assert.deepEqual(result.affectedIds, [subject.id, middle.id].sort())
+  assert.equal(result.errors.length, 0)
+  const missing = previewArtifactChangeSet(nodes, change([subject], subject))
+  assert.deepEqual(
+    missing.errors
+      .filter(e => e.code === 'missing_expected_version')
+      .flatMap(e => e.artifactIds),
+    [middle.id]
+  )
+})
+
+test('0110: a structural link still expands through a reference target', () => {
+  const base = fixture('accepted')
+  const supplement = fixture('accepted', {
+    relations: [{ kind: 'supplements', targetId: base.id }]
+  })
+  const subject = fixture('draft', {
+    relations: [{ kind: 'replaces', targetId: base.id }]
+  })
+  const result = previewArtifactChangeSet(
+    [base, supplement, subject],
+    change([base, subject], subject)
+  )
+  assert.ok(result.affectedIds.includes(base.id))
+  assert.ok(result.affectedIds.includes(supplement.id))
 })

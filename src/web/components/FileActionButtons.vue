@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiMinus, mdiPlus, mdiUndo } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import type { DiffSource } from '@/stores/diff-store'
 import { useFileActions } from '@/composables/use-file-actions'
@@ -12,36 +13,39 @@ const { stage, unstage, discard } = useFileActions()
 <template>
   <template v-if="source === 'unstaged'">
     <q-btn
+      class="app-icon-control"
       v-ripple
       flat
       dense
       round
       size="sm"
-      icon="undo"
+      :icon="mdiUndo"
       :aria-label="t('changes.actions.discard')"
       :data-tooltip="t('changes.actions.discard')"
       @click.stop="discard(path)"
     />
     <q-btn
+      class="app-icon-control"
       v-ripple
       flat
       dense
       round
       size="sm"
-      icon="add"
+      :icon="mdiPlus"
       :aria-label="t('changes.actions.stage')"
       :data-tooltip="t('changes.actions.stage')"
       @click.stop="stage(path)"
     />
   </template>
   <q-btn
+    class="app-icon-control"
     v-else
     v-ripple
     flat
     dense
     round
     size="sm"
-    icon="remove"
+    :icon="mdiMinus"
     :aria-label="t('changes.actions.unstage')"
     :data-tooltip="t('changes.actions.unstage')"
     @click.stop="unstage(path)"

@@ -57,7 +57,7 @@ async function submit() {
           <q-expansion-item
             dense
             :label="t('notes.moveFolder')"
-            class="q-mt-sm"
+            class="app-icon-expansion q-mt-sm"
           >
             <q-input
               v-model="parent"

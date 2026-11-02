@@ -1,19 +1,31 @@
 <script setup lang="ts">
+import {
+  mdiCloudDownloadOutline,
+  mdiConsoleLine,
+  mdiFileDocumentOutline,
+  mdiFileMoveOutline,
+  mdiHeadOutline,
+  mdiMagnify,
+  mdiPencilOutline,
+  mdiSwapHorizontal,
+  mdiTrashCanOutline,
+  mdiWrenchOutline
+} from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import type { ChatItem } from '@/utils/agent-chat'
 import AgentDiffView from './AgentDiffView.vue'
 
 // Identify tool kinds without repeating icons in the template.
 const KIND_ICON: Record<string, string> = {
-  read: 'description',
-  edit: 'edit',
-  delete: 'delete',
-  move: 'drive_file_move',
-  search: 'search',
-  execute: 'terminal',
-  think: 'psychology',
-  fetch: 'cloud_download',
-  switch_mode: 'swap_horiz'
+  read: mdiFileDocumentOutline,
+  edit: mdiPencilOutline,
+  delete: mdiTrashCanOutline,
+  move: mdiFileMoveOutline,
+  search: mdiMagnify,
+  execute: mdiConsoleLine,
+  think: mdiHeadOutline,
+  fetch: mdiCloudDownloadOutline,
+  switch_mode: mdiSwapHorizontal
 }
 
 // Distinguish pending, running, successful, and failed tools.
@@ -34,12 +46,16 @@ const { t } = useI18n()
     dense
     dense-toggle
     switch-toggle-side
-    class="agent-tool"
+    class="app-icon-expansion agent-tool"
     :default-opened="item.diffs.length > 0"
   >
     <template #header>
       <q-item-section avatar class="agent-tool__icon">
-        <q-icon :name="KIND_ICON[item.toolKind ?? ''] ?? 'build'" size="14px" />
+        <q-icon
+          class="app-icon-neutral"
+          :name="KIND_ICON[item.toolKind ?? ''] ?? mdiWrenchOutline"
+          size="14px"
+        />
       </q-item-section>
       <q-item-section>
         <q-item-label class="ellipsis">

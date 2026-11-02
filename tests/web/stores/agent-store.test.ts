@@ -354,6 +354,37 @@ test('a "sessions" frame brings in chats opened elsewhere and drops closed ones'
   )
 })
 
+test('a finished validation chat is removed even after a missed close event', async () => {
+  const validator = session('v1', {
+    name: 'Artifact validation',
+    kind: 'validation',
+    status: 'busy'
+  })
+  const store = await storeWith(validator, session('s1'))
+  // The validation ended while the stream was down: the server removed the
+  // session, so no close event is replayed and the list no longer names it.
+  routes['GET /api/agent/sessions'] = () => json([session('s1')])
+  agentStream().frame('sessions')
+  await store.refreshSessions()
+
+  assert.equal(store.chats.v1, undefined)
+  assert.deepEqual(store.order, ['s1'])
+  assert.equal(store.activeId, 's1')
+  assert.equal(store.canAddChat, true)
+})
+
+test('a regular closed chat still occupies the session limit', async () => {
+  const store = await storeWith(
+    ...Array.from({ length: MAX_AGENT_SESSIONS }, (_, index) =>
+      session('s' + index, {
+        status: index === MAX_AGENT_SESSIONS - 1 ? 'closed' : 'ready'
+      })
+    )
+  )
+  // The server counts closed sessions too: the UI must refuse a new chat.
+  assert.equal(store.canAddChat, false)
+})
+
 test('a session list fetched before a chat was created does not remove it', async () => {
   const store = await storeWith(session('s1'))
   routes['GET /api/agent/sessions'] = () => json([session('s1')])
@@ -767,4 +798,33 @@ test('note drafts are saved before prompting; conflicts preserve pending context
   const promptIndex = requests.findIndex(r => r.url.endsWith('/prompt'))
   assert.ok(saveIndex >= 0 && promptIndex > saveIndex)
   assert.equal(notes.drafts.note.saved, 'Changed')
+})
+
+test('artifact action notifications and reconnect invalidate readers on the shared agent stream', async () => {
+  const store = await storeWith()
+  const stream = agentStream()
+  const before = store.artifactActionsVersion
+  stream.frame('artifact-actions')
+  assert.equal(store.artifactActionsVersion, before + 1)
+  stream.frame('open')
+  assert.equal(store.artifactActionsVersion, before + 2)
+  assert.equal(
+    FakeEventSource.instances.filter(es => es.url === '/api/agent/events')
+      .length,
+    1
+  )
+})
+
+test('artifact context deduplicates by store and document identity across title changes', async () => {
+  const store = await storeWith(session('artifact-chat'))
+  const item = {
+    kind: 'artifact' as const,
+    storeId: 'store',
+    artifactId: 'document',
+    name: 'Original'
+  }
+  store.addContext(item, 'artifact-chat')
+  store.addContext({ ...item, name: 'Renamed' }, 'artifact-chat')
+  store.addContext({ ...item, storeId: 'other' }, 'artifact-chat')
+  assert.equal(store.chats['artifact-chat']?.pendingContext.length, 2)
 })

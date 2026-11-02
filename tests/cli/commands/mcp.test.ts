@@ -187,3 +187,49 @@ test(
     assert.match(text(down), /server is unavailable/)
   }
 )
+
+test('MCP initialize instructions and tool descriptions explain task activation without changing HTTP schemas', async t => {
+  const client = new Client({ name: 'instructions-probe', version: '1.0.0' })
+  t.after(() => client.close())
+  await client.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: [ENTRY, 'mcp', '--stdio'],
+      env: {
+        GITHUMAN_AGENT_URL: 'http://127.0.0.1:1/',
+        GITHUMAN_AGENT_KEY: 'e'.repeat(64)
+      },
+      stderr: 'pipe'
+    })
+  )
+  assert.match(client.getInstructions() ?? '', /Before EACH activation/)
+  assert.match(
+    client.getInstructions() ?? '',
+    /create all with tasks_create, activate none/
+  )
+  const listed = await client.listTools()
+  const tools = new Map(listed.tools.map(tool => [tool.name, tool]))
+  for (const name of [
+    'tasks_get_context',
+    'tasks_activate',
+    'tasks_create_and_activate'
+  ]) {
+    assert.ok(tools.has(name), name)
+  }
+  assert.match(
+    tools.get('tasks_create')?.description ?? '',
+    /never changes chat selection/
+  )
+  assert.match(
+    tools.get('tasks_get_context')?.description ?? '',
+    /null while idle or after cancellation/
+  )
+  assert.match(tools.get('tasks_activate')?.description ?? '', /replayed:true/)
+  assert.match(
+    tools.get('tasks_create_and_activate')?.description ?? '',
+    /Atomically/
+  )
+  const { TaskCreateBody } =
+    await import('../../../src/shared/tasks/schemas.ts')
+  assert.equal(TaskCreateBody.description, 'Create a task.')
+})

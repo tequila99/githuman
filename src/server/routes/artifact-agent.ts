@@ -129,63 +129,22 @@ export async function artifactAgentRoutes(
       )
     ],
     [
-      'reviews.resolve',
-      checked(
-        ArtifactToolSchemas['reviews.resolve'],
-        ({ id, authorizationId, ...input }, actor) =>
-          storage.lifecycle.executeReview(
-            {
-              kind: 'review',
-              threadId: id,
-              input: { ...input, kind: 'resolved' }
-            },
-            authorizationId,
-            actor
-          )
-      )
-    ],
-    [
-      'reviews.reopen',
-      checked(
-        ArtifactToolSchemas['reviews.reopen'],
-        ({ id, authorizationId, ...input }, actor) =>
-          storage.lifecycle.executeReview(
-            {
-              kind: 'review',
-              threadId: id,
-              input: { ...input, kind: 'reopened' }
-            },
-            authorizationId,
-            actor
-          )
-      )
-    ],
-    [
-      'reviews.set_blocking',
-      checked(
-        ArtifactToolSchemas['reviews.set_blocking'],
-        ({ id, authorizationId, ...input }, actor) =>
-          storage.lifecycle.executeReview(
-            {
-              kind: 'review',
-              threadId: id,
-              input: { ...input, kind: 'blocking_changed' }
-            },
-            authorizationId,
-            actor
-          )
-      )
-    ],
-    [
-      'reviews.execute',
-      checked(ArtifactToolSchemas['reviews.execute'], (p, a) =>
-        storage.lifecycle.executeReview(p.action, p.authorizationId, a)
+      'actions.status',
+      checked(ArtifactToolSchemas['actions.status'], (p, a) =>
+        storage.lifecycle.authorization.status(p.id, artifactSessionId(a))
       )
     ],
     [
       'artifacts.create',
       checked(ArtifactToolSchemas['artifacts.create'], (p, a) =>
-        storage.create(p, a)
+        storage.create(p, a, registry.get(a.id)?.turnTaskContext)
+      )
+    ],
+    [
+      'artifacts.update_metadata',
+      checked(
+        ArtifactToolSchemas['artifacts.update_metadata'],
+        ({ id, ...p }, a) => storage.updateMetadata(id, p, a)
       )
     ],
     [
@@ -226,56 +185,6 @@ export async function artifactAgentRoutes(
       )
     ],
     [
-      'reviews.list',
-      checked(ArtifactToolSchemas['reviews.list'], ({ id, ...options }) =>
-        storage.reviews.list(id, options)
-      )
-    ],
-    [
-      'reviews.summary',
-      checked(ArtifactToolSchemas['reviews.summary'], p =>
-        storage.reviews.summary(p.id)
-      )
-    ],
-    [
-      'reviews.comment',
-      checked(
-        ArtifactToolSchemas['reviews.comment'],
-        ({ id, ...input }, actor) =>
-          storage.reviews.createThread(id, input, actor)
-      )
-    ],
-    [
-      'reviews.reply',
-      checked(ArtifactToolSchemas['reviews.reply'], ({ id, ...input }, actor) =>
-        storage.reviews.comment(id, { ...input, kind: 'replied' }, actor)
-      )
-    ],
-    [
-      'reviews.edit',
-      checked(ArtifactToolSchemas['reviews.edit'], ({ id, ...input }, actor) =>
-        storage.reviews.comment(id, { ...input, kind: 'content_edited' }, actor)
-      )
-    ],
-    [
-      'reviews.hide',
-      checked(ArtifactToolSchemas['reviews.hide'], ({ id, ...input }, actor) =>
-        storage.reviews.comment(id, { ...input, kind: 'hidden' }, actor)
-      )
-    ],
-    [
-      'reviews.comments',
-      checked(ArtifactToolSchemas['reviews.comments'], ({ id, ...options }) =>
-        storage.reviews.comments(id, options)
-      )
-    ],
-    [
-      'reviews.history',
-      checked(ArtifactToolSchemas['reviews.history'], p =>
-        storage.reviews.history(p.id, p.afterSeq, p.limit)
-      )
-    ],
-    [
       'tasks.list',
       checked(ArtifactToolSchemas['tasks.list'], p =>
         storage.tasks.list(p.limit, p.cursor)
@@ -289,6 +198,24 @@ export async function artifactAgentRoutes(
       'tasks.create',
       checked(ArtifactToolSchemas['tasks.create'], (p, a) =>
         storage.tasks.create(p.requestId, p.input, a)
+      )
+    ],
+    [
+      'tasks.get_context',
+      checked(ArtifactToolSchemas['tasks.get_context'], (_p, a) =>
+        storage.tasks.getContext(a)
+      )
+    ],
+    [
+      'tasks.activate',
+      checked(ArtifactToolSchemas['tasks.activate'], (p, a) =>
+        storage.tasks.activate(p, a)
+      )
+    ],
+    [
+      'tasks.create_and_activate',
+      checked(ArtifactToolSchemas['tasks.create_and_activate'], (p, a) =>
+        storage.tasks.createAndActivate(p, a)
       )
     ],
     [

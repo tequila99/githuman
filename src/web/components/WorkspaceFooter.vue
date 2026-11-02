@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { mdiFileDocumentOutline, mdiFormatListBulleted } from '@mdi/js'
+import { APP_ICONS } from '@/constants/icons'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
@@ -24,26 +26,28 @@ const tabs = computed(() =>
     name,
     icon:
       name === 'agent'
-        ? 'smart_toy'
+        ? APP_ICONS.agent
         : name === 'list'
-          ? 'format_list_bulleted'
-          : 'description',
+          ? mdiFormatListBulleted
+          : mdiFileDocumentOutline,
     label:
       name === 'agent'
         ? t('nav.agent')
-        : route.path.startsWith('/reviews')
-          ? t('nav.reviews')
-          : name === 'list'
-            ? t(
-                route.path.startsWith('/notes')
-                  ? 'notes.title'
-                  : 'workspace.list'
-              )
-            : route.path.startsWith('/notes')
-              ? t('workspace.note')
-              : explorer.browseMode
-                ? t('workspace.file')
-                : t('nav.changes')
+        : route.path.startsWith('/artifacts')
+          ? t(name === 'list' ? 'artifacts.title' : 'artifacts.document')
+          : route.path.startsWith('/reviews')
+            ? t('nav.reviews')
+            : name === 'list'
+              ? t(
+                  route.path.startsWith('/notes')
+                    ? 'notes.title'
+                    : 'workspace.list'
+                )
+              : route.path.startsWith('/notes')
+                ? t('workspace.note')
+                : explorer.browseMode
+                  ? t('workspace.file')
+                  : t('nav.changes')
   }))
 )
 </script>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { APP_ICONS } from '@/constants/icons'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { onBeforeUnmount, onDeactivated, ref } from 'vue'
 import { copyToClipboard, useTimeout } from 'quasar'
@@ -36,13 +37,14 @@ async function copy() {
 
 <template>
   <q-btn
+    class="app-icon-control"
     v-ripple
     flat
     dense
     round
     size="sm"
     :color="copied ? 'positive' : undefined"
-    :icon="copied ? 'check' : 'content_copy'"
+    :icon="copied ? APP_ICONS.done : APP_ICONS.copy"
     :aria-label="tooltip"
     @click.stop="copy"
   >

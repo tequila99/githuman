@@ -1,3 +1,4 @@
+import type { ArtifactTaskBinding } from '../services/agent/turn-task-context.ts'
 import { canonicalJson } from '../../shared/utils/canonical-json.ts'
 import { normalizeArtifact } from '../../shared/artifacts/normalize.ts'
 import { withTransaction, type SyncCallback } from '../db/transaction.ts'
@@ -8,15 +9,22 @@ import type { DatabaseSync } from 'node:sqlite'
 import type {
   Artifact,
   ArtifactActor,
-  ArtifactEvent
+  ArtifactEvent,
+  ArtifactExportEvent
 } from '../../shared/artifacts/types.ts'
-import { ArtifactConflictError } from '../errors/artifacts.ts'
+import {
+  artifactBusyError,
+  ArtifactConflictError,
+  ArtifactIntegrityError
+} from '../errors/artifacts.ts'
 
 export interface ArtifactReservation {
   artifact: Artifact
   fileName: string
   tempName: string
   actor: ArtifactActor
+  taskBinding?: ArtifactTaskBinding
+  callerCommit?: boolean
 }
 
 export interface ArtifactOperation {
@@ -94,7 +102,7 @@ export class ArtifactCatalogRepository {
       return withTransaction(this.db, run, { mode })
     } catch (error) {
       if (isSqliteBusyError(error)) {
-        throw new ArtifactConflictError(
+        throw artifactBusyError(
           'Artifact database is busy. Retry the operation.'
         )
       }
@@ -146,6 +154,57 @@ export class ArtifactCatalogRepository {
     return rows.map(row =>
       normalizeArtifact(JSON.parse(row.snapshot_json) as Artifact)
     )
+  }
+
+  eventSequence(): number {
+    return (
+      this.db
+        .prepare(
+          'SELECT COALESCE(MAX(seq),0) seq FROM artifact_events WHERE store_id=?'
+        )
+        .get(this.storeId) as { seq: number }
+    ).seq
+  }
+
+  assertExportHistory(id: string, snapshotSeq: number): void {
+    const missing = this.db
+      .prepare(`SELECT e.seq FROM artifact_events e
+      LEFT JOIN artifact_metadata_versions v
+      ON v.store_id=e.store_id AND v.artifact_id=e.artifact_id AND v.version=json_extract(e.data_json,'$.afterVersion')
+      WHERE e.store_id=? AND e.artifact_id=? AND e.seq<=? AND v.version IS NULL LIMIT 1`)
+      .get(this.storeId, id, snapshotSeq)
+    if (missing) {
+      throw new ArtifactIntegrityError('Artifact history version is missing.')
+    }
+  }
+
+  exportHistory(
+    id: string,
+    afterSeq: number,
+    snapshotSeq: number,
+    limit: number
+  ): ArtifactExportEvent[] {
+    const rows = this.db
+      .prepare(`SELECT e.seq,e.data_json,v.snapshot_json
+      FROM artifact_events e LEFT JOIN artifact_metadata_versions v
+      ON v.store_id=e.store_id AND v.artifact_id=e.artifact_id AND v.version=json_extract(e.data_json,'$.afterVersion')
+      WHERE e.store_id=? AND e.artifact_id=? AND e.seq>? AND e.seq<=?
+      ORDER BY e.seq LIMIT ?`)
+      .all(this.storeId, id, afterSeq, snapshotSeq, limit) as {
+      seq: number
+      data_json: string
+      snapshot_json: string | null
+    }[]
+    return rows.map(row => {
+      if (row.snapshot_json === null) {
+        throw new ArtifactIntegrityError('Artifact history version is missing.')
+      }
+      return {
+        ...(JSON.parse(row.data_json) as Omit<ArtifactEvent, 'seq'>),
+        seq: row.seq,
+        snapshot: normalizeArtifact(JSON.parse(row.snapshot_json) as Artifact)
+      }
+    })
   }
 
   history(id: string, afterSeq: number, limit: number): ArtifactEvent[] {
@@ -290,6 +349,9 @@ export class ArtifactCatalogRepository {
       createdAt: artifact.metadataUpdatedAt,
       metadata: {
         title: artifact.title,
+        ...(artifact.sourcePath === undefined
+          ? {}
+          : { sourcePath: artifact.sourcePath }),
         tags: artifact.tags,
         typeId: artifact.typeId,
         taskIds: artifact.taskIds,

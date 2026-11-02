@@ -1,10 +1,16 @@
 <script setup lang="ts">
+import {
+  mdiArrowUp,
+  mdiFileOutline,
+  mdiFolderOutline,
+  mdiFolderPlusOutline,
+  mdiPlus
+} from '@mdi/js'
 import { noteParentPath } from '../../../shared/notes/note-path.ts'
 import NoteContextMenu from './NoteContextMenu.vue'
 import { useNoteDragDrop } from '@/composables/notes/use-note-drag-drop'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { mdiFolderPlusOutline } from '@mdi/js'
 import type { NoteEntry } from '../../../shared/notes/types.ts'
 import { noteFolderChildren } from '@/utils/note-navigation'
 
@@ -40,8 +46,8 @@ const children = computed(() => noteFolderChildren(props.entries, props.folder))
         round
         dense
         color="grey-7"
-        icon="arrow_upward"
-        class="note-drop-zone"
+        :icon="mdiArrowUp"
+        class="app-icon-control note-drop-zone"
         :class="{ 'note-drop-active': drag.hovered.value === parent }"
         :aria-label="t('notes.parentFolder')"
         @click="emit('folder', parent)"
@@ -78,10 +84,9 @@ const children = computed(() => noteFolderChildren(props.entries, props.folder))
         />
         <span class="column items-center full-width">
           <q-icon
-            :name="child.folder ? 'folder' : 'insert_drive_file'"
-            :color="child.folder ? 'warning' : 'grey-6'"
+            :name="child.folder ? mdiFolderOutline : mdiFileOutline"
+            class="app-icon-neutral q-mb-sm"
             size="72px"
-            class="q-mb-sm"
           />
           <span class="notes-folder-name">{{ child.label }}</span>
         </span>
@@ -92,13 +97,15 @@ const children = computed(() => noteFolderChildren(props.entries, props.folder))
       {{ t('notes.folderEmpty') }}
       <template #actions>
         <q-btn
+          class="app-icon-control"
           flat
           no-caps
-          icon="add"
+          :icon="mdiPlus"
           :label="t('notes.newNote')"
           @click="emit('create', false)"
         />
         <q-btn
+          class="app-icon-control"
           flat
           no-caps
           :icon="mdiFolderPlusOutline"

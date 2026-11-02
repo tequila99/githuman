@@ -211,6 +211,65 @@ test('metadata filters precede pagination; deleted/draft require explicit status
   )
 })
 
+test('any-tag mode and creation range combine with text search by AND', t => {
+  const { create, search } = setup(t)
+  const a = create('Alpha', 'needle', 'accepted', ['one'])
+  const b = create('Beta', 'needle', 'accepted', ['two'])
+  create('Gamma', 'needle', 'accepted', ['three'])
+  create('Other', 'haystack', 'accepted', ['one'])
+  const ids = (filters: object, query = 'needle') =>
+    search
+      .search({ query, filters })
+      .items.map(item => item.id)
+      .sort()
+  assert.deepEqual(ids({ tags: ['one', 'two'] }), [])
+  assert.deepEqual(
+    ids({ tags: ['one', 'two'], tagMode: 'any' }),
+    [a.id, b.id].sort()
+  )
+  const past = '2000-01-01T00:00:00.000Z',
+    future = '2999-01-01T00:00:00.000Z'
+  assert.equal(ids({ createdFrom: past }).length, 3)
+  assert.equal(ids({ createdFrom: future }).length, 0)
+  assert.equal(ids({ createdTo: past }).length, 0)
+  assert.equal(ids({ createdFrom: past, createdTo: future }).length, 3)
+  assert.deepEqual(
+    ids({ tags: ['one'], createdTo: future }, 'haystack').length,
+    1
+  )
+  assert.throws(() => search.search({ filters: { createdFrom: 'nope' } }))
+})
+test('an explicit All status filter includes every status in catalog and text search without changing the default', t => {
+  const { create, search } = setup(t)
+  const statuses: Artifact['status'][] = [
+    'draft',
+    'in_review',
+    'accepted',
+    'rejected',
+    'superseded',
+    'archived',
+    'deleted'
+  ]
+  const documents = statuses.map(status =>
+    create(status, 'commonneedle', status)
+  )
+  for (const query of ['', 'commonneedle']) {
+    const all = search.search({ query, filters: { statuses } })
+    assert.deepEqual(
+      new Set(all.items.map(item => item.id)),
+      new Set(documents.map(item => item.id))
+    )
+    assert.deepEqual(
+      new Set(all.items.map(item => item.status)),
+      new Set(statuses)
+    )
+    assert.deepEqual(
+      search.search({ query }).items.map(item => item.status),
+      ['accepted']
+    )
+  }
+})
+
 test('epoch/query-bound pagination is stable and rebuild retains IDs/ranking without changing authoritative history', t => {
   const { storage, db, create, search } = setup(t)
   for (let i = 0; i < 5; i++) create(`artifact ${i}`, 'searchable content')

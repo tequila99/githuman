@@ -55,6 +55,29 @@ export const ContextItem = Type.Union(
   [
     Type.Object(
       {
+        kind: Type.Literal('artifact', {
+          description: 'An immutable artifact with current metadata.'
+        }),
+        storeId: Type.String({
+          minLength: 1,
+          description: 'Artifact store identity.'
+        }),
+        artifactId: Type.String({
+          minLength: 1,
+          description: 'Stable artifact UUID.'
+        }),
+        name: Type.String({
+          minLength: 1,
+          description: 'Display title when attached.'
+        })
+      },
+      {
+        additionalProperties: false,
+        description: 'Artifact context resolved by the server before sending.'
+      }
+    ),
+    Type.Object(
+      {
         kind: Type.Literal('note', { description: 'A project note.' }),
         noteId: Type.String({ minLength: 1, description: 'Stable note UUID.' }),
         storageId: Type.String({
@@ -199,6 +222,10 @@ export const AgentSessionStatusSchema = Type.Union(
   { description: 'Session state.' }
 )
 
+export const AgentSessionKindSchema = Type.Union([Type.Literal('validation')], {
+  description: 'Server-created session kind. Absent for chats the user started.'
+})
+
 export const AgentSessionInfoSchema = Type.Object(
   {
     id: Type.String({ description: 'Chat session id.' }),
@@ -210,6 +237,7 @@ export const AgentSessionInfoSchema = Type.Object(
     ),
     presetId: Type.String({ description: 'Preset of the agent.' }),
     name: Type.String({ description: 'Chat name in the UI.' }),
+    kind: Type.Optional(AgentSessionKindSchema),
     status: AgentSessionStatusSchema,
     reviewId: Nullable(
       Type.String({ description: 'Review of the chat. Else null.' })

@@ -1,4 +1,9 @@
 <script setup lang="ts">
+import {
+  mdiChevronRight,
+  mdiFolderOpenOutline,
+  mdiFolderOutline
+} from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import { treeIndentPx } from '@/utils/file-tree'
 
@@ -31,18 +36,18 @@ const { t } = useI18n()
     <q-item-section avatar class="diff-tree-folder-row__icons">
       <div class="row items-center no-wrap q-gutter-x-xs">
         <q-icon
-          name="chevron_right"
+          :name="mdiChevronRight"
           size="xs"
-          class="diff-tree-folder-row__chevron"
+          class="app-icon-neutral diff-tree-folder-row__chevron"
           :class="{
             'diff-tree-folder-row__chevron--expanded': expanded,
             invisible: locked
           }"
         />
         <q-icon
-          :name="expanded ? 'folder_open' : 'folder'"
+          :name="expanded ? mdiFolderOpenOutline : mdiFolderOutline"
           size="xs"
-          color="warning"
+          class="app-icon-neutral"
         />
       </div>
     </q-item-section>

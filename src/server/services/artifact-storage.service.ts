@@ -1,8 +1,7 @@
+import type { TurnTaskContext } from './agent/turn-task-context.ts'
 import { ArtifactSearchService } from './artifact-search.service.ts'
 import { ArtifactLifecycleService } from './artifact-lifecycle.service.ts'
 import { takeWithinBytes } from '../utils/take-within-bytes.ts'
-import { ArtifactReviewService } from './artifact-review.service.ts'
-import { ArtifactReviewRepository } from '../repositories/artifact-review.repo.ts'
 import { ArtifactTypeService } from './artifact-type.service.ts'
 import { TaskService } from './task.service.ts'
 import { ArtifactGraphService } from './artifact-graph.service.ts'
@@ -50,6 +49,7 @@ import {
 } from '../repositories/artifact-catalog.repo.ts'
 import { ArtifactFilesRepository } from '../repositories/artifact-files.repo.ts'
 import { sha256Hex } from '../utils/hash.ts'
+import type { SyncCallback } from '../db/transaction.ts'
 import type { EventBus } from '../event-bus.ts'
 
 // Recover a stopped owner without taking an active writer's operation.
@@ -108,6 +108,9 @@ function sortedRelations(relations: readonly ArtifactRelation[]) {
 
 function graphPayload(metadata: ArtifactMetadataInput) {
   return {
+    ...(metadata.sourcePath === undefined
+      ? {}
+      : { sourcePath: metadata.sourcePath }),
     ...(metadata.typeId === undefined ? {} : { typeId: metadata.typeId }),
     ...(metadata.taskIds === undefined
       ? {}
@@ -124,7 +127,6 @@ export class ArtifactStorageService {
   readonly files: ArtifactFilesRepository
   readonly types: ArtifactTypeService
   readonly tasks: TaskService
-  readonly reviews: ArtifactReviewService
   readonly graph: ArtifactGraphService
   readonly graphRepository: ArtifactGraphRepository
   readonly definitions: TaskRepository
@@ -159,11 +161,6 @@ export class ArtifactStorageService {
     this.tasks = new TaskService(definitions)
     this.graphRepository = new ArtifactGraphRepository(options.db, this.catalog)
     this.graph = new ArtifactGraphService(this)
-    this.reviews = new ArtifactReviewService(
-      this,
-      new ArtifactReviewRepository(options.db, this.catalog),
-      this.now
-    )
     this.lifecycle = new ArtifactLifecycleService(this, options.db, this.now)
     this.observedEpoch = this.catalog.epoch()
   }
@@ -213,6 +210,9 @@ export class ArtifactStorageService {
       store_id: this.storeId,
       artifact_id: artifact.id,
       title: artifact.title,
+      ...(artifact.sourcePath === undefined
+        ? {}
+        : { source_path: artifact.sourcePath }),
       type_id: artifact.typeId,
       status: artifact.status,
       created_at: artifact.createdAt,
@@ -228,7 +228,29 @@ export class ArtifactStorageService {
     return Buffer.from(`---\n${header}---\n${body}`, 'utf8')
   }
 
-  create(input: CreateArtifactInput, suppliedActor: ArtifactActor): Artifact {
+  create(
+    input: CreateArtifactInput,
+    suppliedActor: ArtifactActor,
+    turn?: TurnTaskContext
+  ): Artifact {
+    return this.createArtifact(input, suppliedActor, undefined, turn)
+  }
+
+  // Recovery must wait for the caller to recheck its scope and join this commit.
+  createWithCommit(
+    input: CreateArtifactInput,
+    suppliedActor: ArtifactActor,
+    commit: (artifact: Artifact) => ReturnType<SyncCallback<void>>
+  ): Artifact {
+    return this.createArtifact(input, suppliedActor, commit)
+  }
+
+  private createArtifact(
+    input: CreateArtifactInput,
+    suppliedActor: ArtifactActor,
+    commit?: (artifact: Artifact) => void,
+    turn?: TurnTaskContext
+  ): Artifact {
     this.validate(input.requestId, input.metadata, suppliedActor)
     const actor = canonicalActor(suppliedActor)
     if (!Value.Check(ArtifactGraphFields.revisionOf, input.revisionOf ?? [])) {
@@ -263,6 +285,11 @@ export class ArtifactStorageService {
       const previous = this.catalog.operation(input.requestId)
       if (previous) {
         this.checkReplay(previous, payloadHash)
+        if (previous.data.callerCommit && !commit) {
+          throw new ArtifactConflictError(
+            'This artifact requires its caller commit.'
+          )
+        }
         if (previous.state !== 'committed') {
           this.catalog.claim(
             input.requestId,
@@ -273,6 +300,13 @@ export class ArtifactStorageService {
         }
         return previous
       }
+      // Resolve only new operations; retries retain the originally reserved task IDs.
+      const inherited =
+        input.metadata.taskIds === undefined &&
+        actor.kind === 'agent' &&
+        turn?.sessionId === actor.id &&
+        turn.taskIds.length === 1
+      const taskIds = input.metadata.taskIds ?? (inherited ? turn.taskIds : [])
       const now = new Date(this.now()).toISOString()
       const artifact: Artifact = {
         storeId: this.storeId,
@@ -284,9 +318,12 @@ export class ArtifactStorageService {
         metadataVersion: 1,
         metadataUpdatedAt: now,
         title: input.metadata.title,
+        ...(input.metadata.sourcePath === undefined
+          ? {}
+          : { sourcePath: input.metadata.sourcePath }),
         tags: [...input.metadata.tags],
         typeId: input.metadata.typeId ?? 'generic',
-        taskIds: [...(input.metadata.taskIds ?? [])],
+        taskIds: [...taskIds],
         relations: structuredClone(input.metadata.relations ?? []),
         revisionOf: [...(input.revisionOf ?? [])],
         status: 'draft'
@@ -304,9 +341,31 @@ export class ArtifactStorageService {
       const fileName = this.fileName(artifact.id)
       const data: ArtifactReservation = {
         artifact,
+        taskBinding: inherited
+          ? turn.source === 'turn_activation'
+            ? {
+                source: 'turn_activation',
+                sessionId: turn.sessionId,
+                turnId: turn.turnId,
+                assignmentVersion: turn.assignmentVersion,
+                activationRequestId: turn.activationRequestId!
+              }
+            : {
+                source: 'turn_assignment',
+                sessionId: turn.sessionId,
+                turnId: turn.turnId,
+                assignmentVersion: turn.assignmentVersion
+              }
+          : {
+              source:
+                input.metadata.taskIds === undefined
+                  ? 'legacy_default'
+                  : 'explicit'
+            },
         actor: { ...actor },
         fileName,
-        tempName: `${fileName}.${randomUUID()}.tmp`
+        tempName: `${fileName}.${randomUUID()}.tmp`,
+        ...(commit ? { callerCommit: true } : {})
       }
       const created: ArtifactOperation = {
         requestId: input.requestId,
@@ -331,7 +390,9 @@ export class ArtifactStorageService {
         operation.data.artifact.sha256,
         operation.data.artifact.bytes
       )
-      return normalizeArtifact(operation.data.artifact)
+      const artifact = normalizeArtifact(operation.data.artifact)
+      if (commit) this.catalog.transaction(() => commit(artifact))
+      return artifact
     }
     this.checkpoint('reserved', operation.data)
     const content = this.document(operation.data.artifact, input.body)
@@ -340,7 +401,7 @@ export class ArtifactStorageService {
         'Reserved artifact content cannot be reproduced.'
       )
     }
-    return this.finish(operation, content)
+    return this.finish(operation, content, commit)
   }
 
   private checkReplay(operation: ArtifactOperation, payloadHash: string): void {
@@ -363,7 +424,11 @@ export class ArtifactStorageService {
     this.options.checkpoint?.(phase, data)
   }
 
-  private finish(operation: ArtifactOperation, supplied?: Buffer): Artifact {
+  private finish(
+    operation: ArtifactOperation,
+    supplied?: Buffer,
+    commit?: (artifact: Artifact) => void
+  ): Artifact {
     const data = operation.data
     const { artifact } = data
     this.catalog.assertOwner(operation.requestId, this.owner, this.now())
@@ -401,6 +466,7 @@ export class ArtifactStorageService {
     this.catalog.transaction(() => {
       this.catalog.assertOwner(operation.requestId, this.owner, this.now())
       this.files.verify(data.fileName, artifact.sha256, artifact.bytes)
+      commit?.(normalizeArtifact(artifact))
       this.catalog.insertArtifact(data)
       this.graphRepository.appendLineage(normalizeArtifact(artifact))
       this.catalog.appendMetadata(
@@ -493,6 +559,21 @@ export class ArtifactStorageService {
     } catch (error) {
       if (!(error instanceof ArtifactConflictError)) throw error
       result.busy.push(operation.artifactId)
+      return
+    }
+    if (operation.data.callerCommit) {
+      this.catalog.transaction(() => {
+        this.catalog.assertOwner(operation.requestId, this.owner, this.now())
+        if (operation.state !== 'awaiting_retry') {
+          this.catalog.transition(
+            operation.requestId,
+            'awaiting_retry',
+            new Date(this.now()).toISOString()
+          )
+        }
+        this.catalog.release(operation.requestId, this.owner)
+      })
+      result.awaitingRetry.push(operation.artifactId)
       return
     }
     try {
@@ -714,6 +795,9 @@ export class ArtifactStorageService {
       this.files.verify(this.fileName(id), previous.sha256, previous.bytes)
       const updated: Artifact = {
         ...previous,
+        ...(input.metadata.sourcePath === undefined
+          ? {}
+          : { sourcePath: input.metadata.sourcePath }),
         title: input.metadata.title,
         tags: [...input.metadata.tags],
         typeId: input.metadata.typeId ?? previous.typeId,

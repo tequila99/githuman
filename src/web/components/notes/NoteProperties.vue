@@ -96,25 +96,12 @@ const title = computed(() => {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-.note-properties :deep(.q-chip) {
-  background: #f4f0ff;
-  color: #9873f2;
-  font-size: 14px;
-  margin: 2px;
-}
-.note-properties :deep(.q-chip__icon) {
-  color: inherit;
-}
 .note-properties :deep(.q-field__control) {
   min-height: 34px;
 }
 .note-properties :deep(.q-field__native) {
   font-family: inherit;
   font-size: inherit;
-}
-.body--dark .note-properties :deep(.q-chip) {
-  background: #3a314d;
-  color: #c4aaff;
 }
 .body--dark .note-properties :deep(a) {
   color: #c4aaff;

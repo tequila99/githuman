@@ -1,9 +1,9 @@
-import { MAX_ARTIFACT_REVIEW_PAGE_BYTES } from '../../shared/artifacts/constants.ts'
+import { MAX_ARTIFACT_PAGE_BYTES } from '../../shared/artifacts/constants.ts'
 
 export function takeWithinBytes<T>(
   items: readonly T[],
   limit: number,
-  maxBytes = MAX_ARTIFACT_REVIEW_PAGE_BYTES
+  maxBytes = MAX_ARTIFACT_PAGE_BYTES
 ): T[] {
   const result: T[] = []
   let bytes = 2

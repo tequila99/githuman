@@ -1,3 +1,5 @@
+// Stable server identity used by ACP configuration and permission checks.
+export const ARTIFACT_MCP_SERVER_NAME = 'githuman_artifacts'
 // Environment variable names that carry the bridge address and session key to the MCP process.
 export const ARTIFACT_AGENT_URL_ENV = 'GITHUMAN_AGENT_URL'
 export const ARTIFACT_AGENT_KEY_ENV = 'GITHUMAN_AGENT_KEY'

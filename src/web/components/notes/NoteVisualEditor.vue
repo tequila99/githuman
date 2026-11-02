@@ -113,6 +113,13 @@ defineExpose({ prepareLink, insertLink })
 .note-visual .milkdown .ProseMirror {
   min-height: 320px;
 }
+.note-visual .app-editor-icon {
+  color: var(--app-icon-neutral);
+}
+.note-visual [data-active='true'] .app-editor-icon,
+.note-visual .active .app-editor-icon {
+  color: var(--crepe-color-primary);
+}
 </style>
 
 <style scoped>

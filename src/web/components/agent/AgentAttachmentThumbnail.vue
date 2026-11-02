@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiClose } from '@mdi/js'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { attachmentSrc, type AttachmentItem } from '@/utils/attachments'
@@ -21,8 +22,8 @@ const src = computed(() => attachmentSrc(props.item))
       unelevated
       size="xs"
       color="grey-8"
-      icon="close"
-      class="agent-attachment-thumb-remove"
+      :icon="mdiClose"
+      class="app-icon-control agent-attachment-thumb-remove"
       :aria-label="t('agent.context.remove')"
       @click="emit('remove')"
     />

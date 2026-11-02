@@ -9,25 +9,9 @@ import type {
   ArtifactContentSchema,
   ArtifactRelationSchema,
   ArtifactChangeSetSchema,
+  ArtifactHistoricalChangeSetSchema,
   GraphIssueSchema,
-  ArtifactSourceAnchorSchema,
-  ArtifactReviewScopeSchema,
-  ArtifactReviewEventPayloadSchema,
-  ArtifactReviewEventSchema,
-  ArtifactReviewHistorySchema,
-  ArtifactReviewCreateBody,
-  ArtifactReviewCommentEventBody,
-  ArtifactReviewDecisionBody,
-  ArtifactReviewCommentSchema,
-  ArtifactThreadCurrentSchema,
-  ArtifactThreadViewSchema,
-  ArtifactReviewStateSchema,
-  ArtifactReviewListSchema,
-  ArtifactReviewListQuery,
-  ArtifactThreadSummarySchema,
-  ArtifactReviewCommentPreviewSchema,
-  ArtifactReviewCommentsSchema,
-  ArtifactReviewCommentsQuery
+  ArtifactSourceAnchorSchema
 } from './schemas.ts'
 
 export type ArtifactActor = Static<typeof ArtifactActorSchema>
@@ -40,40 +24,12 @@ export type ArtifactContent = Static<typeof ArtifactContentSchema>
 
 export type ArtifactRelation = Static<typeof ArtifactRelationSchema>
 export type ArtifactChangeSet = Static<typeof ArtifactChangeSetSchema>
+export type ArtifactHistoricalChangeSet = Static<
+  typeof ArtifactHistoricalChangeSetSchema
+>
 export type GraphIssue = Static<typeof GraphIssueSchema>
 
 export type ArtifactSourceAnchor = Static<typeof ArtifactSourceAnchorSchema>
-export type ArtifactReviewScope = Static<typeof ArtifactReviewScopeSchema>
-export type ArtifactReviewEventPayload = Static<
-  typeof ArtifactReviewEventPayloadSchema
->
-export type ArtifactReviewEvent = Static<typeof ArtifactReviewEventSchema>
-export type ArtifactReviewHistory = Static<typeof ArtifactReviewHistorySchema>
-
-export type ArtifactReviewCreateInput = Static<typeof ArtifactReviewCreateBody>
-export type ArtifactReviewCommentInput = Static<
-  typeof ArtifactReviewCommentEventBody
->
-
-export type ArtifactReviewDecisionInput = Static<
-  typeof ArtifactReviewDecisionBody
->
-export type ArtifactReviewComment = Static<typeof ArtifactReviewCommentSchema>
-export type ArtifactThreadCurrent = Static<typeof ArtifactThreadCurrentSchema>
-export type ArtifactThreadView = Static<typeof ArtifactThreadViewSchema>
-export type ArtifactReviewState = Static<typeof ArtifactReviewStateSchema>
-export type ArtifactReviewList = Static<typeof ArtifactReviewListSchema>
-export type ArtifactReviewListOptions = Static<typeof ArtifactReviewListQuery>
-
-export type ArtifactThreadSummary = Static<typeof ArtifactThreadSummarySchema>
-export type ArtifactReviewCommentPreview = Static<
-  typeof ArtifactReviewCommentPreviewSchema
->
-export type ArtifactReviewComments = Static<typeof ArtifactReviewCommentsSchema>
-export type ArtifactReviewCommentsOptions = Static<
-  typeof ArtifactReviewCommentsQuery
->
-
 export type ArtifactValidationReport = Static<
   typeof import('./schemas.ts').ArtifactValidationSubmitBody
 >
@@ -95,3 +51,52 @@ export type ArtifactSearchItem = Static<
 export type ArtifactSearchResult = Static<
   typeof import('./schemas.ts').ArtifactSearchSchema
 >
+
+export type ArtifactGraphEdge = Static<
+  typeof import('./schemas.ts').ArtifactGraphEdgeSchema
+>
+export type ArtifactGraphPage = Static<
+  typeof import('./schemas.ts').ArtifactGraphPageSchema
+>
+export type ArtifactAncestry = Static<
+  typeof import('./schemas.ts').ArtifactAncestrySchema
+>
+
+export type ArtifactStoredChangeSet = Static<
+  typeof import('./schemas.ts').ArtifactStoredChangeSetSchema
+>
+export type ArtifactValidationView = Static<
+  typeof import('./schemas.ts').ArtifactValidationViewSchema
+>
+export type ArtifactReportChunk = Static<
+  typeof import('./schemas.ts').ArtifactReportChunkSchema
+>
+export type PendingArtifactAction = Static<
+  typeof import('./schemas.ts').PendingArtifactActionSchema
+>
+export type ArtifactActionInspection = Static<
+  typeof import('./schemas.ts').ArtifactActionInspectionSchema
+>
+export type ArtifactActionList = Static<
+  typeof import('./schemas.ts').ArtifactActionListSchema
+>
+export type ArtifactActionStatus = Static<
+  typeof import('./schemas.ts').ArtifactActionStatusSchema
+>
+
+export type ArtifactValidationInspection = Static<
+  typeof import('./schemas.ts').ArtifactValidationInspectionSchema
+>
+export type ArtifactChangeSetPreview = Static<
+  typeof import('./schemas.ts').ArtifactChangeSetPreviewSchema
+>
+
+export type ArtifactExportEvent = Static<
+  typeof import('./schemas.ts').ArtifactExportEventSchema
+>
+export type ArtifactMetadataExport = Static<
+  typeof import('./schemas.ts').ArtifactMetadataExportSchema
+>
+export type ArtifactExportFormat = Static<
+  typeof import('./schemas.ts').ArtifactExportQuery
+>['format']

@@ -1,6 +1,12 @@
+import type { Static } from '@sinclair/typebox'
+import type { Readable } from 'node:stream'
+import { ArtifactExportService } from '../services/artifact-export.service.ts'
 import type { FastifyInstance } from 'fastify'
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 import {
+  ArtifactExportQuery,
+  ArtifactOriginalExportSchema,
+  ArtifactMetadataExportSchema,
   ArtifactSearchBody,
   ArtifactSearchQuery,
   ArtifactSearchSchema,
@@ -22,6 +28,58 @@ export async function artifactRoutes(
   { service }: { service: ArtifactStorageService }
 ): Promise<void> {
   const typed = app.withTypeProvider<TypeBoxTypeProvider>()
+  const exports = new ArtifactExportService(service)
+  // The schema describes the downloaded file; Fastify sends exact buffers or pre-serialized JSON streams.
+  typed.get<{
+    Params: Static<typeof ArtifactParams>
+    Querystring: Static<typeof ArtifactExportQuery>
+    Reply: Buffer | Readable
+  }>(
+    '/api/artifacts/:id/export',
+    {
+      schema: {
+        tags: ['artifacts'],
+        summary: 'Download the original bytes or consistent metadata history',
+        params: ArtifactParams,
+        querystring: ArtifactExportQuery,
+        response: {
+          200: {
+            description:
+              'Exact original Markdown file or streamed metadata history snapshot.',
+            content: {
+              'text/markdown': { schema: ArtifactOriginalExportSchema },
+              'application/json': { schema: ArtifactMetadataExportSchema }
+            }
+          },
+          ...ERROR_RESPONSES
+        }
+      }
+    },
+    (request, reply) => {
+      const id = request.params.id
+      if (request.query.format === 'original') {
+        const { artifact, content } = exports.original(id)
+        reply.header(
+          'Content-Disposition',
+          `attachment; filename="artifact-${id}.md"`
+        )
+        reply.header('X-Artifact-SHA256', artifact.sha256)
+        reply.type('text/markdown; charset=utf-8')
+        reply.send(content)
+        return
+      }
+      const stream = exports.metadataHistory(id)
+      reply.header(
+        'Content-Disposition',
+        `attachment; filename="artifact-${id}.metadata-history.json"`
+      )
+      reply.type('application/json; charset=utf-8')
+      const close = () => stream.destroy()
+      reply.raw.once('close', close)
+      stream.once('close', () => reply.raw.removeListener('close', close))
+      reply.send(stream)
+    }
+  )
   typed.get(
     '/api/artifacts/search',
     {

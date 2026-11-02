@@ -1,25 +1,34 @@
 import { UUID_PATTERN_SOURCE } from '../utils/is-uuid.ts'
-import { Type } from '@sinclair/typebox'
+import { Type, type TLiteral } from '@sinclair/typebox'
 import { Nullable } from '../utils/schemas.ts'
 import {
+  ARTIFACT_STATUSES,
   MAX_SEARCH_QUERY_CODEPOINTS,
   MAX_SEARCH_TOKENS,
   MAX_ARTIFACT_CHUNK_BYTES,
   MAX_ARTIFACT_PAGE_SIZE,
-  MAX_ARTIFACT_REVIEW_TEXT_BYTES,
-  MAX_ARTIFACT_REVIEW_QUOTE_BYTES
+  MAX_ARTIFACT_SOURCE_QUOTE_BYTES
 } from './constants.ts'
 
+// Keep import provenance separate from the human-readable title; this value never grants file access.
+const ARTIFACT_SOURCE_PATH = Type.Optional(
+  Type.String({
+    minLength: 1,
+    maxLength: 4096,
+    description:
+      'Informational original document path; never used for file access.'
+  })
+)
+
+type LiteralTuple<T extends readonly string[]> = {
+  -readonly [K in keyof T]: TLiteral<T[K]>
+}
+
 export const ArtifactStatusSchema = Type.Union(
-  [
-    Type.Literal('draft'),
-    Type.Literal('in_review'),
-    Type.Literal('accepted'),
-    Type.Literal('rejected'),
-    Type.Literal('superseded'),
-    Type.Literal('archived'),
-    Type.Literal('deleted')
-  ],
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- Mapping preserves tuple length and order; Fastify requires this tuple type.
+  ARTIFACT_STATUSES.map(status => Type.Literal(status)) as LiteralTuple<
+    typeof ARTIFACT_STATUSES
+  >,
   {
     description:
       'Artifact lifecycle status; transitions are not exposed in stage 0089.'
@@ -126,7 +135,7 @@ export const SupplementDispositionSchema = Type.Object(
     description: 'Explicit treatment of a supplement.'
   }
 )
-export const ArtifactChangeSetSchema = Type.Object(
+export const ArtifactHistoricalChangeSetSchema = Type.Object(
   {
     storeId: Type.String({
       pattern: UUID_PATTERN_SOURCE,
@@ -201,6 +210,27 @@ export const ArtifactChangeSetSchema = Type.Object(
     additionalProperties: false,
     description:
       'Canonical input to a proposed atomic change; preview never commits it.'
+  }
+)
+export const ArtifactChangeSetSchema = Type.Object(
+  {
+    ...ArtifactHistoricalChangeSetSchema.properties,
+    command: Type.Union(
+      [
+        Type.Literal('return_to_draft'),
+        Type.Literal('reject'),
+        Type.Literal('accept'),
+        Type.Literal('archive'),
+        Type.Literal('delete'),
+        Type.Literal('restore'),
+        Type.Literal('update_relations')
+      ],
+      { description: 'Supported lifecycle command.' }
+    )
+  },
+  {
+    additionalProperties: false,
+    description: 'Supported canonical atomic change input.'
   }
 )
 export const GraphPageQuery = Type.Object(
@@ -285,6 +315,7 @@ export const ArtifactMetadataInputSchema = Type.Object(
       maxLength: 1000,
       description: 'Document title.'
     }),
+    sourcePath: ARTIFACT_SOURCE_PATH,
     typeId: Type.Optional(ArtifactGraphFields.typeId),
     taskIds: Type.Optional(ArtifactGraphFields.taskIds),
     relations: Type.Optional(ArtifactGraphFields.relations),
@@ -318,6 +349,7 @@ export const ArtifactSchema = Type.Object(
       description: 'Last metadata change in UTC.'
     }),
     title: Type.String({ description: 'Current document title.' }),
+    sourcePath: ARTIFACT_SOURCE_PATH,
     tags: Type.Array(Type.String(), { description: 'Current document tags.' }),
     ...ArtifactGraphFields,
     status: ArtifactStatusSchema
@@ -469,7 +501,7 @@ export const ArtifactContentSchema = Type.Object(
 
 export const ArtifactChangeSetPreviewSchema = Type.Object(
   {
-    canonical: ArtifactChangeSetSchema,
+    canonical: ArtifactHistoricalChangeSetSchema,
     changeDigest: Type.String({
       description: 'Server SHA-256 digest of canonical change set.'
     }),
@@ -525,7 +557,7 @@ export const ArtifactSourceAnchorSchema = Type.Object(
       description: 'Last selected body line, inclusive.'
     }),
     quote: Type.String({
-      maxLength: MAX_ARTIFACT_REVIEW_QUOTE_BYTES,
+      maxLength: MAX_ARTIFACT_SOURCE_QUOTE_BYTES,
       description:
         'Exact original source excerpt; verified against the stored body.'
     })
@@ -537,599 +569,6 @@ export const ArtifactSourceAnchorSchema = Type.Object(
   }
 )
 
-export const ArtifactReviewScopeSchema = Type.Object(
-  {
-    appliesToArtifactId: Type.String({
-      pattern: UUID_PATTERN_SOURCE,
-      description: 'Revision or explicit candidate affected by this decision.'
-    }),
-    includeRevisionDescendants: Type.Literal(true, {
-      description:
-        'Apply to existing and future immutable revision descendants.'
-    })
-  },
-  {
-    additionalProperties: false,
-    description:
-      'Explicit review decision scope; sibling revisions are excluded.'
-  }
-)
-
-export const ArtifactReviewTextSchema = Type.String({
-  minLength: 1,
-  maxLength: MAX_ARTIFACT_REVIEW_TEXT_BYTES,
-  description: 'Comment text; the service also enforces the UTF-8 byte limit.'
-})
-
-export const ArtifactReviewEventPayloadSchema = Type.Union(
-  [
-    Type.Object(
-      {
-        kind: Type.Literal('created', {
-          description: 'Create a review thread.'
-        }),
-        anchor: Nullable(ArtifactSourceAnchorSchema),
-        text: ArtifactReviewTextSchema,
-        blocking: Type.Boolean({
-          default: false,
-          description:
-            'Whether this thread blocks acceptance; defaults to false in the service.'
-        })
-      },
-      { additionalProperties: false, description: 'Thread creation record.' }
-    ),
-    Type.Object(
-      {
-        kind: Type.Literal('replied', { description: 'Append a reply.' }),
-        commentId: Type.String({
-          pattern: UUID_PATTERN_SOURCE,
-          description: 'New reply identifier.'
-        }),
-        text: ArtifactReviewTextSchema
-      },
-      { additionalProperties: false, description: 'Reply record.' }
-    ),
-    Type.Object(
-      {
-        kind: Type.Literal('content_edited', {
-          description: 'Record new comment text without deleting prior events.'
-        }),
-        commentId: Type.String({
-          pattern: UUID_PATTERN_SOURCE,
-          description: 'Comment being edited; the root comment uses threadId.'
-        }),
-        text: ArtifactReviewTextSchema
-      },
-      { additionalProperties: false, description: 'Comment edit record.' }
-    ),
-    Type.Object(
-      {
-        kind: Type.Literal('hidden', {
-          description:
-            'Hide comment text without resolving or changing blocking.'
-        }),
-        commentId: Type.String({
-          pattern: UUID_PATTERN_SOURCE,
-          description: 'Comment to hide; the root comment uses threadId.'
-        })
-      },
-      {
-        additionalProperties: false,
-        description: 'Logical hiding record; prior text remains in history.'
-      }
-    ),
-    Type.Object(
-      {
-        kind: Type.Literal('blocking_changed', {
-          description: 'Record an authorized blocking decision.'
-        }),
-        blocking: Type.Boolean({
-          description: 'New thread-wide blocking flag.'
-        }),
-        scope: ArtifactReviewScopeSchema
-      },
-      {
-        additionalProperties: false,
-        description:
-          'Protected blocking change; authorization also binds the explicit scope.'
-      }
-    ),
-    Type.Object(
-      {
-        kind: Type.Literal('resolved', {
-          description: 'Resolve for one revision branch.'
-        }),
-        scope: ArtifactReviewScopeSchema
-      },
-      {
-        additionalProperties: false,
-        description: 'Protected scoped resolution record.'
-      }
-    ),
-    Type.Object(
-      {
-        kind: Type.Literal('reopened', {
-          description: 'Reopen for one revision branch.'
-        }),
-        scope: ArtifactReviewScopeSchema
-      },
-      {
-        additionalProperties: false,
-        description: 'Protected scoped reopening record.'
-      }
-    )
-  ],
-  {
-    description:
-      'Append-only review action; protected actions require verified server authorization.'
-  }
-)
-
-export const ArtifactReviewEventSchema = Type.Object(
-  {
-    storeId: Type.String({
-      pattern: UUID_PATTERN_SOURCE,
-      description: 'Owning artifact store.'
-    }),
-    seq: Type.Integer({
-      minimum: 1,
-      description: 'Committed event sequence; defines event order.'
-    }),
-    threadId: Type.String({
-      pattern: UUID_PATTERN_SOURCE,
-      description: 'Stable thread and root comment identifier.'
-    }),
-    originArtifactId: Type.String({
-      pattern: UUID_PATTERN_SOURCE,
-      description: 'Immutable artifact where the thread was created.'
-    }),
-    expectedThreadVersion: Type.Integer({
-      minimum: 0,
-      description: 'Version before this event; zero only for creation.'
-    }),
-    actor: ArtifactActorSchema,
-    createdAt: Type.String({ description: 'Server-assigned UTC event time.' }),
-    payload: ArtifactReviewEventPayloadSchema
-  },
-  {
-    additionalProperties: false,
-    description:
-      'Immutable review history event; hiding preserves all earlier records.'
-  }
-)
-
-export const ArtifactReviewHistorySchema = Type.Object(
-  {
-    storeId: Type.String({
-      pattern: UUID_PATTERN_SOURCE,
-      description: 'Owning artifact store.'
-    }),
-    items: Type.Array(ArtifactReviewEventSchema, {
-      description:
-        'History events in sequence order, including edits and hidden comments.'
-    }),
-    nextAfterSeq: Nullable(
-      Type.Integer({
-        minimum: 1,
-        description: 'Last sequence for the next page, or null.'
-      })
-    )
-  },
-  { additionalProperties: false, description: 'Review history page.' }
-)
-
-export const ArtifactReviewCreateBody = Type.Object(
-  {
-    requestId: Type.String({
-      minLength: 1,
-      maxLength: 128,
-      description: 'Idempotent command identifier.'
-    }),
-    text: ArtifactReviewTextSchema,
-    anchor: Type.Optional(Nullable(ArtifactSourceAnchorSchema)),
-    blocking: Type.Optional(
-      Type.Boolean({
-        default: false,
-        description:
-          'Whether this new thread blocks acceptance; false by default.'
-      })
-    )
-  },
-  {
-    additionalProperties: false,
-    description:
-      'New artifact review thread; actor and identity are assigned by the server.'
-  }
-)
-
-export const ArtifactReviewCommentEventBody = Type.Union(
-  [
-    Type.Object(
-      {
-        requestId: ArtifactReviewCreateBody.properties.requestId,
-        expectedThreadVersion: Type.Integer({
-          minimum: 1,
-          description: 'Expected current thread version.'
-        }),
-        kind: Type.Literal('replied', {
-          description: 'Add a reply with a server-assigned identity.'
-        }),
-        text: ArtifactReviewTextSchema
-      },
-      { additionalProperties: false, description: 'Ordinary reply command.' }
-    ),
-    Type.Object(
-      {
-        requestId: ArtifactReviewCreateBody.properties.requestId,
-        expectedThreadVersion: Type.Integer({
-          minimum: 1,
-          description: 'Expected current thread version.'
-        }),
-        kind: Type.Literal('content_edited', {
-          description: 'Edit a comment while retaining its history.'
-        }),
-        commentId: Type.String({
-          pattern: UUID_PATTERN_SOURCE,
-          description:
-            'Comment in this thread; threadId identifies the root comment.'
-        }),
-        text: ArtifactReviewTextSchema
-      },
-      {
-        additionalProperties: false,
-        description: 'Ordinary comment edit command.'
-      }
-    ),
-    Type.Object(
-      {
-        requestId: ArtifactReviewCreateBody.properties.requestId,
-        expectedThreadVersion: Type.Integer({
-          minimum: 1,
-          description: 'Expected current thread version.'
-        }),
-        kind: Type.Literal('hidden', {
-          description: 'Hide a comment without changing blocking or resolution.'
-        }),
-        commentId: Type.String({
-          pattern: UUID_PATTERN_SOURCE,
-          description:
-            'Comment in this thread; threadId identifies the root comment.'
-        })
-      },
-      {
-        additionalProperties: false,
-        description: 'Ordinary comment hiding command.'
-      }
-    )
-  ],
-  {
-    description:
-      'Ordinary review command; protected decisions are not accepted.'
-  }
-)
-
-export const ArtifactReviewDecisionBody = Type.Union(
-  [
-    Type.Object(
-      {
-        requestId: ArtifactReviewCreateBody.properties.requestId,
-        expectedThreadVersion:
-          ArtifactReviewCommentEventBody.anyOf[0].properties
-            .expectedThreadVersion,
-        kind: Type.Literal('blocking_changed', {
-          description:
-            'Explicit user decision to change the thread blocking flag.'
-        }),
-        scope: ArtifactReviewScopeSchema,
-        blocking: Type.Boolean({
-          description: 'New thread-wide blocking value.'
-        })
-      },
-      {
-        additionalProperties: false,
-        description: 'Protected blocking decision.'
-      }
-    ),
-    Type.Object(
-      {
-        requestId: ArtifactReviewCreateBody.properties.requestId,
-        expectedThreadVersion:
-          ArtifactReviewCommentEventBody.anyOf[0].properties
-            .expectedThreadVersion,
-        kind: Type.Literal('resolved', {
-          description: 'Resolve for one revision branch.'
-        }),
-        scope: ArtifactReviewScopeSchema
-      },
-      {
-        additionalProperties: false,
-        description: 'Structured scoped resolution command.'
-      }
-    ),
-    Type.Object(
-      {
-        requestId: ArtifactReviewCreateBody.properties.requestId,
-        expectedThreadVersion:
-          ArtifactReviewCommentEventBody.anyOf[0].properties
-            .expectedThreadVersion,
-        kind: Type.Literal('reopened', {
-          description: 'Reopen for one revision branch.'
-        }),
-        scope: ArtifactReviewScopeSchema
-      },
-      {
-        additionalProperties: false,
-        description: 'Structured scoped reopening command.'
-      }
-    )
-  ],
-  {
-    description:
-      'Structured scoped user decision; agent execution requires a separate grant.'
-  }
-)
-
-export const ArtifactReviewCommentSchema = Type.Object(
-  {
-    id: Type.String({
-      description: 'Comment identity; root comment uses threadId.'
-    }),
-    text: Type.String({
-      description: 'Current text; earlier versions remain in history.'
-    }),
-    hidden: Type.Boolean({
-      description: 'Whether this comment is logically hidden.'
-    }),
-    actor: ArtifactActorSchema,
-    createdAt: Type.String({ description: 'Original creation time in UTC.' }),
-    updatedAt: Type.String({ description: 'Last edit or hiding time in UTC.' })
-  },
-  { additionalProperties: false, description: 'Current comment projection.' }
-)
-
-export const ArtifactThreadCurrentSchema = Type.Object(
-  {
-    threadId: Type.String({ description: 'Stable thread identity.' }),
-    originArtifactId: Type.String({
-      description: 'Original immutable artifact.'
-    }),
-    anchor: Nullable(ArtifactSourceAnchorSchema),
-    blocking: Type.Boolean({ description: 'Thread-wide blocking flag.' }),
-    version: Type.Integer({
-      minimum: 1,
-      description: 'Current optimistic concurrency version.'
-    }),
-    comments: Type.Array(ArtifactReviewCommentSchema, {
-      description: 'Comments in creation order, including hidden comments.'
-    }),
-    resolutions: Type.Array(
-      Type.Object(
-        {
-          scope: ArtifactReviewScopeSchema,
-          resolved: Type.Boolean({
-            description: 'Latest decision in this scope.'
-          }),
-          seq: Type.Integer({
-            description: 'Sequence that orders decisions across scopes.'
-          })
-        },
-        {
-          additionalProperties: false,
-          description: 'Latest scoped decision projection.'
-        }
-      ),
-      { description: 'Latest decision for each scope.' }
-    )
-  },
-  { additionalProperties: false, description: 'Rebuildable thread projection.' }
-)
-
-export const ArtifactThreadViewSchema = Type.Object(
-  {
-    ...ArtifactThreadCurrentSchema.properties,
-    inheritedFrom: Nullable(
-      Type.String({
-        description:
-          'Original artifact when inherited or included from a priority target.'
-      })
-    ),
-    effectiveResolved: Type.Boolean({
-      description: 'Resolution evaluated for the requested artifact.'
-    })
-  },
-  {
-    additionalProperties: false,
-    description: 'Thread in the context of a requested artifact.'
-  }
-)
-
-export const ArtifactBlockerSummarySchema = Type.Object(
-  {
-    count: Type.Integer({
-      minimum: 0,
-      description: 'Number of unique unresolved blocking threads.'
-    }),
-    threadIds: Type.Array(Type.String(), {
-      maxItems: MAX_ARTIFACT_PAGE_SIZE,
-      description: 'First blocker thread IDs, in stable order.'
-    }),
-    truncated: Type.Boolean({
-      description: 'More blocker IDs are available through review list pages.'
-    }),
-    attention: Type.Boolean({
-      description:
-        'Accepted artifact currently has unresolved blockers; accepted status is retained.'
-    })
-  },
-  {
-    additionalProperties: false,
-    description:
-      'Blockers from lineage and proposed replacement or supplement targets.'
-  }
-)
-
-export const ArtifactReviewStateSchema = Type.Object(
-  {
-    storeId: Type.String({ description: 'Owning store identity.' }),
-    storeEpoch: Type.Integer({
-      description: 'Current committed store revision.'
-    }),
-    validationEpoch: Type.Integer({
-      description:
-        'Last change relevant to validation scope or blocking review state.'
-    }),
-    artifactId: Type.String({
-      description: 'Artifact whose review state is evaluated.'
-    }),
-    blockerSummary: ArtifactBlockerSummarySchema
-  },
-  {
-    additionalProperties: false,
-    description: 'Review state without modifying lifecycle status.'
-  }
-)
-
-export const ArtifactReviewListQuery = Type.Object(
-  {
-    ...ArtifactListQuery.properties,
-    includeInherited: Type.Optional(
-      Type.Boolean({
-        description:
-          'Include open lineage threads and blockers of priority targets; true by default.'
-      })
-    )
-  },
-  { additionalProperties: false, description: 'Review thread page options.' }
-)
-
-export const ArtifactReviewVisibleCommentSchema = Type.Object(
-  {
-    ...ArtifactReviewCommentSchema.properties,
-    text: Nullable(
-      Type.String({
-        description:
-          'Complete current text; null when hidden. Prior text remains in history.'
-      })
-    )
-  },
-  {
-    additionalProperties: false,
-    description: 'Public comment projection with hidden text suppressed.'
-  }
-)
-
-export const ArtifactReviewCommentPreviewSchema = Type.Object(
-  {
-    ...ArtifactReviewVisibleCommentSchema.properties,
-    truncated: Type.Boolean({
-      description:
-        'Text is a UTF-8 preview; full visible text is available in comments pages.'
-    })
-  },
-  { additionalProperties: false, description: 'Short comment preview.' }
-)
-
-export const ArtifactSourceAnchorPreviewSchema = Type.Object(
-  {
-    ...ArtifactSourceAnchorSchema.properties,
-    quote: Type.String({ description: 'UTF-8 preview of the original quote.' }),
-    truncated: Type.Boolean({
-      description: 'The complete quote is available in comments or history.'
-    })
-  },
-  {
-    additionalProperties: false,
-    description: 'Original source coordinates with a bounded quote preview.'
-  }
-)
-
-export const ArtifactThreadSummarySchema = Type.Object(
-  {
-    ...Type.Omit(ArtifactThreadViewSchema, [
-      'comments',
-      'resolutions',
-      'anchor'
-    ]).properties,
-    anchor: Nullable(ArtifactSourceAnchorPreviewSchema),
-    commentCount: Type.Integer({
-      minimum: 1,
-      description: 'Number of current comments, including hidden comments.'
-    }),
-    rootComment: ArtifactReviewCommentPreviewSchema,
-    lastComment: ArtifactReviewCommentPreviewSchema
-  },
-  {
-    additionalProperties: false,
-    description:
-      'Bounded thread summary without full comments or scoped decision history.'
-  }
-)
-
-export const ArtifactReviewCommentsQuery = Type.Object(
-  {
-    limit: ArtifactListQuery.properties.limit,
-    afterIndex: Type.Optional(
-      Type.Integer({
-        minimum: 0,
-        description:
-          'Number of comments already read in this thread; zero starts the list. Not tied to store epoch.'
-      })
-    )
-  },
-  {
-    additionalProperties: false,
-    description: 'Live comment page; edits and hiding preserve comment order.'
-  }
-)
-
-export const ArtifactReviewCommentsSchema = Type.Object(
-  {
-    storeId: Type.String({ description: 'Owning store identity.' }),
-    threadId: Type.String({
-      description: 'Thread whose comment positions are being read.'
-    }),
-    version: Type.Integer({
-      description:
-        'Thread version when this page was read; pages are live, not a historical snapshot.'
-    }),
-    anchor: Nullable(ArtifactSourceAnchorSchema),
-    items: Type.Array(ArtifactReviewVisibleCommentSchema, {
-      description:
-        'Complete current comments within the count and soft byte budgets.'
-    }),
-    nextAfterIndex: Nullable(
-      Type.Integer({
-        minimum: 1,
-        description:
-          'Number of comments consumed after this page, or null at the current end.'
-      })
-    )
-  },
-  {
-    additionalProperties: false,
-    description: 'Live comment page with the full original source anchor.'
-  }
-)
-
-export const ArtifactReviewListSchema = Type.Object(
-  {
-    ...ArtifactReviewStateSchema.properties,
-    items: Type.Array(ArtifactThreadSummarySchema, {
-      description: 'Thread page in stable thread ID order.'
-    }),
-    nextCursor: Nullable(
-      Type.String({
-        description: 'Next cursor, bound to store epoch and query.'
-      })
-    )
-  },
-  {
-    additionalProperties: false,
-    description: 'Complete review thread page and blocker summary.'
-  }
-)
-
-// Lifecycle commands share contracts across HTTP, MCP and persisted validation history.
 export const ArtifactChangeSetProposeBody = Type.Object(
   {
     requestId: Type.String({
@@ -1239,37 +678,19 @@ export const ArtifactLifecycleCommitBody = Type.Object(
     description: 'Commit a validated and authorized package atomically.'
   }
 )
-export const ArtifactAuthorizationRequestBody = Type.Union(
-  [
-    Type.Object(
-      {
-        kind: Type.Literal('lifecycle', {
-          description: 'Lifecycle authorization.'
-        }),
-        changeSetId: ArtifactParams.properties.id,
-        version: Type.Integer({ minimum: 1, description: 'Proposal version.' }),
-        validationId: ArtifactParams.properties.id
-      },
-      {
-        additionalProperties: false,
-        description: 'Request permission for a validated package.'
-      }
-    ),
-    Type.Object(
-      {
-        kind: Type.Literal('review', {
-          description: 'Scoped review authorization without validation.'
-        }),
-        threadId: ArtifactParams.properties.id,
-        input: ArtifactReviewDecisionBody
-      },
-      {
-        additionalProperties: false,
-        description: 'Request permission for one scoped review action.'
-      }
-    )
-  ],
-  { description: 'A concrete action proposed for user confirmation.' }
+export const ArtifactAuthorizationRequestBody = Type.Object(
+  {
+    kind: Type.Literal('lifecycle', {
+      description: 'Lifecycle authorization.'
+    }),
+    changeSetId: ArtifactParams.properties.id,
+    version: Type.Integer({ minimum: 1, description: 'Proposal version.' }),
+    validationId: ArtifactParams.properties.id
+  },
+  {
+    additionalProperties: false,
+    description: 'Request permission for a validated package.'
+  }
 )
 export const ArtifactAuthorizationApproveBody = Type.Object(
   {
@@ -1298,7 +719,7 @@ export const ArtifactValidationReadBody = Type.Object(
     key: Type.String({
       minLength: 1,
       maxLength: 64,
-      description: 'Artifact ID or review:threadId from the manifest.'
+      description: 'Artifact ID from the assigned manifest.'
     }),
     offset: Type.Optional(
       Type.Integer({ minimum: 0, description: 'Sequential UTF-8 byte offset.' })
@@ -1319,16 +740,6 @@ export const ArtifactValidationReportBody = Type.Object(
   {
     additionalProperties: false,
     description: 'Save a standalone report without changing the manifest.'
-  }
-)
-export const ArtifactReviewExecuteBody = Type.Object(
-  {
-    authorizationId: ArtifactParams.properties.id,
-    action: ArtifactAuthorizationRequestBody.anyOf[1]
-  },
-  {
-    additionalProperties: false,
-    description: 'Execute one authorized review action.'
   }
 )
 export const ArtifactValidationReportQuery = Type.Object(
@@ -1369,8 +780,25 @@ export const ArtifactSearchFiltersSchema = Type.Object(
     tags: Type.Optional(
       Type.Array(
         Type.String({ maxLength: 128, description: 'Required tag.' }),
-        { maxItems: 100, description: 'Require every selected tag.' }
+        { maxItems: 100, description: 'Selected tags; see tagMode.' }
       )
+    ),
+    tagMode: Type.Optional(
+      Type.Union([Type.Literal('all'), Type.Literal('any')], {
+        description: 'Require every selected tag (all, default) or any (any).'
+      })
+    ),
+    createdFrom: Type.Optional(
+      Type.String({
+        maxLength: 40,
+        description: 'Earliest creation time, inclusive; ISO 8601 timestamp.'
+      })
+    ),
+    createdTo: Type.Optional(
+      Type.String({
+        maxLength: 40,
+        description: 'Latest creation time, inclusive; ISO 8601 timestamp.'
+      })
     )
   },
   {
@@ -1444,6 +872,8 @@ export const ArtifactSearchItemSchema = Type.Object(
     storeId: ArtifactSchema.properties.storeId,
     id: ArtifactParams.properties.id,
     title: ArtifactSchema.properties.title,
+    createdAt: ArtifactSchema.properties.createdAt,
+    tags: ArtifactSchema.properties.tags,
     status: ArtifactStatusSchema,
     typeId: ArtifactSchema.properties.typeId,
     taskIds: ArtifactSchema.properties.taskIds,
@@ -1540,5 +970,244 @@ export const ArtifactSearchDiagnosticsSchema = Type.Object(
   {
     description:
       'Availability and integrity diagnostics of the derived search index.'
+  }
+)
+
+function lifecycleId(description: string) {
+  return Type.String({ pattern: UUID_PATTERN_SOURCE, description })
+}
+function lifecycleDigest(description: string) {
+  return Type.String({ pattern: '^[a-f0-9]{64}$', description })
+}
+
+export const ArtifactStoredChangeSetSchema = Type.Object(
+  {
+    id: lifecycleId('Change set identifier.'),
+    version: Type.Integer({
+      minimum: 1,
+      description: 'Immutable proposal version.'
+    }),
+    requestId: Type.String({ description: 'Idempotent proposal request.' }),
+    changeSet: ArtifactHistoricalChangeSetSchema,
+    changeDigest: lifecycleDigest('Canonical change set digest.'),
+    requestDigest: lifecycleDigest('Canonical proposal request digest.'),
+    actor: ArtifactActorSchema
+  },
+  { description: 'Current immutable change set proposal.' }
+)
+
+export const ArtifactValidationStateSchema = Type.Union(
+  [
+    Type.Literal('prepared'),
+    Type.Literal('running'),
+    Type.Literal('pass'),
+    Type.Literal('conflict'),
+    Type.Literal('incomplete'),
+    Type.Literal('cancelled')
+  ],
+  { description: 'Validation job state.' }
+)
+export const ArtifactValidationViewSchema = Type.Object(
+  {
+    id: lifecycleId('Validation identifier.'),
+    changeSetId: lifecycleId('Validated proposal.'),
+    version: Type.Integer({
+      minimum: 1,
+      description: 'Validated proposal version.'
+    }),
+    state: ArtifactValidationStateSchema,
+    validatorSessionId: Nullable(lifecycleId('Assigned validator session.')),
+    manifestDigest: lifecycleDigest('Server-assigned manifest digest.'),
+    changeDigest: lifecycleDigest('Validated change digest.'),
+    validationEpoch: Type.Integer({
+      description: 'Manifest validation epoch.'
+    }),
+    expiresAt: Nullable(
+      Type.Number({
+        description: 'Validation lease expiry in Unix milliseconds.'
+      })
+    ),
+    reason: Type.Optional(
+      Type.String({ description: 'Terminal outcome explanation.' })
+    ),
+    report: Nullable(
+      Type.Object(
+        {
+          verdict: ArtifactValidationSubmitBody.properties.verdict,
+          findingCount: Type.Integer({
+            minimum: 0,
+            description: 'Number of cited findings.'
+          }),
+          reportArtifactId: Type.Optional(
+            lifecycleId('Standalone draft report artifact.')
+          )
+        },
+        {
+          description: 'Structured report summary; full text is read in chunks.'
+        }
+      )
+    )
+  },
+  { description: 'Validation progress and report summary.' }
+)
+
+export const ArtifactReportChunkSchema = Type.Object(
+  {
+    id: lifecycleId('Validation identifier.'),
+    offset: Type.Integer({
+      minimum: 0,
+      description: 'First UTF-8 byte offset.'
+    }),
+    totalBytes: Type.Integer({
+      minimum: 0,
+      description: 'Complete JSON report size.'
+    }),
+    nextOffset: Nullable(
+      Type.Integer({ minimum: 0, description: 'Next UTF-8 offset, or null.' })
+    ),
+    text: Type.String({ description: 'Exact report JSON chunk.' })
+  },
+  { description: 'Bounded UTF-8 report response.' }
+)
+
+export const PendingArtifactActionSchema = Type.Object(
+  {
+    id: lifecycleId('Pending action identifier.'),
+    sessionId: Type.String({
+      description: 'Requesting session; user actors use the user prefix.'
+    }),
+    action: ArtifactAuthorizationRequestBody,
+    actionDigest: lifecycleDigest('Exact requested action digest.'),
+    manifestDigest: Nullable(
+      lifecycleDigest('Bound validation manifest digest.')
+    ),
+    expiresAt: Type.Number({
+      description: 'Pending action expiry in Unix milliseconds.'
+    })
+  },
+  { description: 'One exact action awaiting explicit user approval.' }
+)
+export const ArtifactActionListSchema = Type.Object(
+  {
+    storeId: lifecycleId('Owning store.'),
+    items: Type.Array(PendingArtifactActionSchema, {
+      description: 'Live pending requests.'
+    })
+  },
+  { description: 'Current pending actions in one store.' }
+)
+export const ArtifactActionPhaseSchema = Type.Union(
+  [
+    Type.Literal('pending'),
+    Type.Literal('authorized'),
+    Type.Literal('consumed')
+  ],
+  { description: 'Authorization lifecycle of this request.' }
+)
+export const ArtifactActionInspectionSchema = Type.Object(
+  {
+    storeId: lifecycleId('Owning store.'),
+    pending: PendingArtifactActionSchema,
+    phase: ArtifactActionPhaseSchema,
+    canExecute: Type.Boolean({
+      description: 'Current user owns the requesting execution session.'
+    }),
+    ready: Type.Boolean({
+      description: 'Exact action is currently fresh, valid and unblocked.'
+    }),
+    problem: Nullable(
+      Type.String({
+        description: 'Reason confirmation or execution is blocked.'
+      })
+    ),
+    proposal: Nullable(ArtifactStoredChangeSetSchema),
+    validation: Nullable(ArtifactValidationViewSchema),
+    preview: Nullable(ArtifactChangeSetPreviewSchema),
+    authorizationId: Nullable(
+      lifecycleId('Existing user-owned grant; never persisted by the browser.')
+    )
+  },
+  { description: 'Reviewable current scope with server readiness checks.' }
+)
+export const ArtifactActionStatusSchema = Type.Object(
+  {
+    id: lifecycleId('Original pending request identifier.'),
+    state: ArtifactActionPhaseSchema,
+    authorizationId: Nullable(
+      lifecycleId('Grant for this requesting session after approval.')
+    ),
+    expiresAt: Type.Number({
+      description: 'Authorization expiry in Unix milliseconds.'
+    })
+  },
+  { description: 'Read-only authorization status for the requesting session.' }
+)
+
+export const ArtifactValidationInspectionSchema = Type.Object(
+  {
+    storeId: lifecycleId('Owning store.'),
+    proposal: ArtifactStoredChangeSetSchema,
+    validation: ArtifactValidationViewSchema,
+    preview: ArtifactChangeSetPreviewSchema,
+    ready: Type.Boolean({
+      description: 'A current matching pass has no blocking conflicts.'
+    }),
+    problem: Nullable(
+      Type.String({ description: 'Why authorization cannot be requested.' })
+    )
+  },
+  { description: 'Read-only validation freshness and proposed post-state.' }
+)
+
+export const ArtifactExportQuery = Type.Object(
+  {
+    format: Type.Union(
+      [Type.Literal('original'), Type.Literal('metadata-history')],
+      {
+        description:
+          'Exact original file or consistent metadata history snapshot.'
+      }
+    )
+  },
+  { additionalProperties: false, description: 'Artifact download format.' }
+)
+export const ArtifactOriginalExportSchema = Type.String({
+  format: 'binary',
+  description:
+    'Verified exact original Markdown bytes, including historical frontmatter.'
+})
+export const ArtifactExportEventSchema = Type.Object(
+  { ...ArtifactEventSchema.properties, snapshot: ArtifactSchema },
+  {
+    additionalProperties: false,
+    description: 'Metadata event with its complete immutable artifact version.'
+  }
+)
+export const ArtifactMetadataExportSchema = Type.Object(
+  {
+    formatVersion: Type.Literal(1, {
+      description: 'Metadata export format version.'
+    }),
+    storeId: Type.String({ description: 'Owning artifact store identity.' }),
+    artifactId: Type.String({ description: 'Exported artifact identity.' }),
+    snapshotSeq: Type.Integer({
+      minimum: 0,
+      description:
+        'Store artifact event sequence captured with current metadata; history never exceeds this boundary.'
+    }),
+    storeEpoch: Type.Integer({
+      minimum: 0,
+      description: 'Store revision captured with the metadata snapshot.'
+    }),
+    artifact: ArtifactSchema,
+    history: Type.Array(ArtifactExportEventSchema, {
+      description:
+        'Complete ordered metadata events through snapshotSeq, with full version snapshots.'
+    })
+  },
+  {
+    additionalProperties: false,
+    description:
+      'Consistent artifact metadata and complete history export, streamed in bounded pages.'
   }
 )

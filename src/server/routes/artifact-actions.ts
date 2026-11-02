@@ -2,6 +2,12 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import type { TSchema, Static } from '@sinclair/typebox'
 import { Value } from '@sinclair/typebox/value'
 import {
+  ArtifactValidationInspectionSchema,
+  ArtifactActionInspectionSchema,
+  ArtifactActionListSchema,
+  ArtifactStoredChangeSetSchema,
+  ArtifactValidationViewSchema,
+  ArtifactReportChunkSchema,
   ArtifactValidationReportQuery,
   ArtifactHistoryQuery,
   ArtifactParams,
@@ -11,8 +17,7 @@ import {
   ArtifactLifecycleCommitBody,
   ArtifactAuthorizationRequestBody,
   ArtifactAuthorizationApproveBody,
-  ArtifactLifecycleResultSchema,
-  ArtifactReviewExecuteBody
+  ArtifactLifecycleResultSchema
 } from '../../shared/artifacts/schemas.ts'
 import { DefinitionQuery } from '../../shared/tasks/schemas.ts'
 import { ERROR_RESPONSES } from '../../shared/http/schemas.ts'
@@ -106,13 +111,6 @@ export async function artifactActionRoutes(
         service.authorization.approve(request.params.id, request)
       )
   )
-  post('/api/artifact-review-actions', ArtifactReviewExecuteBody, request =>
-    service.executeReview(
-      request.body.action,
-      request.body.authorizationId,
-      artifactUserActor(request)
-    )
-  )
   app.get<{ Params: { id: string } }>(
     '/api/artifact-change-sets/:id',
     {
@@ -120,10 +118,25 @@ export async function artifactActionRoutes(
         tags: ['artifacts'],
         summary: 'Read the current immutable proposal version',
         params: ArtifactParams,
-        response: { 200: ArtifactLifecycleResultSchema, ...ERROR_RESPONSES }
+        response: { 200: ArtifactStoredChangeSetSchema, ...ERROR_RESPONSES }
       }
     },
     request => service.get(request.params.id)
+  )
+  app.get<{ Params: { id: string } }>(
+    '/api/artifact-validations/:id/check',
+    {
+      schema: {
+        tags: ['artifacts'],
+        summary: 'Inspect validation freshness and exact post-state',
+        params: ArtifactParams,
+        response: {
+          200: ArtifactValidationInspectionSchema,
+          ...ERROR_RESPONSES
+        }
+      }
+    },
+    request => service.inspectValidation(request.params.id)
   )
   app.get<{ Params: { id: string } }>(
     '/api/artifact-validations/:id',
@@ -132,7 +145,7 @@ export async function artifactActionRoutes(
         tags: ['artifacts'],
         summary: 'Read validation status and report summary',
         params: ArtifactParams,
-        response: { 200: ArtifactLifecycleResultSchema, ...ERROR_RESPONSES }
+        response: { 200: ArtifactValidationViewSchema, ...ERROR_RESPONSES }
       }
     },
     request => service.jobs.get(request.params.id)
@@ -169,7 +182,7 @@ export async function artifactActionRoutes(
         summary: 'Read the complete structured report in bounded chunks',
         params: ArtifactParams,
         querystring: ArtifactValidationReportQuery,
-        response: { 200: ArtifactLifecycleResultSchema, ...ERROR_RESPONSES }
+        response: { 200: ArtifactReportChunkSchema, ...ERROR_RESPONSES }
       }
     },
     request => service.jobs.report(request.params.id, request.query.offset)
@@ -201,10 +214,26 @@ export async function artifactActionRoutes(
       schema: {
         tags: ['artifacts'],
         summary: 'Read pending actions awaiting explicit user confirmation',
-        response: { 200: ArtifactLifecycleResultSchema, ...ERROR_RESPONSES }
+        response: { 200: ArtifactActionListSchema, ...ERROR_RESPONSES }
       }
     },
-    () => ({ items: service.authorization.list() })
+    () => ({
+      storeId: service.storage.storeId,
+      items: service.authorization.list()
+    })
+  )
+  app.get<{ Params: { id: string } }>(
+    '/api/artifact-actions/:id',
+    {
+      schema: {
+        tags: ['artifacts'],
+        summary: 'Inspect the exact pending or authorized action scope',
+        params: ArtifactParams,
+        response: { 200: ArtifactActionInspectionSchema, ...ERROR_RESPONSES }
+      }
+    },
+    request =>
+      service.inspectAction(request.params.id, artifactUserActor(request))
   )
   app.delete<{ Params: { id: string } }>(
     '/api/artifact-actions/:id',

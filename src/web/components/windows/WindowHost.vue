@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiConsoleLine, mdiEyeOutline } from '@mdi/js'
 import {
   TERMINAL_WINDOW_ID,
   PREVIEW_WINDOW_ID
@@ -27,7 +28,7 @@ const unregisterTerminal = registry.register({
   id: TERMINAL_WINDOW_ID,
   component: TerminalWindow,
   title: () => t('terminal.title'),
-  icon: 'terminal',
+  icon: mdiConsoleLine,
   availability: () =>
     terminal.enabled
       ? { enabled: true }
@@ -41,7 +42,7 @@ const unregisterPreview = registry.register({
   id: PREVIEW_WINDOW_ID,
   component: PreviewWindow,
   title: () => t('windows.preview'),
-  icon: 'visibility',
+  icon: mdiEyeOutline,
   availability: () => ({ enabled: true }),
   badge: () => preview.tabs.length || null,
   active: () => windows.isActive(PREVIEW_WINDOW_ID),
