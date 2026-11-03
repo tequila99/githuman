@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiPlus } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '@/stores/agent-store'
 import { AGENT_ICON } from '@/utils/agent-icon'
@@ -9,7 +10,7 @@ const store = useAgentStore()
 
 <template>
   <div class="agent-empty column items-center justify-center text-center fit">
-    <q-icon :name="AGENT_ICON" size="48px" class="text-grey-6" />
+    <q-icon :name="AGENT_ICON" size="48px" class="app-icon-neutral" />
     <div class="text-subtitle1 q-mt-md">{{ t('agent.emptyState.title') }}</div>
     <div class="text-caption text-grey-6 q-mt-xs agent-empty__hint">
       {{ t('agent.emptyState.hint') }}
@@ -19,8 +20,8 @@ const store = useAgentStore()
       color="primary"
       unelevated
       no-caps
-      icon="add"
-      class="q-mt-md"
+      :icon="mdiPlus"
+      class="app-icon-control q-mt-md"
       :label="t('agent.emptyState.add')"
       @click="store.openNewChatDialog()"
     />

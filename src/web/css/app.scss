@@ -17,8 +17,17 @@
 @import '@fontsource/fira-code/600.css';
 @import 'markdown';
 @import 'markdown-document';
+@import 'document-tags';
+@import 'artifact-summary';
+@import 'artifact-status';
 
 :root {
+  --app-icon-neutral: #757575;
+  --app-icon-active: var(--q-primary);
+  --app-icon-danger: #c10015;
+  --app-icon-success: #168330;
+  --app-icon-warning: #936400;
+  --app-icon-on-accent: #fff;
   --font-agent: 'Golos Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --code-font-size: 14px;
@@ -40,6 +49,60 @@ html[data-code-font='fira'] {
   font-family: var(--font-mono);
 }
 
+// Explicit roles keep neutral icons independent of label and status colors.
+.q-dark {
+  --app-icon-neutral: #bdbdbd;
+  --app-icon-danger: #ff6b7c;
+  --app-icon-success: #4bd36c;
+  --app-icon-warning: #f2c037;
+}
+.app-icon-neutral,
+.app-icon-control:not([class*='text-']) > .q-btn__content > .q-icon,
+.app-icon-expansion
+  > .q-expansion-item__container
+  > .q-item
+  > .q-item__section--avatar
+  > .q-icon {
+  color: var(--app-icon-color, var(--app-icon-neutral));
+}
+.q-item--active,
+.q-router-link--active,
+.q-tab--active {
+  --app-icon-color: var(--app-icon-active);
+}
+.app-icon-control[class*='text-'] > .q-btn__content > .q-icon {
+  color: inherit;
+}
+.app-icon-control.text-positive > .q-btn__content > .q-icon {
+  color: var(--app-icon-success);
+}
+.app-icon-control.text-negative > .q-btn__content > .q-icon {
+  color: var(--app-icon-danger);
+}
+.app-icon-control.text-warning > .q-btn__content > .q-icon {
+  color: var(--app-icon-warning);
+}
+.app-icon-warning {
+  color: var(--app-icon-warning);
+}
+.app-icon-expansion
+  > .q-expansion-item__container
+  > .q-item
+  > .q-item__section--side
+  > .q-expansion-item__toggle-icon,
+.workspace-footer .q-tab:not(.q-tab--active) .q-tab__icon {
+  color: var(--app-icon-neutral);
+}
+.app-icon-on-accent {
+  --app-icon-color: var(--app-icon-on-accent);
+}
+.app-icon-control[aria-pressed='true']:not([class*='text-']) {
+  --app-icon-color: var(--app-icon-active);
+}
+.workspace-footer .q-tabs__arrow {
+  color: var(--app-icon-neutral);
+}
+
 // Diff line colors (see githuman/src/web/styles/globals.css)
 :root {
   --diff-added-bg: #e6ffed;
@@ -52,6 +115,10 @@ html[data-code-font='fira'] {
 }
 
 body.body--dark {
+  --app-icon-neutral: #bdbdbd;
+  --app-icon-danger: #ff6b7c;
+  --app-icon-success: #4bd36c;
+  --app-icon-warning: #f2c037;
   --diff-added-bg: rgba(34, 197, 94, 0.15);
   --diff-removed-bg: rgba(244, 63, 94, 0.15);
   --diff-gutter-color: #64748b;
@@ -386,4 +453,10 @@ body.workspace-narrow {
   .workspace--narrow *::after {
     transition-duration: 0s !important;
   }
+}
+
+.agent-menu.agent-session-tasks-menu .q-item {
+  min-height: 40px;
+  align-items: center;
+  padding: 10px 12px;
 }

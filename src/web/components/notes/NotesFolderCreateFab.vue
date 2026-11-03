@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import { mdiFolderPlusOutline, mdiPlus } from '@mdi/js'
 import { shallowRef, useTemplateRef } from 'vue'
 import type { TouchPanValue } from 'quasar'
 import { useI18n } from 'vue-i18n'
-import { mdiFolderPlusOutline } from '@mdi/js'
 
 type TouchPanDetails = Parameters<NonNullable<TouchPanValue>>[0]
 const emit = defineEmits<{ create: [folder: boolean] }>()
@@ -32,7 +32,7 @@ function moveFab(event: TouchPanDetails) {
     <q-fab
       class="notes-folder-create"
       color="primary"
-      icon="add"
+      :icon="mdiPlus"
       direction="up"
       vertical-actions-align="right"
       :style="{ right: fabPos[0] + 'px', bottom: fabPos[1] + 'px' }"
@@ -42,7 +42,7 @@ function moveFab(event: TouchPanDetails) {
     >
       <q-fab-action
         color="primary"
-        icon="add"
+        :icon="mdiPlus"
         :label="t('notes.newNote')"
         @click="emit('create', false)"
       />

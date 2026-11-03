@@ -1,4 +1,11 @@
 <script setup lang="ts">
+import {
+  mdiChevronRight,
+  mdiCircle,
+  mdiFileOutline,
+  mdiFolderOpenOutline,
+  mdiFolderOutline
+} from '@mdi/js'
 import type { FileTreeNode } from '@/api/types'
 import { treeIndentPx } from '@/utils/file-tree'
 
@@ -28,9 +35,9 @@ const emit = defineEmits<{
       <q-item-section avatar class="file-tree-node__icon-section">
         <div class="row items-center no-wrap q-gutter-x-xs">
           <q-icon
-            name="chevron_right"
+            :name="mdiChevronRight"
             size="xs"
-            class="file-tree-node__chevron"
+            class="app-icon-neutral file-tree-node__chevron"
             :class="{
               'file-tree-node__chevron--expanded': expandedFolders.has(
                 node.path
@@ -38,9 +45,13 @@ const emit = defineEmits<{
             }"
           />
           <q-icon
-            :name="expandedFolders.has(node.path) ? 'folder_open' : 'folder'"
+            :name="
+              expandedFolders.has(node.path)
+                ? mdiFolderOpenOutline
+                : mdiFolderOutline
+            "
             size="xs"
-            color="warning"
+            class="app-icon-neutral"
           />
         </div>
       </q-item-section>
@@ -69,7 +80,7 @@ const emit = defineEmits<{
       @click="emit('file-select', node.path)"
     >
       <q-item-section avatar class="file-tree-node__icon-section">
-        <q-icon name="insert_drive_file" size="xs" color="grey-6" />
+        <q-icon :name="mdiFileOutline" size="xs" class="app-icon-neutral" />
       </q-item-section>
       <q-item-section class="text-mono">
         <div class="ellipsis file-tree-node__label" :data-tooltip="node.path">
@@ -77,7 +88,7 @@ const emit = defineEmits<{
         </div>
       </q-item-section>
       <q-item-section v-if="node.isChanged" side>
-        <q-icon name="fiber_manual_record" size="8px" color="warning" />
+        <q-icon :name="mdiCircle" size="8px" class="app-icon-warning" />
       </q-item-section>
     </q-item>
 

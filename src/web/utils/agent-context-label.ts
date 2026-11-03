@@ -3,6 +3,9 @@ import type { AgentContextItem } from '@/api/types'
 type Translate = (key: string, named?: Record<string, unknown>) => string
 
 export function contextLabel(item: AgentContextItem, t: Translate): string {
+  if (item.kind === 'artifact') {
+    return t('agent.context.artifact', { name: item.name })
+  }
   if (item.kind === 'note') return item.name
   if (item.kind === 'file') {
     return t('agent.context.file', { path: item.path })

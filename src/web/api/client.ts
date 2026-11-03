@@ -7,11 +7,14 @@ import { reportAccessProblem } from '@/utils/access-problem'
 
 export class ApiRequestError extends Error {
   readonly status: number
+  /** Machine-readable server code, for example GHT_ARTIFACT_INTEGRITY; absent when the body has none. */
+  readonly code: string | undefined
 
-  constructor(message: string, status: number) {
+  constructor(message: string, status: number, code?: string) {
     super(message)
     this.name = 'ApiRequestError'
     this.status = status
+    this.code = code
   }
 }
 
@@ -28,17 +31,20 @@ async function checkedFetch(
     // The server's JSON error body (see src/shared/http/types.ts ApiError) carries
     // a human-readable `message` (e.g. a ValidationError's text) — surface
     // it instead of a generic "status N" string whenever the body has one.
-    const message = await response
+    const body = await response
       .clone()
       .json()
-      .then((body: unknown) =>
-        isRecord(body) && 'message' in body ? String(body.message) : null
-      )
+      .then((value: unknown) => (isRecord(value) ? value : null))
       .catch(() => null)
+    const message =
+      body !== null && 'message' in body ? String(body.message) : null
+    const code =
+      body !== null && typeof body.code === 'string' ? body.code : undefined
 
     throw new ApiRequestError(
       message ?? `Request failed with status ${response.status}`,
-      response.status
+      response.status,
+      code
     )
   }
 

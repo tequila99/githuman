@@ -1,3 +1,4 @@
+import { withSavepoint, type SyncCallback } from '../db/transaction.ts'
 import { randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import type { NoteIssue, NoteRecord } from '../../shared/notes/types.ts'
@@ -77,16 +78,8 @@ export class NotesCatalogRepository {
       )
     }
   }
-  transaction<T>(run: () => T): T {
-    this.db.exec('SAVEPOINT notes_catalog')
-    try {
-      const value = run()
-      this.db.exec('RELEASE notes_catalog')
-      return value
-    } catch (error) {
-      this.db.exec('ROLLBACK TO notes_catalog; RELEASE notes_catalog')
-      throw error
-    }
+  transaction<T>(run: SyncCallback<T>): T {
+    return withSavepoint(this.db, run)
   }
   all(): CatalogNote[] {
     return (

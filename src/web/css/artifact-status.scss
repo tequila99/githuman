@@ -1,0 +1,11 @@
+// Artifact status colors. One variable per status; change a color here only.
+// White text stays readable on every value in both themes.
+:root {
+  --artifact-status-draft: rgb(25, 118, 210);
+  --artifact-status-in_review: rgb(156, 90, 0);
+  --artifact-status-accepted: rgb(46, 125, 50);
+  --artifact-status-rejected: rgb(198, 40, 40);
+  --artifact-status-superseded: rgb(123, 31, 162);
+  --artifact-status-archived: rgb(84, 110, 122);
+  --artifact-status-deleted: rgb(97, 97, 97);
+}

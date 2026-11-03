@@ -1,17 +1,6 @@
 #!/usr/bin/env node
 import { errorMessage } from '../shared/utils/error-message.ts'
 import { writeFileSync } from 'node:fs'
-import { parseServeArgs } from './config.ts'
-import {
-  startServer,
-  resolveRepositoryPath,
-  resolveReviewsDbPath
-} from './server-runtime.ts'
-import { formatStartupMessage } from './startup-message.ts'
-import { lanAddresses } from '../server/utils/lan-addresses.ts'
-import { parseListArgs, runList } from './commands/list.ts'
-import { parseExportArgs, runExport } from './commands/export.ts'
-import { createFileDatabase } from '../server/db/index.ts'
 import { getAppVersion } from '../server/app-version.ts'
 import type { DatabaseSync } from 'node:sqlite'
 
@@ -22,6 +11,9 @@ const SHUTDOWN_TIMEOUT_MS = 5000
 async function openReviewsDb(
   dbPrefix: string
 ): Promise<{ db: DatabaseSync; repositoryPath: string }> {
+  const { resolveRepositoryPath, resolveReviewsDbPath } =
+    await import('./server-runtime.ts')
+  const { createFileDatabase } = await import('../server/db/index.ts')
   const repositoryPath = await resolveRepositoryPath(process.cwd())
   return {
     db: createFileDatabase(resolveReviewsDbPath(repositoryPath, dbPrefix)),
@@ -30,12 +22,26 @@ async function openReviewsDb(
 }
 
 async function main(argv: string[]): Promise<void> {
+  if (argv[0] === 'pi-acp') {
+    const { runPiAcp } = await import('./commands/pi-acp.ts')
+    runPiAcp(argv.slice(1))
+    return
+  }
+  if (argv[0] === 'mcp') {
+    const { runMcp } = await import('./commands/mcp.ts')
+    await runMcp(argv.slice(1))
+    return
+  }
   console.log(`githuman v${getAppVersion()}`)
 
   const [command, ...rest] = argv
 
   switch (command) {
     case 'serve': {
+      const { parseServeArgs } = await import('./config.ts')
+      const { startServer } = await import('./server-runtime.ts')
+      const { formatStartupMessage } = await import('./startup-message.ts')
+      const { lanAddresses } = await import('../server/utils/lan-addresses.ts')
       const options = parseServeArgs(rest)
       const { app, url } = await startServer(options)
       let stopping = false
@@ -63,12 +69,15 @@ async function main(argv: string[]): Promise<void> {
       return
     }
     case 'list': {
+      const { parseListArgs, runList } = await import('./commands/list.ts')
       const options = parseListArgs(rest)
       const { db } = await openReviewsDb(options.dbPrefix)
       console.log(runList(db, options))
       return
     }
     case 'export': {
+      const { parseExportArgs, runExport } =
+        await import('./commands/export.ts')
       const options = parseExportArgs(rest)
       const { db, repositoryPath } = await openReviewsDb(options.dbPrefix)
       const output = await runExport(
@@ -86,7 +95,7 @@ async function main(argv: string[]): Promise<void> {
     }
     default:
       console.error(`Unknown command: ${command ?? '(none)'}`)
-      console.error('Usage: githuman serve|list|export [options]')
+      console.error('Usage: githuman serve|list|export|mcp|pi-acp [options]')
       process.exitCode = 1
   }
 }

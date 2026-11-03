@@ -1,3 +1,14 @@
+import { artifactActionRoutes } from './routes/artifact-actions.ts'
+import { artifactTransitionRoutes } from './routes/artifact-transitions.ts'
+import { addressUrl } from '../shared/network/address-url.ts'
+import { artifactAgentRoutes } from './routes/artifact-agent.ts'
+import type { AgentSessionRegistry } from './services/agent/session-registry.ts'
+import { ForbiddenError } from './errors/http.ts'
+import { artifactDefinitionRoutes } from './routes/artifact-definitions.ts'
+import { DEFAULT_DB_PREFIX } from '../shared/app/storage-constants.ts'
+import { artifactRoutes } from './routes/artifacts.ts'
+import { ArtifactStorageService } from './services/artifact-storage.service.ts'
+import { ArtifactMaintenanceService } from './services/artifact-maintenance.service.ts'
 import { watchNotes } from './services/notes-watcher.service.ts'
 import { notesRoutes } from './routes/notes.ts'
 import { NotesService } from './services/notes.service.ts'
@@ -56,6 +67,11 @@ const DEVICE_SWEEP_MS = 60 * 60 * 1000
 // also when another server process on the same database revoked it.
 // One indexed SELECT per connected device.
 const DEVICE_RECHECK_MS = 2000
+// A wildcard bind accepts loopback connections; the MCP process connects there.
+const WILDCARD_LOOPBACK: Record<string, string> = {
+  '::': '::1',
+  '0.0.0.0': '127.0.0.1'
+}
 
 export interface BuildAppOptions {
   /** Launch directory used for project notes; it can differ from the Git root. */
@@ -68,6 +84,8 @@ export interface BuildAppOptions {
   repositoryPath?: string
   /** Database for reviews/comments. Defaults to a throwaway in-memory database — production callers (server-runtime) must pass a real file-backed one. */
   db?: DatabaseSync
+  artifactPrefix?: string
+  artifacts?: ArtifactStorageService
   /** Bus used to notify SSE clients of review/comment changes. Defaults to a fresh, process-local bus. */
   eventBus?: EventBus
   /** Watches the repository's working tree and publishes 'files:changed' SSE events on change. Off by default — the real server enables it; tests don't need it and it would otherwise watch process.cwd() by default. */
@@ -97,6 +115,8 @@ export interface BuildAppOptions {
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   const app = Fastify({
+    // Logging is off. Redact the Authorization header before you turn it on:
+    // it carries the agent session key (ADR 0096).
     logger: false,
     forceCloseConnections: true,
     ajv: {
@@ -108,6 +128,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       ]
     }
   })
+  const allowedHosts = new AllowedHosts(options.allowedHosts)
   const repositoryPath = options.repositoryPath ?? process.cwd()
   const db = options.db ?? createTestDatabase()
   const eventBus = options.eventBus ?? createEventBus()
@@ -117,6 +138,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     onChange: () => eventBus.publish({ type: 'devices:changed' })
   })
   const deviceConnections = new DeviceConnections(devices)
+  // Set after the access hook exists, because the registry needs the listening server address.
+  let agentRegistry: AgentSessionRegistry | undefined
   devices.removeExpired()
   const sweep = setInterval(() => devices.removeExpired(), DEVICE_SWEEP_MS)
   sweep.unref()
@@ -147,7 +170,20 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         'onRequest',
         createAccessHook({
           devices,
-          allowedHosts: new AllowedHosts(options.allowedHosts)
+          allowedHosts,
+          authorizeArtifactAgent(request, reply) {
+            const id = agentRegistry?.authenticateArtifactKey(
+              request.headers.authorization
+            )
+            if (!id || !agentRegistry) {
+              throw new ForbiddenError('Artifact session access denied.')
+            }
+            const release = agentRegistry.trackArtifactRequest(id, () =>
+              reply.raw.destroy()
+            )
+            reply.raw.once('finish', release)
+            reply.raw.once('close', release)
+          }
         })
       )
     })
@@ -186,6 +222,50 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       watcher.close()
     })
   }
+  const artifacts =
+    options.artifacts ??
+    new ArtifactStorageService({
+      db,
+      repositoryPath,
+      prefix: options.artifactPrefix ?? DEFAULT_DB_PREFIX,
+      eventBus
+    })
+  app.register(artifactRoutes, { service: artifacts })
+  app.register(artifactActionRoutes, {
+    service: artifacts.lifecycle,
+    recheckAccess: createAccessHook({ devices, allowedHosts })
+  })
+  artifacts.lifecycle.transitions.setActorGuard(
+    actor => actor.id === 'local' || devices.isTrusted(actor.id)
+  )
+  artifacts.lifecycle.transitions.setErrorHandler(error =>
+    app.log.error({ err: error }, 'Artifact transition work failed')
+  )
+  app.register(artifactTransitionRoutes, {
+    service: artifacts.lifecycle.transitions,
+    recheckAccess: createAccessHook({ devices, allowedHosts })
+  })
+  app.addHook('onReady', async () => {
+    artifacts.lifecycle.jobs.recover()
+    artifacts.lifecycle.transitions.start()
+  })
+  app.addHook('onClose', async () => {
+    artifacts.lifecycle.transitions.stop()
+    artifacts.lifecycle.jobs.close()
+  })
+  app.register(artifactDefinitionRoutes, { storage: artifacts })
+  const artifactMaintenance = new ArtifactMaintenanceService({
+    storage: artifacts,
+    onError: (error, phase) => {
+      app.log.error({ err: error, phase }, 'Artifact maintenance failed')
+    }
+  })
+  app.addHook('onReady', async () => {
+    artifactMaintenance.start()
+  })
+  app.addHook('onClose', async () => {
+    artifactMaintenance.stop()
+  })
   app.register(diffRoutes, { repositoryPath })
   app.register(gitRoutes, { repositoryPath })
   app.register(projectFileRoutes, { repositoryPath })
@@ -218,12 +298,32 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   }
 
   if (options.agentPresets) {
+    const registry = createSessionRegistry({
+      presets: options.agentPresets,
+      connections: deviceConnections,
+      artifactUrl: () => {
+        const address = app.server.address()
+        // Before listen there is no address; only tests that skip listen get here.
+        if (!address) return undefined
+        if (typeof address === 'string') {
+          throw new Error(
+            `Artifact tools need a TCP address, but the server listens on "${address}".`
+          )
+        }
+        return `${addressUrl(WILDCARD_LOOPBACK[address.address] ?? address.address, address.port)}/`
+      },
+      repositoryPath,
+      taskIds: sessionId => artifacts.definitions.assignment(sessionId).taskIds,
+      taskAssignment: sessionId => artifacts.definitions.assignment(sessionId)
+    })
+    agentRegistry = registry
+    app.register(artifactAgentRoutes, { storage: artifacts, registry })
+    artifacts.tasks.attachSessions(registry)
+    artifacts.lifecycle.attachSessions(registry)
     app.register(agentRoutes, {
+      artifacts,
       notes,
-      registry: createSessionRegistry({
-        presets: options.agentPresets,
-        repositoryPath
-      }),
+      registry,
       db,
       repositoryPath,
       eventBus,

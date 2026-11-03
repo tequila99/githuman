@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiChevronLeft, mdiChevronRight, mdiMinus, mdiPlus } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import {
   PREVIEW_MIN_SCALE,
@@ -22,11 +23,12 @@ const { t } = useI18n()
 <template>
   <div class="preview-controls row items-center no-wrap" @click.stop>
     <q-btn
+      class="app-icon-control"
       flat
       dense
       size="var(--control-size-compact)"
       v-if="pages !== undefined"
-      icon="chevron_left"
+      :icon="mdiChevronLeft"
       :disable="page <= 1"
       :aria-label="t('windows.pdfPrevious')"
       @click="emit('navigate', -1)"
@@ -44,10 +46,11 @@ const { t } = useI18n()
     >
     <span v-if="pages !== undefined" class="preview-controls__divider" />
     <q-btn
+      class="app-icon-control"
       flat
       dense
       size="var(--control-size-compact)"
-      icon="remove"
+      :icon="mdiMinus"
       :disable="scale <= PREVIEW_MIN_SCALE"
       :aria-label="t('windows.zoomOut')"
       @click="emit('zoom', -PREVIEW_SCALE_STEP)"
@@ -56,10 +59,11 @@ const { t } = useI18n()
       >{{ Math.round(scale * 100) }}%</span
     >
     <q-btn
+      class="app-icon-control"
       flat
       dense
       size="var(--control-size-compact)"
-      icon="add"
+      :icon="mdiPlus"
       :disable="scale >= PREVIEW_MAX_SCALE"
       :aria-label="t('windows.zoomIn')"
       @click="emit('zoom', PREVIEW_SCALE_STEP)"
@@ -69,11 +73,12 @@ const { t } = useI18n()
       <q-spinner v-show="busy" size="11px" />
     </span>
     <q-btn
+      class="app-icon-control"
       flat
       dense
       size="var(--control-size-compact)"
       v-if="pages !== undefined"
-      icon="chevron_right"
+      :icon="mdiChevronRight"
       :disable="!pages || page >= pages"
       :aria-label="t('windows.pdfNext')"
       @click="emit('navigate', 1)"

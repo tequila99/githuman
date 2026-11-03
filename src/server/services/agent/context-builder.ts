@@ -1,3 +1,5 @@
+import type { ArtifactStorageService } from '../artifact-storage.service.ts'
+import { artifactBody } from '../../../shared/utils/artifact-body.ts'
 import type { NotesService } from '../notes.service.ts'
 import { MAX_ATTACHMENT_BYTES } from '../../../shared/agents/constants.ts'
 import { AgentContextError } from '../../errors/agents.ts'
@@ -27,6 +29,7 @@ export const MAX_EMBEDDED_CHARS = 200_000
 export interface ContextBuilderDeps {
   db: DatabaseSync
   notes?: NotesService
+  artifacts?: ArtifactStorageService
   repositoryPath: string
   /** Agent advertised `promptCapabilities.embeddedContext`. */
   embeddedContext: boolean
@@ -66,13 +69,16 @@ function embed(
   uri: string,
   title: string,
   mimeType: string,
-  text: string
+  text: string,
+  prefix = ''
 ): ContentBlock {
-  const body = truncateText(
-    text,
-    MAX_EMBEDDED_CHARS,
-    omitted => `\n… [truncated by githuman: ${omitted} more characters]`
-  )
+  const body =
+    prefix +
+    truncateText(
+      text,
+      MAX_EMBEDDED_CHARS,
+      omitted => `\n… [truncated by githuman: ${omitted} more characters]`
+    )
   if (deps.embeddedContext) {
     return { type: 'resource', resource: { uri, mimeType, text: body } }
   }
@@ -275,10 +281,50 @@ async function buildNoteItem(
   }
 }
 
+async function buildArtifactItem(
+  item: Extract<AgentContextItem, { kind: 'artifact' }>,
+  deps: ContextBuilderDeps
+): Promise<ContentBlock> {
+  try {
+    const storage = deps.artifacts
+    if (!storage || item.storeId !== storage.storeId) {
+      throw new AgentContextError(
+        'Artifact store is unavailable or has changed'
+      )
+    }
+    const { content, ...snapshot } = storage.graph.readDocumentContext(
+      item.artifactId
+    )
+    const { artifact } = snapshot
+    const prefix =
+      'Artifact metadata snapshot (current; original frontmatter is historical):\n' +
+      JSON.stringify(snapshot) +
+      '\n\n' +
+      'Use artifacts.relations with direction and nextCursor to read remaining links. Read related documents explicitly via artifacts.get and artifacts.get_content; they are not embedded here.\n' +
+      'Cite documents with /#/artifacts?storeId=' +
+      encodeURIComponent(storage.storeId) +
+      '&selectedId=' +
+      encodeURIComponent(artifact.id) +
+      '. Related document citations use their own selectedId.\n' +
+      'Use artifacts.get_content with this artifact ID and offset=0 to read the full original UTF-8 file; follow nextOffset. bodyStartLine identifies the body. Cite artifact IDs and distinguish historical statuses from current accepted context.\n\nDocument body:\n'
+    return embed(
+      deps,
+      `githuman://artifact/${encodeURIComponent(item.storeId)}/${encodeURIComponent(artifact.id)}`,
+      `Artifact ${artifact.title}:`,
+      'text/markdown',
+      artifactBody(content.toString('utf8'), artifact.bodyStartLine),
+      prefix
+    )
+  } catch (error) {
+    throw asContextError(error)
+  }
+}
+
 function buildItem(
   item: AgentContextItem,
   deps: ContextBuilderDeps
 ): Promise<ContentBlock> {
+  if (item.kind === 'artifact') return buildArtifactItem(item, deps)
   if (item.kind === 'note') return buildNoteItem(item, deps)
   if (item.kind === 'diff') {
     return buildDiffItem(item, deps)

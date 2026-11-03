@@ -1,6 +1,16 @@
+import { applyArtifactSearchMigrations } from './artifact-search-migrations.ts'
+import { applyArtifactValidationMigrations } from './artifact-validation-migrations.ts'
+import { applyArtifactReviewMigrations } from './artifact-review-migrations.ts'
+import { applyArtifactGraphMigrations } from './artifact-graph-migrations.ts'
+import { applyArtifactMigrations } from './artifact-migrations.ts'
 import type { DatabaseSync } from 'node:sqlite'
 
 export function applyMigrations(db: DatabaseSync): void {
+  applyArtifactMigrations(db)
+  applyArtifactGraphMigrations(db)
+  applyArtifactReviewMigrations(db)
+  applyArtifactValidationMigrations(db)
+  applyArtifactSearchMigrations(db)
   db.exec(`
     CREATE TABLE IF NOT EXISTS note_storages (
       id TEXT PRIMARY KEY,

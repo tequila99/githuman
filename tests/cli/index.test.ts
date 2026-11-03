@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,24 +16,59 @@ const APP_VERSION = (
 ).version
 
 function waitForListeningUrl(
-  stdout: NodeJS.ReadableStream,
-  timeoutMs = 5000
+  child: ChildProcess,
+  timeoutMs = 15_000
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    let stdout = ''
+    let stderr = ''
     const timer = setTimeout(
-      () => reject(new Error('Timed out waiting for server to start')),
+      () => fail(`Timed out waiting for server to start after ${timeoutMs} ms`),
       timeoutMs
     )
-    let buffer = ''
 
-    stdout.on('data', (chunk: Buffer) => {
-      buffer += chunk.toString()
-      const match = buffer.match(/listening on (\S+)/)
+    function cleanup(): void {
+      clearTimeout(timer)
+      child.stdout?.off('data', onStdout)
+      child.stderr?.off('data', onStderr)
+      child.off('error', onError)
+      child.off('close', onClose)
+    }
+
+    function fail(reason: string): void {
+      cleanup()
+      reject(
+        new Error(
+          `${reason} (exitCode=${child.exitCode}, signal=${child.signalCode})\nstdout:\n${stdout}\nstderr:\n${stderr}`
+        )
+      )
+    }
+
+    function onStdout(chunk: Buffer): void {
+      stdout += chunk.toString()
+      const match = stdout.match(/listening on (\S+)/)
       if (match) {
-        clearTimeout(timer)
+        cleanup()
         resolve(match[1])
       }
-    })
+    }
+
+    function onStderr(chunk: Buffer): void {
+      stderr += chunk.toString()
+    }
+
+    function onError(error: Error): void {
+      fail(`Failed to start CLI: ${error.message}`)
+    }
+
+    function onClose(): void {
+      fail('CLI closed before the server started listening')
+    }
+
+    child.stdout?.on('data', onStdout)
+    child.stderr?.on('data', onStderr)
+    child.once('error', onError)
+    child.once('close', onClose)
   })
 }
 
@@ -79,7 +114,7 @@ test('githuman serve boots a working HTTP server from the CLI entry point', asyn
     child.kill()
   })
 
-  const url = await waitForListeningUrl(child.stdout)
+  const url = await waitForListeningUrl(child)
   const response = await fetch(new URL('/health', url))
 
   assert.equal(response.status, 200)

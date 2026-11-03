@@ -1,9 +1,14 @@
 <script setup lang="ts">
+import AddToAgentButton from '@/components/buttons/AddToAgentButton.vue'
+import {
+  mdiCodeTags,
+  mdiDownloadOutline,
+  mdiLinkVariant,
+  mdiPencilOutline
+} from '@mdi/js'
 import { computed } from 'vue'
-import { useAgentStore } from '@/stores/agent-store'
-import { ADD_TO_CHAT_ICON } from '@/utils/agent-icon'
 import { useI18n } from 'vue-i18n'
-import { useAddNoteToAgent } from '@/composables/notes/use-add-note-to-agent'
+import { useNoteAgentContext } from '@/composables/notes/use-add-note-to-agent'
 import type { NoteDraft } from '@/stores/notes-store'
 import type { NoteEditorMode } from '@/composables/notes/use-note-editor'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
@@ -16,18 +21,17 @@ const props = defineProps<{
 const mode = defineModel<NoteEditorMode>({ required: true })
 const emit = defineEmits<{ insertLink: []; downloadAssets: [] }>()
 const { t } = useI18n()
-const addToAgent = useAddNoteToAgent()
-const agent = useAgentStore()
+const noteContext = useNoteAgentContext()
 const modes = computed(() => [
   {
     value: 'visual' as const,
-    icon: 'edit',
+    icon: mdiPencilOutline,
     label: t('notes.visual'),
     disabled: props.visualDisabled
   },
   {
     value: 'source' as const,
-    icon: 'code',
+    icon: mdiCodeTags,
     label: t('notes.source'),
     disabled: false
   }
@@ -45,25 +49,18 @@ const modes = computed(() => [
       "
       >{{ t('notes.status.' + status) }}</span
     >
-    <q-btn
-      v-if="agent.enabled"
-      flat
-      round
-      dense
+    <AddToAgentButton
+      tooltip
       color="grey-7"
-      :icon="ADD_TO_CHAT_ICON"
-      :aria-label="t('notes.addToAgent')"
-      @click="addToAgent(path)"
-    >
-      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
-        t('notes.addToAgent')
-      }}</q-tooltip>
-    </q-btn>
+      :label="t('notes.addToAgent')"
+      :context="() => noteContext(path)"
+    />
     <q-btn
+      class="app-icon-control"
       flat
       round
       dense
-      icon="download"
+      :icon="mdiDownloadOutline"
       :disable="status === 'conflict'"
       :aria-label="t('notes.externalAssets.title')"
       @click="emit('downloadAssets')"
@@ -83,7 +80,7 @@ const modes = computed(() => [
         :data-mode-button="option.value"
         flat
         dense
-        class="note-action"
+        class="app-icon-control note-action"
         :class="{ 'note-action-active': mode === option.value }"
         :icon="option.icon"
         :aria-label="option.label"
@@ -97,8 +94,8 @@ const modes = computed(() => [
     <q-btn
       flat
       dense
-      class="note-action"
-      icon="link"
+      class="app-icon-control note-action"
+      :icon="mdiLinkVariant"
       :aria-label="t('notes.insertLink')"
       @mousedown.prevent
       @click="emit('insertLink')"

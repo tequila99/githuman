@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiCalendarOutline, mdiPencilOutline } from '@mdi/js'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type {
@@ -50,9 +51,12 @@ const display = computed(() =>
         :class="{ 'note-property-empty': !display }"
         :aria-label="property.key"
         @click="start"
-        ><q-icon v-if="type === 'date'" name="calendar_today" size="14px" />{{
-          display || t('notes.propertyEmpty')
-        }}</button
+        ><q-icon
+          class="app-icon-neutral"
+          v-if="type === 'date'"
+          :name="mdiCalendarOutline"
+          size="14px"
+        />{{ display || t('notes.propertyEmpty') }}</button
       >
       <q-btn
         v-if="link"
@@ -60,8 +64,8 @@ const display = computed(() =>
         round
         dense
         size="xs"
-        icon="edit"
-        class="note-property-edit"
+        :icon="mdiPencilOutline"
+        class="app-icon-control note-property-edit"
         :aria-label="t('notes.editProperty')"
         @click="start"
       />

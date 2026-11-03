@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiDragVertical } from '@mdi/js'
 import { computed, ref, useTemplateRef, onBeforeUnmount } from 'vue'
 import { useQuasar, useElementSize } from 'quasar'
 import { useWindowStore } from '@/stores/windows/window-store'
@@ -91,7 +92,7 @@ async function activate(app: WindowApplication) {
       v-touch-pan.prevent.mouse="drag"
       class="window-dock__handle"
       :aria-label="t('windows.movePanel')"
-      ><q-icon name="drag_indicator"
+      ><q-icon class="app-icon-neutral" :name="mdiDragVertical"
     /></div>
     <div
       v-for="entry in entries"
@@ -105,7 +106,7 @@ async function activate(app: WindowApplication) {
       <q-btn
         flat
         :icon="entry.app.icon"
-        class="window-dock__button"
+        class="app-icon-control window-dock__button"
         :class="{
           'window-dock__button--running': entry.active || Boolean(entry.badge),
           'window-dock__button--active': entry.active

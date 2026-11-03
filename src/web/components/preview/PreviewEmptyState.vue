@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiFolderOpenOutline } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 
 const emit = defineEmits<{ openFile: [] }>()
@@ -7,12 +8,13 @@ const { t } = useI18n()
 
 <template>
   <div class="preview-empty column items-center justify-center q-pa-lg">
-    <q-icon name="folder_open" size="48px" class="text-grey-6" />
+    <q-icon :name="mdiFolderOpenOutline" size="48px" class="app-icon-neutral" />
     <div class="q-my-md text-grey-6">{{ t('windows.empty') }}</div>
     <q-btn
+      class="app-icon-control"
       outline
       color="primary"
-      icon="folder_open"
+      :icon="mdiFolderOpenOutline"
       :label="t('windows.openFile')"
       @click="emit('openFile')"
     />

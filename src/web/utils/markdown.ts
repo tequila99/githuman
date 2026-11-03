@@ -1,4 +1,5 @@
 import { headingSlug } from '../../shared/utils/heading-slug.ts'
+import { APP_ICONS } from '@/constants/icons'
 import MarkdownIt, { type Env, type Token } from 'markdown-it'
 import { NOTE_ASSET_ID_PATTERN } from '../../shared/notes/asset-formats.ts'
 import {
@@ -42,7 +43,7 @@ md.validateLink = href =>
 const renderImage = md.renderer.rules.image!
 md.renderer.rules.image = (tokens, index, options, env, self) => {
   const source = String(tokens[index]?.attrGet('src') ?? '')
-  if (NOTE_ASSET_URL.test(source)) {
+  if (!env?.disableImages && NOTE_ASSET_URL.test(source)) {
     return renderImage(tokens, index, options, env, self)
   }
   return md.utils.escapeHtml(tokens[index]?.content ?? '')
@@ -106,8 +107,8 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
   return (
     '<div class="agent-code">' +
     `<button type="button" class="agent-code__copy" data-copy data-tooltip="${label}" aria-label="${label}">` +
-    '<svg class="agent-code__copy-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12V1zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm0 16H8V7h11v14z"/></svg>' +
-    '<svg class="agent-code__done-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>' +
+    `<svg class="agent-code__copy-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="${APP_ICONS.copy}"/></svg>` +
+    `<svg class="agent-code__done-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="${APP_ICONS.done}"/></svg>` +
     '</button>' +
     rendered +
     '</div>'
@@ -142,6 +143,7 @@ md.renderer.rules.heading_open = (tokens, index, options, env, self) => {
 }
 
 interface RenderEnv extends Env {
+  disableImages?: boolean | undefined
   headingAnchors?: boolean
   /** Accessible name of the copy button on code blocks. */
   copyLabel?: string

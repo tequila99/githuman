@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiSourceBranch } from '@mdi/js'
 import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import type { QScrollArea } from 'quasar'
@@ -75,12 +76,13 @@ const scrollTarget = computed(() => scrollArea.value?.getScrollTarget() ?? null)
         "
       />
       <q-btn
+        class="app-icon-control"
         v-if="!browseMode"
         flat
         dense
         round
         size="sm"
-        icon="account_tree"
+        :icon="mdiSourceBranch"
         :color="diffListMode === 'tree' ? 'primary' : undefined"
         :aria-label="t('changes.listMode.tree')"
         :aria-pressed="diffListMode === 'tree'"

@@ -1,3 +1,4 @@
+import { isLocalPiLaunch } from '../../../src/server/adapters/pi-acp/launch.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -37,6 +38,25 @@ test('the four target agents have presets, pinned where verified', () => {
       /@0\.\d+\.\d+$/.test(a)
     )
   )
+})
+
+test('the default pi preset uses the shipped local bridge and still requires pi', () => {
+  const pi = DEFAULT_AGENT_PRESETS.find(preset => preset.id === 'pi')
+  assert.ok(pi)
+  assert.equal(isLocalPiLaunch(pi), true)
+  assert.equal(pi.command, process.execPath)
+  assert.equal(pi.requires, 'pi')
+  assert.equal(pi.autoApprovesEdits, true)
+  assert.deepEqual(pi.args.slice(1), ['pi-acp', '--stdio'])
+})
+
+test('an env-only pi override preserves the trusted launcher', t => {
+  const pi = loadAgentPresets(
+    withFile(t, JSON.stringify({ pi: { env: { EXAMPLE: 'literal-$value' } } }))
+  ).find(preset => preset.id === 'pi')
+  assert.ok(pi)
+  assert.equal(isLocalPiLaunch(pi), true)
+  assert.deepEqual(pi.env, { EXAMPLE: 'literal-$value' })
 })
 
 test('an override replaces command/args of a default and keeps its metadata', t => {

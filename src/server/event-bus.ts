@@ -6,6 +6,8 @@ export interface ServerEvent {
   type: ServerEventType
   /** Present for review/comment events; omitted for repository-wide events like 'files:changed'. */
   reviewId?: string
+  storeId?: string
+  storeEpoch?: number
 }
 
 export type ServerEventListener = (event: ServerEvent) => void

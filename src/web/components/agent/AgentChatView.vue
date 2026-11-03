@@ -3,6 +3,7 @@ import { computed, nextTick, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { type QScrollArea } from 'quasar'
 import { useAgentStore } from '@/stores/agent-store'
+import AgentSessionTasks from './AgentSessionTasks.vue'
 import AgentChatItem from './AgentChatItem.vue'
 import AgentChatBanners from './AgentChatBanners.vue'
 import AgentComposer from './AgentComposer.vue'
@@ -121,6 +122,8 @@ async function resume() {
       :error="entry.error"
       @disable-auto-approve="store.setAutoApprove(false, chatId)"
     />
+
+    <AgentSessionTasks :chat-id="chatId" :active="active" />
 
     <!-- Messages never grow wider than the panel: prose wraps, and wide
          blocks (code, tables, diffs) scroll inside themselves. -->

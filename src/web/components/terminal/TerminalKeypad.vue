@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiArrowDown, mdiArrowLeft, mdiArrowRight, mdiArrowUp } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 import type { TerminalKey } from '@/utils/terminal-keys'
 
@@ -36,15 +37,16 @@ const { t } = useI18n()
       @click="emit('control')"
     />
     <q-btn
+      class="app-icon-control"
       v-for="key in ['left', 'down', 'up', 'right'] as const"
       :key="key"
       flat
       :icon="
         {
-          left: 'arrow_back',
-          right: 'arrow_forward',
-          up: 'arrow_upward',
-          down: 'arrow_downward'
+          left: mdiArrowLeft,
+          right: mdiArrowRight,
+          up: mdiArrowUp,
+          down: mdiArrowDown
         }[key]
       "
       :disable="disabled"

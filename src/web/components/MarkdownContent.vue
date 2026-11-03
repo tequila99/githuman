@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { parseArtifactLink } from '@/utils/windows/artifact-link'
 import { computed, useTemplateRef, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -29,6 +30,7 @@ const OPEN_ROUTE_PREFIX = PROJECT_FILE_ROUTE + '?'
 const props = withDefaults(
   defineProps<{
     text: string
+    disableImages?: boolean
     headingAnchors?: boolean
     mermaidDebounce?: number
     previewSource?: PreviewSource
@@ -52,6 +54,7 @@ const repository = useRepositoryStore()
 const projectFiles = useProjectFilesStore()
 const html = computed(() =>
   renderMarkdown(props.text, {
+    disableImages: props.disableImages,
     copyLabel: t('agent.code.copy'),
     headingAnchors: props.headingAnchors,
     fileLink: props.fileLinks ? rewriteFileLink : undefined
@@ -73,6 +76,7 @@ watchEffect(() => {
 })
 function rewriteFileLink(href: string): string {
   if (!repository.info || !projectFiles.ready) return href
+  if (parseArtifactLink(href, window.location.href)) return href
   const source = props.previewSource
   try {
     const link = parseProjectFileLink(href, {
@@ -93,6 +97,34 @@ function rewriteFileLink(href: string): string {
     return router.resolve(PROJECT_FILE_ROUTE + '?' + PROJECT_FILE_INVALID_QUERY)
       .href
   }
+}
+function openArtifactLink(event: MouseEvent): boolean {
+  const anchor =
+    event.target instanceof Element ? event.target.closest('a') : null
+  if (!anchor || !body.value?.contains(anchor)) return false
+  const link = parseArtifactLink(
+    anchor.getAttribute('href') ?? '',
+    window.location.href
+  )
+  if (!link) return false
+  if (
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    event.altKey ||
+    event.button !== 0
+  ) {
+    return true
+  }
+  event.preventDefault()
+  preview.open(
+    'markdown',
+    { type: 'artifact', ...link },
+    {
+      title: anchor.textContent?.trim() || t('windows.preview')
+    }
+  )
+  return true
 }
 async function openFileLink(event: MouseEvent): Promise<boolean> {
   if (!props.fileLinks) return false
@@ -154,7 +186,13 @@ function openDiagram(event: Event) {
 }
 
 async function onClick(event: MouseEvent) {
-  if (event.defaultPrevented || (await openFileLink(event))) return
+  if (
+    event.defaultPrevented ||
+    openArtifactLink(event) ||
+    (await openFileLink(event))
+  ) {
+    return
+  }
   const button =
     event.target instanceof Element
       ? event.target.closest<HTMLElement>('[data-copy]')

@@ -1,3 +1,4 @@
+import { localPiLaunch } from '../adapters/pi-acp/launch.ts'
 import { isSystemError } from '../utils/system-error.ts'
 import { readFileSync } from 'node:fs'
 import { Type } from '@sinclair/typebox'
@@ -8,10 +9,8 @@ import type { AgentPreset } from '../../shared/agents/types.ts'
 import type { AgentPresetInfo } from '../../shared/agents/types.ts'
 
 /**
- * Packages are pinned to the versions the ADR 0023 spike was run against —
- * `npx -y` otherwise executes whatever was published last. Cursor and Codex
- * are not verified yet (Codex's adapter moved to the agentclientprotocol org
- * after zed-industries/codex-acp was archived) and stay unpinned.
+ * Pin external adapters where verified. The local pi bridge uses the installed runtime.
+ * Cursor and Codex keep their existing launch configuration.
  */
 export const DEFAULT_AGENT_PRESETS: readonly AgentPreset[] = [
   {
@@ -24,8 +23,7 @@ export const DEFAULT_AGENT_PRESETS: readonly AgentPreset[] = [
   {
     id: 'pi',
     title: 'pi',
-    command: 'npx',
-    args: ['-y', 'pi-acp@0.0.34'],
+    ...localPiLaunch(),
     requires: 'pi',
     autoApprovesEdits: true
   },

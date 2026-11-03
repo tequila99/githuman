@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiAt, mdiFileUploadOutline, mdiPlus } from '@mdi/js'
 import { useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 defineProps<{ disabled: boolean }>()
@@ -27,8 +28,8 @@ function onFilesPicked(event: Event) {
       dense
       flat
       size="sm"
-      icon="add"
-      class="q-ma-xs"
+      :icon="mdiPlus"
+      class="app-icon-control q-ma-xs"
       :disable="disabled"
       :aria-label="t('agent.attach.menu')"
     >
@@ -36,13 +37,17 @@ function onFilesPicked(event: Event) {
         <q-list dense class="agent-menu agent-add-menu">
           <q-item v-close-popup clickable @click="fileInput?.click()">
             <q-item-section avatar>
-              <q-icon name="upload_file" size="16px" />
+              <q-icon
+                class="app-icon-neutral"
+                :name="mdiFileUploadOutline"
+                size="16px"
+              />
             </q-item-section>
             <q-item-section>{{ t('agent.attach.uploadFile') }}</q-item-section>
           </q-item>
           <q-item v-close-popup clickable @click="emit('mention')">
             <q-item-section avatar>
-              <q-icon name="alternate_email" size="16px" />
+              <q-icon class="app-icon-neutral" :name="mdiAt" size="16px" />
             </q-item-section>
             <q-item-section>{{ t('agent.attach.mentionFile') }}</q-item-section>
           </q-item>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiDownloadOutline } from '@mdi/js'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { ref } from 'vue'
 import { exportFile } from 'quasar'
@@ -36,13 +37,14 @@ async function download() {
 
 <template>
   <q-btn
+    class="app-icon-control"
     v-bind="$attrs"
     padding="4px"
     flat
     dense
     round
     :loading="downloading"
-    icon="download"
+    :icon="mdiDownloadOutline"
     :aria-label="tooltip"
     @click.stop="download"
   >

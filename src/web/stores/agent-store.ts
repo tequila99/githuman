@@ -69,6 +69,7 @@ export const useAgentStore = defineStore('agent', () => {
   const creating = ref(false)
   /** Problems that belong to no chat: loading agents, creating a chat. */
   const error = ref<string | null>(null)
+  const artifactActionsVersion = ref(0)
   /** The new-chat dialog; `context` waits for the chat it creates. */
   const newChatDialog = ref<{ open: boolean; context: AgentContextItem[] }>({
     open: false,
@@ -182,7 +183,9 @@ export const useAgentStore = defineStore('agent', () => {
     const gone = order.value.filter(
       id => !live.has(id) && (chats.value[id]?.seq ?? 0) <= before
     )
-    for (const id of gone) removeChat(id)
+    for (const id of gone) {
+      removeChat(id)
+    }
     for (const id of orphans.keys()) {
       if (!live.has(id)) orphans.delete(id)
     }
@@ -276,6 +279,9 @@ export const useAgentStore = defineStore('agent', () => {
         states.set(state.sessionId, state)
       }
     })
+    es.addEventListener('artifact-actions', () => {
+      if (stream === es) artifactActionsVersion.value++
+    })
     es.addEventListener('sessions', () => {
       if (stream !== es) return
       void refreshSessions()
@@ -284,6 +290,7 @@ export const useAgentStore = defineStore('agent', () => {
     es.addEventListener('open', () => {
       if (stream !== es) return
       void refreshSessions()
+      artifactActionsVersion.value++
     })
     es.addEventListener('error', () => {
       if (stream !== es) return
@@ -502,6 +509,7 @@ export const useAgentStore = defineStore('agent', () => {
   onScopeDispose(disconnectStream)
 
   return {
+    artifactActionsVersion,
     presets,
     enabled,
     initialized,

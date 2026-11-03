@@ -1,3 +1,4 @@
+import { isUuid } from '../../../shared/utils/is-uuid.ts'
 import {
   PREVIEW_MIN_SCALE,
   PREVIEW_MAX_SCALE
@@ -20,6 +21,9 @@ export function previewFingerprint(text: string): string {
   return `${text.length}:${hash >>> 0}`
 }
 export function previewSourceKey(source: PreviewSource): string {
+  if (source.type === 'artifact') {
+    return JSON.stringify(['artifact', source.storeId, source.artifactId])
+  }
   if (source.type === 'local') return JSON.stringify(['local', source.id])
   return source.type === 'file'
     ? JSON.stringify(['file', source.ref, source.path])
@@ -54,6 +58,17 @@ export function parsePreviewTab(value: unknown): PreviewTab | null {
     raw.ref
   ) {
     source = { type: 'file', path: raw.path, ref: raw.ref }
+  } else if (
+    raw.type === 'artifact' &&
+    isUuid(raw.storeId) &&
+    isUuid(raw.artifactId) &&
+    (value.kind === 'markdown' || value.kind === 'diagram')
+  ) {
+    source = {
+      type: 'artifact',
+      storeId: raw.storeId,
+      artifactId: raw.artifactId
+    }
   } else if (
     raw.type === 'message' &&
     typeof raw.sessionId === 'string' &&

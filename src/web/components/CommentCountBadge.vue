@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiCommentOutline } from '@mdi/js'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { useI18n } from 'vue-i18n'
 
@@ -13,7 +14,11 @@ const { t } = useI18n()
     class="comment-count-badge relative-position inline-block"
     :class="{ 'comment-count-badge--compact': compact }"
   >
-    <q-icon name="mode_comment" :size="compact ? '15px' : '20px'" />
+    <q-icon
+      class="app-icon-neutral"
+      :name="mdiCommentOutline"
+      :size="compact ? '15px' : '20px'"
+    />
     <q-badge color="primary" floating rounded>{{ count }}</q-badge>
     <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
       t('reviews.comments.count', { count })

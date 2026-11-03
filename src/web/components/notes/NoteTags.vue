@@ -20,6 +20,7 @@ const { isDark } = useAppTheme()
 </script>
 <template>
   <q-select
+    class="document-tags"
     :key="String(isDark)"
     :dark="isDark"
     v-model="model"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiCheck, mdiClose, mdiPlus } from '@mdi/js'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { NotePropertyValue } from '../../../shared/notes/document.ts'
@@ -37,23 +38,27 @@ const types = computed(() =>
       :label="t('notes.propertyType')"
     />
     <q-btn
+      class="app-icon-control"
       type="submit"
       flat
       dense
-      icon="check"
+      :icon="mdiCheck"
       :aria-label="t('notes.addProperty')"
       :disable="!name.trim()"
     />
     <q-btn
+      class="app-icon-control"
       flat
       dense
-      icon="close"
+      :icon="mdiClose"
       :aria-label="t('notes.done')"
       @click="cancel"
     />
   </form>
   <button v-else type="button" class="note-properties-add" @click="start"
-    ><q-icon name="add" size="20px" />{{ t('notes.addProperty') }}</button
+    ><q-icon class="app-icon-neutral" :name="mdiPlus" size="20px" />{{
+      t('notes.addProperty')
+    }}</button
   >
 </template>
 <style scoped>

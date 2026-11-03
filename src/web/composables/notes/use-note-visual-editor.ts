@@ -17,6 +17,7 @@ import {
 } from '@/utils/markdown'
 import { errorMessage } from '@/utils/error-message'
 import { configureNoteVisualEditor } from '@/utils/notes/visual-editor-config'
+import { EDITOR_ICON_CONFIG } from '@/utils/notes/editor-icons'
 
 export function useNoteVisualEditor(
   root: MaybeRefOrGetter<HTMLElement | null>,
@@ -61,7 +62,9 @@ export function useNoteVisualEditor(
         root: element,
         defaultValue: normalized,
         featureConfigs: {
+          ...EDITOR_ICON_CONFIG,
           [Crepe.Feature.Toolbar]: {
+            ...EDITOR_ICON_CONFIG[Crepe.Feature.Toolbar],
             buildToolbar(builder) {
               for (const group of builder.build()) {
                 const link = group.items.find(item => item.key === 'link')

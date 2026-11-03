@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiClose } from '@mdi/js'
 import { computed, shallowRef, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useQuasar } from 'quasar'
@@ -6,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { PAIRING_CODE_LENGTH } from '@/api/types'
 import { useDevicesStore } from '@/stores/devices-store'
 import { useCountdown } from '@/composables/use-countdown'
+import DialogHeader from '@/components/DialogHeader.vue'
 import { errorMessage } from '@/utils/error-message'
 
 const $q = useQuasar()
@@ -76,7 +78,7 @@ function postpone() {
         color: 'white',
         handler: () => setPostponed(device.id, false)
       },
-      { icon: 'close', color: 'white', round: true, dense: true }
+      { icon: mdiClose, color: 'white', round: true, dense: true }
     ]
   })
 }
@@ -105,12 +107,19 @@ async function answer(approve: boolean) {
 </script>
 
 <template>
-  <q-dialog :model-value="request !== undefined" @update:model-value="postpone">
+  <q-dialog
+    :model-value="request !== undefined"
+    :persistent="busy"
+    @update:model-value="postpone"
+  >
     <q-card v-if="request" style="width: 360px; max-width: 90vw">
       <q-form @submit="answer(true)">
-        <q-card-section class="q-pb-none text-h6">
-          {{ t('devices.request.title') }}
-        </q-card-section>
+        <DialogHeader
+          class="q-pb-none"
+          :title="t('devices.request.title')"
+          :close-label="t('common.filters.close')"
+          :disable-close="busy"
+        />
         <q-card-section class="q-gutter-y-sm">
           <div>
             {{

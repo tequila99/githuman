@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiSendOutline } from '@mdi/js'
 import { ref, useTemplateRef } from 'vue'
 import type { QInput } from 'quasar'
 import { useI18n } from 'vue-i18n'
@@ -53,9 +54,10 @@ function sendSignal(signal: 'interrupt' | 'eof') {
     >
       <template #append
         ><q-btn
+          class="app-icon-control"
           flat
           dense
-          icon="send"
+          :icon="mdiSendOutline"
           :aria-label="t('terminal.send')"
           @click="submit"
       /></template>

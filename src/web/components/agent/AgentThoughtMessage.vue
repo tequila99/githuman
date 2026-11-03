@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiHeadOutline } from '@mdi/js'
 import { useI18n } from 'vue-i18n'
 
 defineProps<{ text: string }>()
@@ -9,9 +10,9 @@ const { t } = useI18n()
   <q-expansion-item
     dense
     dense-toggle
-    class="agent-item agent-thought text-grey-6"
+    class="app-icon-expansion agent-item agent-thought text-grey-6"
     :label="t('agent.thinking')"
-    icon="psychology"
+    :icon="mdiHeadOutline"
   >
     <div class="q-px-md q-pb-xs agent-thought__text">{{ text }}</div>
   </q-expansion-item>

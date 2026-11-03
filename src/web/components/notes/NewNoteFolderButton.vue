@@ -4,6 +4,7 @@ import { mdiFolderPlusOutline } from '@mdi/js'
 </script>
 <template>
   <q-btn
+    class="app-icon-control"
     flat
     dense
     round

@@ -88,3 +88,11 @@ DOM references, visual copies and transition promises stay in memory. When relea
 on close, use `afterWindowTransition(id, release)` so the visual copy retains its source until
 completion. PDF renderers and workers follow the live component's visibility lifecycle; the
 visual copy owns canvas pixels and does not retain a worker or document.
+
+Markdown links to GitHuman artifacts (`/#/artifacts?storeId=…&selectedId=…` or
+`githuman://artifact/<storeId>/<artifactId>`) open in the existing preview window.
+The preview stores the artifact identity, reads verified content through the artifact
+API, and displays the Markdown body with the current title. Reopening the same
+artifact activates its existing tab. Ctrl/Meta/Shift clicks retain browser behavior.
+External web links are not fetched into the preview. Project Markdown, PDF and image
+links continue to use the existing project-file preview and access checks.
