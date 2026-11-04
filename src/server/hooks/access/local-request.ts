@@ -7,6 +7,12 @@ import {
   sameOrigin
 } from '../../utils/request-origin.ts'
 
+/** True when the `Host` header names this machine (`localhost`, `127.0.0.1`, `[::1]`). */
+export function isLoopbackHostHeader(host: string | undefined): boolean {
+  const target = parseHost(host)
+  return target !== undefined && isLoopbackHost(target.hostname)
+}
+
 /**
  * True when the request comes from a page or a client on this machine
  * (ADR 0079). The `Host` header alone is not proof: with a bind on

@@ -14,7 +14,8 @@ import type {
 } from '@/api/types'
 
 export const artifactActionsApi = {
-  list: () => apiGet<ArtifactActionList>('/api/artifact-actions'),
+  list: (signal?: AbortSignal) =>
+    apiGet<ArtifactActionList>('/api/artifact-actions', signal),
   inspect: (id: string, signal?: AbortSignal) =>
     apiGet<ArtifactActionInspection>(
       '/api/artifact-actions/' + encodeURIComponent(id),

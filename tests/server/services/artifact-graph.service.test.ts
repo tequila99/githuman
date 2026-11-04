@@ -14,7 +14,8 @@ import { ArtifactStorageService } from '../../../src/server/services/artifact-st
 import {
   previewArtifactChangeSet,
   artifactIssues,
-  graphIssues
+  graphIssues,
+  graphIssuesMessage
 } from '../../../src/server/services/artifact-graph-validation.ts'
 import {
   ArtifactConflictError,
@@ -1525,4 +1526,94 @@ test('0110: a structural link still expands through a reference target', () => {
   )
   assert.ok(result.affectedIds.includes(base.id))
   assert.ok(result.affectedIds.includes(supplement.id))
+})
+
+function missingVersion(id: string) {
+  return {
+    code: 'missing_expected_version',
+    artifactIds: [id],
+    message: 'The affected artifact needs an expected version.'
+  }
+}
+
+test('graph issue message names artifacts, current versions and merges repeats', () => {
+  assert.equal(
+    graphIssuesMessage(
+      [
+        missingVersion('a'),
+        missingVersion('b'),
+        missingVersion('a'),
+        { code: 'transition_unavailable', artifactIds: [], message: 'No.' }
+      ],
+      [
+        { id: 'a', version: 2 },
+        { id: 'b', version: 1 }
+      ]
+    ),
+    'missing_expected_version [a@v2, b@v1]: The affected artifact needs an expected version. transition_unavailable: No.'
+  )
+  const many = Array.from({ length: 25 }, (_, index) => ({
+    code: `code_${index}`,
+    artifactIds: Array.from({ length: 22 }, (__, item) => `id${item}`),
+    message: 'Problem.'
+  }))
+  const text = graphIssuesMessage(many)
+  assert.match(text, /code_19 \[id0, .*id19, \+2 more\]/)
+  assert.doesNotMatch(text, /code_20/)
+  assert.match(text, /5 more issues\. Preview the change set/)
+})
+
+test('0119: a general accepted document does not enter the set', () => {
+  const general = fixture('accepted')
+  const subject = fixture('draft')
+  const result = previewArtifactChangeSet(
+    [general, subject],
+    change([subject], subject)
+  )
+  assert.deepEqual(result.affectedIds, [subject.id])
+  assert.deepEqual(result.errors, [])
+})
+
+test('0119: an accepted document of the same task is context and does not expand the set', () => {
+  const taskIds = [randomUUID()]
+  const decision = fixture('accepted', { taskIds })
+  const decisionDraft = fixture('draft', {
+    relations: [{ kind: 'supplements', targetId: decision.id }]
+  })
+  const subject = fixture('draft', { taskIds })
+  const result = previewArtifactChangeSet(
+    [decision, decisionDraft, subject],
+    change([subject, decision], subject)
+  )
+  assert.deepEqual(result.affectedIds, [decision.id, subject.id].sort())
+  assert.deepEqual(result.errors, [])
+})
+
+test('0119: a deleted neighbour does not enter the set', () => {
+  const removed = fixture('deleted')
+  const subject = fixture('draft', {
+    relations: [{ kind: 'parent', targetId: removed.id }]
+  })
+  const result = previewArtifactChangeSet(
+    [removed, subject],
+    change([subject], subject)
+  )
+  assert.deepEqual(result.affectedIds, [subject.id])
+})
+
+test('0119: an old issue blocks only when it touches the set', () => {
+  const broken = fixture('draft', {
+    relations: [{ kind: 'references', targetId: randomUUID() }]
+  })
+  const subject = fixture('draft')
+  const unrelated = previewArtifactChangeSet(
+    [broken, subject],
+    change([subject], subject)
+  )
+  assert.deepEqual(unrelated.errors, [])
+  const touched = previewArtifactChangeSet(
+    [broken, subject],
+    change([broken], broken)
+  )
+  assert.ok(touched.errors.some(error => error.code === 'missing_target'))
 })

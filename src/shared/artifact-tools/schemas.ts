@@ -3,6 +3,7 @@ import {
   ArtifactSearchBody,
   ArtifactValidationReportQuery,
   ArtifactChangeSetProposeBody,
+  ArtifactChangeSetSchema,
   ArtifactValidationPrepareBody,
   ArtifactValidationStartBody,
   ArtifactValidationSubmitBody,
@@ -32,6 +33,7 @@ import { MAX_ARTIFACT_BODY_BYTES } from '../artifacts/constants.ts'
 // Keep HTTP and MCP input contracts identical, including rejection of actor overrides.
 export const ArtifactToolSchemas = {
   'artifacts.search': ArtifactSearchBody,
+  'change_sets.preview': ArtifactChangeSetSchema,
   'change_sets.propose': ArtifactChangeSetProposeBody,
   'change_sets.get': ArtifactParams,
   'change_sets.commit': Type.Object(
@@ -79,6 +81,14 @@ export const ArtifactToolSchemas = {
     {
       additionalProperties: false,
       description: 'Read assigned context sequentially.'
+    }
+  ),
+  'validations.read_next': Type.Object(
+    { ...ArtifactParams.properties },
+    {
+      additionalProperties: false,
+      description:
+        'Read the next unread assigned content in manifest order, several documents per call.'
     }
   ),
   'validations.submit': Type.Object(

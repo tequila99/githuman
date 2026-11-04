@@ -5,7 +5,10 @@ import { takeWithinBytes } from '../utils/take-within-bytes.ts'
 import { ArtifactTypeService } from './artifact-type.service.ts'
 import { TaskService } from './task.service.ts'
 import { ArtifactGraphService } from './artifact-graph.service.ts'
-import { artifactIssues } from './artifact-graph-validation.ts'
+import {
+  artifactIssues,
+  graphIssuesMessage
+} from './artifact-graph-validation.ts'
 import { ArtifactGraphRepository } from '../repositories/artifact-graph.repo.ts'
 import { TaskRepository } from '../repositories/task.repo.ts'
 import { normalizeArtifact } from '../../shared/artifacts/normalize.ts'
@@ -882,7 +885,7 @@ export class ArtifactStorageService {
       this.storeId
     )
     if (issues.length) {
-      throw new ArtifactInputError(issues.map(issue => issue.message).join(' '))
+      throw new ArtifactInputError(graphIssuesMessage(issues))
     }
   }
 

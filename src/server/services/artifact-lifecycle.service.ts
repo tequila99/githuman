@@ -1,6 +1,7 @@
 import { errorMessage } from '../../shared/utils/error-message.ts'
 import type {
   ArtifactActionInspection,
+  ArtifactActionListItem,
   ArtifactValidationInspection
 } from '../../shared/artifacts/types.ts'
 import { randomUUID } from 'node:crypto'
@@ -28,6 +29,7 @@ import {
 import type { ArtifactStorageService } from './artifact-storage.service.ts'
 import {
   canonicalChangeSet,
+  graphIssuesMessage,
   previewArtifactChangeSet
 } from './artifact-graph-validation.ts'
 import {
@@ -46,10 +48,25 @@ import { ArtifactTransitionRepository } from '../repositories/artifact-transitio
 import { ArtifactTransitionService } from './artifact-transition.service.ts'
 
 // Manifest changes invalidate all earlier semantic conclusions.
-const VALIDATION_RULES_VERSION = 2
+const VALIDATION_RULES_VERSION = 3
+// The server is the author of a proposal version that only follows the grown set (ADR 0121).
+const REBASE_ACTOR: ArtifactActor = { kind: 'system', id: 'validation-rebase' }
+// Preview errors that a rebase can fix: they only name versions of the set context.
+const REBASE_CODES = new Set(['missing_expected_version', 'stale_version'])
+// The reason in the request list is cut to this length; the full text stays in the proposal.
+const ACTION_REASON_CHARS = 300
 
 export function artifactSessionId(actor: ArtifactActor): string {
   return actor.kind === 'user' ? `user:${actor.id}` : actor.id
+}
+
+/**
+ * The digest covers the affected set, not the store epoch. A store change outside
+ * the set does not make a running validation stale (ADR 0119).
+ */
+function setDigest(manifest: ValidationManifest): string {
+  const { validationEpoch: _epoch, ...content } = manifest
+  return artifactActionDigest(content)
 }
 
 export class ArtifactLifecycleService {
@@ -158,7 +175,7 @@ export class ArtifactLifecycleService {
     const preview = this.preview(input.changeSet)
     if (preview.errors.length) {
       throw new ArtifactInputError(
-        preview.errors.map(item => item.message).join(' ')
+        graphIssuesMessage(preview.errors, preview.expectedVersions)
       )
     }
     const previous = input.id ? this.repository.proposal(input.id) : undefined
@@ -210,6 +227,30 @@ export class ArtifactLifecycleService {
         problem
       }
     })
+  }
+  /** The pending requests, each with a short summary so the user can tell them apart. */
+  listActions(): ArtifactActionListItem[] {
+    return this.storage.catalog.readSnapshot(() =>
+      this.authorization.list().map(pending => {
+        try {
+          const { changeSet } = this.repository.proposalVersion(
+            pending.action.changeSetId,
+            pending.action.version
+          )
+          return {
+            ...pending,
+            summary: {
+              command: changeSet.command,
+              reason: changeSet.reason.slice(0, ACTION_REASON_CHARS),
+              documentCount: changeSet.targetStatuses.length
+            }
+          }
+        } catch {
+          // A proposal that cannot be read must not hide the request itself.
+          return { ...pending, summary: null }
+        }
+      })
+    )
   }
   inspectAction(id: string, actor: ArtifactActor): ArtifactActionInspection {
     return this.storage.catalog.readSnapshot(() => {
@@ -295,7 +336,7 @@ export class ArtifactLifecycleService {
       changeSetId,
       version,
       manifest,
-      manifestDigest: artifactActionDigest(manifest),
+      manifestDigest: setDigest(manifest),
       state: 'prepared',
       validatorSessionId: null,
       owner: null,
@@ -308,7 +349,7 @@ export class ArtifactLifecycleService {
     const preview = this.preview(proposal.changeSet)
     if (preview.errors.length) {
       throw new ArtifactConflictError(
-        preview.errors.map(item => item.message).join(' ')
+        graphIssuesMessage(preview.errors, preview.expectedVersions)
       )
     }
     const artifacts = preview.affectedIds.map(
@@ -323,13 +364,84 @@ export class ArtifactLifecycleService {
       requiredContentIds: artifacts.map(item => item.id)
     }
   }
+  /**
+   * Gives the next proposal version and manifest of a running validation when only
+   * the context of its set changed (ADR 0121). The caller owns the transaction.
+   * Returns undefined when the change needs a decision of the proposal author.
+   */
+  rebaseInTransaction(validation: StoredValidation):
+    | {
+        proposal: StoredChangeSet
+        manifest: ValidationManifest
+        digest: string
+      }
+    | undefined {
+    const proposal = this.repository.proposal(validation.changeSetId)
+    if (
+      proposal.version !== validation.version ||
+      validation.manifest.rulesVersion !== VALIDATION_RULES_VERSION
+    ) {
+      return undefined
+    }
+    const subjects = new Set(proposal.changeSet.subjectIds)
+    const preview = this.preview(proposal.changeSet)
+    const decided = proposal.changeSet.supplementDispositions
+      .map(item => item.artifactId)
+      .sort()
+    if (
+      !preview.errors.every(
+        issue =>
+          REBASE_CODES.has(issue.code) &&
+          issue.artifactIds.every(id => !subjects.has(id))
+      ) ||
+      canonicalJson(preview.requiredSupplementDispositions) !==
+        canonicalJson(decided)
+    ) {
+      return undefined
+    }
+    const command = proposal.changeSet.command
+    // A historical command has no current proposal form; its validation stays stale.
+    if (command === 'submit_review') {
+      return undefined
+    }
+    let next = proposal
+    if (preview.errors.length) {
+      next = this.proposeInTransaction(
+        {
+          requestId: `validation-rebase:${validation.id}:${proposal.version}`,
+          id: proposal.id,
+          expectedVersion: proposal.version,
+          changeSet: {
+            ...proposal.changeSet,
+            command,
+            expectedVersions: preview.expectedVersions
+          }
+        },
+        REBASE_ACTOR
+      )
+    }
+    const manifest = this.manifest(next)
+    return { proposal: next, manifest, digest: setDigest(manifest) }
+  }
   assertFresh(validation: StoredValidation): StoredChangeSet {
     const proposal = this.repository.proposal(validation.changeSetId)
+    let digest: string | undefined
+    try {
+      digest = setDigest(this.manifest(proposal))
+    } catch (error) {
+      // A store change can make the change set invalid, for example a new accepted
+      // artifact without tasks. That is staleness too, so the caller sees one error.
+      if (!(error instanceof ArtifactConflictError)) {
+        throw error
+      }
+      throw new ArtifactConflictError(
+        `VALIDATION_STALE: manifest changed (${error.message}); prepare a new validation.`
+      )
+    }
     if (
       validation.manifest.rulesVersion !== VALIDATION_RULES_VERSION ||
       proposal.version !== validation.version ||
-      artifactActionDigest(this.manifest(proposal)) !==
-        validation.manifestDigest
+      digest !== validation.manifestDigest
     ) {
       throw new ArtifactConflictError(
         'VALIDATION_STALE: manifest changed; prepare a new validation.'

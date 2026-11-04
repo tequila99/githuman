@@ -102,6 +102,10 @@ export async function startServer(
     artifactPrefix: resolveDbPrefix(options.dbPrefix),
     watchFiles: true,
     apiDocs: options.apiDocs === true,
+    // The server logs are off; validation debug lines go to the console.
+    ...(options.debugValidation === true
+      ? { onValidationDebug: (line: string) => console.log(line) }
+      : {}),
     allowedHosts: options.allowedHosts ?? [],
     onPairingRequest: device =>
       console.log(

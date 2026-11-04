@@ -7,12 +7,23 @@ const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit'
 })
 
+// Short-lived values, such as a request deadline, need no date.
+const TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  hour: '2-digit',
+  minute: '2-digit'
+})
+
 // Calendar inputs use a fixed format independent of the display locale.
 const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 export function formatDateTime(value: string | number): string {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? '—' : DATE_FORMATTER.format(date)
+}
+
+export function formatTime(value: string | number): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '—' : TIME_FORMATTER.format(date)
 }
 
 export function isCalendarDate(value: string): boolean {

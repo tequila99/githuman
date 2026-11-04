@@ -8,6 +8,11 @@ import { canonicalJson } from '../../shared/utils/canonical-json.ts'
 import { sha256Hex } from '../utils/hash.ts'
 import { allowedTransition } from '../../shared/artifact-transitions/transitions.ts'
 
+// A large store can give hundreds of issues. The full list is in the change set preview.
+const MAX_REPORTED_GRAPH_ISSUES = 20
+// Limit for artifact IDs in one issue line; the rest show as a count.
+const MAX_REPORTED_ISSUE_ARTIFACTS = 20
+
 // Status that a lifecycle command gives to each of its subjects.
 const COMMAND_STATUS: Partial<
   Record<ArtifactHistoricalChangeSet['command'], Artifact['status']>
@@ -21,6 +26,44 @@ const COMMAND_STATUS: Partial<
 }
 
 type EdgeKind = 'hierarchy' | 'priority' | 'lineage'
+
+/**
+ * Builds one error text that names the artifacts of each issue.
+ * Without the IDs and current versions, a caller cannot correct the change set.
+ * Issues with the same code and text merge into one line.
+ */
+export function graphIssuesMessage(
+  issues: readonly GraphIssue[],
+  versions: readonly { id: string; version: number }[] = []
+): string {
+  const current = new Map(versions.map(item => [item.id, item.version]))
+  const groups = new Map<string, { issue: GraphIssue; ids: Set<string> }>()
+  for (const issue of issues) {
+    const key = `${issue.code}\0${issue.message}`
+    const group = groups.get(key) ?? { issue, ids: new Set<string>() }
+    for (const id of issue.artifactIds) group.ids.add(id)
+    groups.set(key, group)
+  }
+  const lines = [...groups.values()].map(({ issue, ids }) => {
+    const all = [...ids].map(id =>
+      current.has(id) ? `${id}@v${current.get(id)}` : id
+    )
+    const shown = all.slice(0, MAX_REPORTED_ISSUE_ARTIFACTS)
+    if (all.length > shown.length) {
+      shown.push(`+${all.length - shown.length} more`)
+    }
+    return shown.length
+      ? `${issue.code} [${shown.join(', ')}]: ${issue.message}`
+      : `${issue.code}: ${issue.message}`
+  })
+  const shown = lines.slice(0, MAX_REPORTED_GRAPH_ISSUES)
+  if (lines.length > shown.length) {
+    shown.push(
+      `${lines.length - shown.length} more issues. Preview the change set for the full list.`
+    )
+  }
+  return shown.join(' ')
+}
 
 // Each kind is a separate graph that must stay acyclic.
 function edgeTargets(kind: EdgeKind, artifact: Artifact): string[] {
@@ -634,7 +677,7 @@ export function previewArtifactChangeSet(
       replacements.set(relation.targetId, node.id)
     }
   }
-  errors.push(...graphIssues([...post.values()], canonical.storeId))
+  const postIssues = graphIssues([...post.values()], canonical.storeId)
   // Compute the component in the union of the old and proposed graphs.
   // A references target enters the set for existence checks only. It does not expand the set.
   const referenceTargets = new Set<string>()
@@ -642,7 +685,8 @@ export function previewArtifactChangeSet(
   while (changed) {
     changed = false
     const add = (id: string, viaReference = false) => {
-      if (!nodes.has(id)) return
+      // Deleted documents were checked when deleted; graph rules still see their metadata.
+      if (!nodes.has(id) || nodes.get(id)!.status === 'deleted') return
       if (!affected.has(id)) {
         affected.add(id)
         if (viaReference) referenceTargets.add(id)
@@ -678,14 +722,24 @@ export function previewArtifactChangeSet(
           add(relation.targetId, true)
         }
       }
+      // An accepted document of the same task is context only: it does not expand the set (ADR 0119).
       if (
         node.status === 'accepted' &&
-        (node.taskIds.length === 0 || node.taskIds.some(id => tasks.has(id)))
+        node.taskIds.some(id => tasks.has(id))
       ) {
-        add(node.id)
+        add(node.id, true)
       }
     }
   }
+  // An old issue in an unrelated part of the store does not block this change set.
+  const before = new Set(graphIssues(current, canonical.storeId).map(issueKey))
+  errors.push(
+    ...postIssues.filter(
+      issue =>
+        !before.has(issueKey(issue)) ||
+        issue.artifactIds.some(id => affected.has(id))
+    )
+  )
   for (const expected of canonical.expectedVersions) {
     if (nodes.get(expected.id)?.metadataVersion !== expected.version) {
       error(
@@ -736,6 +790,10 @@ export function previewArtifactChangeSet(
       .sort((a, b) => a.id.localeCompare(b.id)),
     includedIn
   }
+}
+
+function issueKey(issue: GraphIssue): string {
+  return canonicalJson([issue.code, issue.artifactIds])
 }
 
 function isAncestor(

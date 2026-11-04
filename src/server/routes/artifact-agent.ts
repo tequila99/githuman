@@ -49,6 +49,12 @@ export async function artifactAgentRoutes(
       )
     ],
     [
+      'change_sets.preview',
+      checked(ArtifactToolSchemas['change_sets.preview'], p =>
+        storage.graph.previewChangeSet(p)
+      )
+    ],
+    [
       'change_sets.propose',
       checked(ArtifactToolSchemas['change_sets.propose'], (p, a) =>
         storage.lifecycle.propose(p, a)
@@ -82,9 +88,11 @@ export async function artifactAgentRoutes(
     ],
     [
       'validations.report',
-      checked(ArtifactToolSchemas['validations.report'], p =>
-        storage.lifecycle.jobs.report(p.id, p.offset)
-      )
+      checked(ArtifactToolSchemas['validations.report'], (p, a) => {
+        const result = storage.lifecycle.jobs.report(p.id, p.offset)
+        storage.lifecycle.jobs.observe(p.id, a.id)
+        return result
+      })
     ],
     [
       'validations.history',
@@ -94,9 +102,11 @@ export async function artifactAgentRoutes(
     ],
     [
       'validations.get',
-      checked(ArtifactToolSchemas['validations.get'], p =>
-        storage.lifecycle.jobs.get(p.id)
-      )
+      checked(ArtifactToolSchemas['validations.get'], (p, a) => {
+        const result = storage.lifecycle.jobs.get(p.id)
+        storage.lifecycle.jobs.observe(p.id, a.id)
+        return result
+      })
     ],
     [
       'validations.manifest',
@@ -108,6 +118,12 @@ export async function artifactAgentRoutes(
       'validations.read',
       checked(ArtifactToolSchemas['validations.read'], (p, a) =>
         storage.lifecycle.jobs.read(p.id, a.id, p.key, p.offset)
+      )
+    ],
+    [
+      'validations.read_next',
+      checked(ArtifactToolSchemas['validations.read_next'], (p, a) =>
+        storage.lifecycle.jobs.readNext(p.id, a.id)
       )
     ],
     [

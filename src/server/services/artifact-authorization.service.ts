@@ -206,6 +206,27 @@ export class ArtifactAuthorizationService {
     }
   }
   status(id: string, sessionId: string) {
+    const known =
+      this.pending.get(id) ??
+      [...this.grants.values()].find(value => value.pendingActionId === id)
+    // The requester learns how its request ended, not only that it is gone.
+    if (known?.sessionId === sessionId && known.expiresAt <= this.now()) {
+      return {
+        id,
+        state: 'expired' as const,
+        authorizationId: null,
+        expiresAt: known.expiresAt
+      }
+    }
+    const revoked = known ? null : this.repository.revoked(id)
+    if (revoked?.sessionId === sessionId) {
+      return {
+        id,
+        state: 'revoked' as const,
+        authorizationId: null,
+        expiresAt: revoked.expiresAt ?? this.now()
+      }
+    }
     const value = this.describe(id)
     if (value.pending.sessionId !== sessionId) throw new ArtifactNotFoundError()
     return {
@@ -228,9 +249,14 @@ export class ArtifactAuthorizationService {
         at: this.now()
       })
     }
+    const target = this.pending.get(id) ?? grant
     this.grants.delete(id)
     this.pending.delete(id)
-    this.repository.authorizationEvent(id, 'revoked', { at: this.now() })
+    this.repository.authorizationEvent(id, 'revoked', {
+      at: this.now(),
+      sessionId: target?.sessionId,
+      expiresAt: target?.expiresAt
+    })
     this.changed()
   }
 }

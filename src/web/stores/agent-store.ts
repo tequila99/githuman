@@ -104,7 +104,12 @@ export const useAgentStore = defineStore('agent', () => {
   const activeChat = computed(() =>
     activeId.value === null ? null : (chats.value[activeId.value] ?? null)
   )
-  const canAddChat = computed(() => order.value.length < MAX_AGENT_SESSIONS)
+  // A retired validator is a finished one that debug mode keeps open: the server closes it to free a slot.
+  const canAddChat = computed(
+    () =>
+      order.value.length < MAX_AGENT_SESSIONS ||
+      list.value.some(entry => entry.info.retired === true)
+  )
 
   function registerChat(info: AgentSessionInfo): AgentChatEntry {
     const existing = chats.value[info.id]
