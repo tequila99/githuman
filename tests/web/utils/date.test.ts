@@ -1,7 +1,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { isCalendarDate, localDayStartIso, localDayEndIso } from '@/utils/date'
+import {
+  formatTime,
+  isCalendarDate,
+  localDayStartIso,
+  localDayEndIso
+} from '@/utils/date'
 
 test('calendar dates reject malformed and impossible days without throwing', () => {
   for (const value of [
@@ -59,4 +64,9 @@ test('local day bounds follow daylight saving transitions and preserve early yea
     ['0000-01-01T00:00:00.000Z', '0000-01-01T23:59:59.999Z'],
     ['0099-12-31T00:00:00.000Z', '0099-12-31T23:59:59.999Z']
   ])
+})
+
+test('a time shows hours and minutes only, and an invalid value shows a dash', () => {
+  assert.match(formatTime(Date.UTC(2026, 10, 4, 12, 30)), /\d{1,2}\D\d{2}/)
+  assert.equal(formatTime('not a date'), '—')
 })

@@ -15,6 +15,7 @@ test('parseServeArgs returns defaults when no flags given', () => {
     open: true,
     dbPrefix: DEFAULT_DB_PREFIX,
     apiDocs: false,
+    debugValidation: false,
     allowedHosts: []
   })
 })
@@ -61,6 +62,11 @@ test('parseServeArgs reads repeated --allowed-host as exact names', () => {
 
 test('parseServeArgs reads --api-docs', () => {
   assert.equal(parseServeArgs(['--api-docs']).apiDocs, true)
+})
+
+test('parseServeArgs reads --debug-validation', () => {
+  assert.equal(parseServeArgs([]).debugValidation, false)
+  assert.equal(parseServeArgs(['--debug-validation']).debugValidation, true)
 })
 
 test('parseServeArgs reads --db-prefix', () => {

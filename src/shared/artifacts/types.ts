@@ -74,6 +74,9 @@ export type ArtifactReportChunk = Static<
 export type PendingArtifactAction = Static<
   typeof import('./schemas.ts').PendingArtifactActionSchema
 >
+export type ArtifactActionListItem = Static<
+  typeof import('./schemas.ts').ArtifactActionListItemSchema
+>
 export type ArtifactActionInspection = Static<
   typeof import('./schemas.ts').ArtifactActionInspectionSchema
 >

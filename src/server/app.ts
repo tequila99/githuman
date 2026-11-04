@@ -103,6 +103,8 @@ export interface BuildAppOptions {
    * `--api-docs` flag turn it on. `/api/openapi.json` is always served.
    */
   apiDocs?: boolean
+  /** Receives validator debug lines. Its presence keeps validator sessions open (`--debug-validation`). */
+  onValidationDebug?: (line: string) => void
   /** Exact host names that LAN requests may use besides the machine addresses (ADR 0079). */
   allowedHosts?: readonly string[]
   /** Tells the operator about a pairing request, for example in the console. */
@@ -241,6 +243,9 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   artifacts.lifecycle.transitions.setErrorHandler(error =>
     app.log.error({ err: error }, 'Artifact transition work failed')
   )
+  if (options.onValidationDebug) {
+    artifacts.lifecycle.jobs.setDebug(options.onValidationDebug)
+  }
   app.register(artifactTransitionRoutes, {
     service: artifacts.lifecycle.transitions,
     recheckAccess: createAccessHook({ devices, allowedHosts })

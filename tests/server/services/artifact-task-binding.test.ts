@@ -274,7 +274,9 @@ test('inherited direct IDs select their validation scope without including a sib
   assert.deepEqual(preview.errors, [])
   assert.deepEqual(
     new Set(preview.affectedIds),
-    new Set([candidate.id, same.id, general.id])
+    new Set([candidate.id, same.id])
   )
+  // ADR 0119: a general accepted document no longer enters every change set.
+  assert.ok(!preview.affectedIds.includes(general.id))
   assert.ok(!preview.affectedIds.includes(sibling.id))
 })

@@ -137,6 +137,14 @@ for (const { presetId, invalidSubmit } of ['validator', 'cursor'].flatMap(
         payload: { kind: 'lifecycle', changeSetId, version: 1, validationId }
       })
       assert.equal(pending.statusCode, 200, pending.body)
+      // The list tells the requests apart by what the package does, not by the chat name.
+      const listed = await app.inject('/api/artifact-actions')
+      assert.equal(listed.statusCode, 200, listed.body)
+      assert.deepEqual(listed.json().items[0].summary, {
+        command: 'accept',
+        reason: 'Transport test',
+        documentCount: 1
+      })
       const approved = await app.inject({
         method: 'POST',
         url: `/api/artifact-actions/${pending.json().id}/approve`,

@@ -15,9 +15,14 @@ import { useWorkspaceSwipe } from '@/composables/use-workspace-swipe'
 import { useApplicationRegistry } from '@/stores/windows/application-registry'
 import type { WindowApplication } from '@/types/windows/window'
 import { errorMessage } from '@/utils/error-message'
+import ArtifactActionsButton from '@/components/artifacts/ArtifactActionsButton.vue'
 
+defineProps<{
+  artifactActions: { count: number; loading: boolean; failed: boolean }
+}>()
 const emit = defineEmits<{
   (e: 'toggle-drawer'): void
+  (e: 'open-artifact-actions'): void
   (e: 'resize', height: number): void
 }>()
 
@@ -115,6 +120,12 @@ const { enabled: agentEnabled, panelOpen: agentPanelOpen } =
           @click="launch(application)"
         />
       </template>
+      <ArtifactActionsButton
+        :count="artifactActions.count"
+        :loading="artifactActions.loading"
+        :failed="artifactActions.failed"
+        @open="emit('open-artifact-actions')"
+      />
       <q-btn
         class="app-icon-control"
         v-if="AppFullscreen.isCapable"

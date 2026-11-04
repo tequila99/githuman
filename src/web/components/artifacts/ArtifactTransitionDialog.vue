@@ -2,7 +2,7 @@
 import { computed, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DialogHeader from '@/components/DialogHeader.vue'
-import TextButton from '@/components/buttons/TextButton.vue'
+import DialogButton from '@/components/buttons/DialogButton.vue'
 import SaveButton from '@/components/buttons/SaveButton.vue'
 import { useArtifactTransitionPreview } from '@/composables/artifacts/use-artifact-transition-preview'
 import { errorMessage } from '@/utils/error-message'
@@ -132,17 +132,13 @@ async function confirm() {
         >
       </q-card-section>
       <q-card-actions align="right">
-        <TextButton
+        <DialogButton
           v-if="expired || error"
-          :dense="false"
-          size="md"
           :label="t('artifacts.transition.refresh')"
           :disable="loading || submitting"
           @click="refresh"
         />
-        <TextButton
-          :dense="false"
-          size="md"
+        <DialogButton
           :label="t('artifacts.transition.no')"
           :disable="submitting"
           @click="open = false"

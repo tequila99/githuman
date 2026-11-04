@@ -46,16 +46,26 @@ async function setup(
     {
       id: string
       status: string
-      onEvent: () => () => void
+      onEvent: (listener: (item: { event: unknown }) => void) => () => void
+      emit: (event: unknown) => void
+      retired?: boolean
       prompt: () => void
     }
   >()
   const registry = {
-    create() {
+    create(...args: unknown[]) {
+      const listeners: Array<(item: { event: unknown }) => void> = []
       const value = {
         id: randomUUID(),
         status: 'ready',
-        onEvent: () => () => {},
+        policy: args[4],
+        onEvent: (listener: (item: { event: unknown }) => void) => {
+          listeners.push(listener)
+          return () => listeners.splice(listeners.indexOf(listener), 1)
+        },
+        emit: (event: unknown) => {
+          for (const listener of listeners.slice()) listener({ event })
+        },
         prompt: () => {}
       }
       sessions.set(value.id, value)
@@ -69,6 +79,11 @@ async function setup(
       if (session) session.status = 'closed'
       return true
     },
+    retire(id: string) {
+      const session = sessions.get(id)
+      if (session) session.retired = true
+    },
+    trackArtifactRequest: () => () => {},
     notifyArtifactActionsChanged() {}
   } as unknown as AgentSessionRegistry
   storage.lifecycle.attachSessions(registry)
@@ -679,6 +694,16 @@ test('lifecycle: cancellation, validator revocation and context escape cannot pr
       ),
     /restricted/
   )
+  // The read-only change set preview is still outside the validator scope.
+  assert.throws(
+    () =>
+      storage.lifecycle.jobs.assertOperation(
+        cancelled.sessionId,
+        'change_sets.preview',
+        {}
+      ),
+    /restricted/
+  )
   storage.lifecycle.jobs.cancel(cancelled.prepared.id)
   assert.equal(
     storage.lifecycle.jobs.get(cancelled.prepared.id).state,
@@ -796,7 +821,7 @@ test('0097: legacy blockers stay stored without participating in direct draft ac
   applyMigrations(db)
   const proposal = propose([node])
   const validation = pass(proposal)
-  assert.equal(validation.prepared.manifest.rulesVersion, 2)
+  assert.equal(validation.prepared.manifest.rulesVersion, 3)
   assert.equal('threads' in validation.prepared.manifest, false)
   const page = storage.lifecycle.jobs.manifest(validation.prepared.id)
   assert.ok(page.items.every(item => item.kind !== 'review'))
@@ -1002,4 +1027,620 @@ test('0097: new review commands and grants are rejected while stored submit_revi
     payload: { kind: 'review', threadId: randomUUID(), input: {} }
   })
   assert.equal(grant.statusCode, 400, grant.body)
+})
+
+test('0116: a pending action is visible to the user list but its status only to the source session', async t => {
+  const { storage, create, propose, pass, advance } = await setup(t)
+  const node = create('draft')
+  const proposal = propose([node])
+  const validation = pass(proposal)
+  validation.submit('pass', '# Standalone report')
+  const pending = storage.lifecycle.authorization.request(
+    {
+      kind: 'lifecycle',
+      changeSetId: proposal.id,
+      version: proposal.version,
+      validationId: validation.prepared.id
+    },
+    'user:local'
+  )
+  assert.ok(
+    storage.lifecycle.authorization.list().some(item => item.id === pending.id)
+  )
+  assert.throws(
+    () => storage.lifecycle.authorization.status(pending.id, 'agent:foreign'),
+    /not found|Not found|unavailable/i
+  )
+  assert.equal(
+    storage.lifecycle.authorization.status(pending.id, 'user:local').state,
+    'pending'
+  )
+  // Revoking the request leaves every document as it was.
+  storage.lifecycle.authorization.revoke(pending.id)
+  assert.equal(storage.get(node.id).status, 'draft')
+  assert.equal(storage.lifecycle.authorization.list().length, 0)
+  // The source session is told that the user rejected it; another session learns nothing.
+  assert.equal(
+    storage.lifecycle.authorization.status(pending.id, 'user:local').state,
+    'revoked'
+  )
+  assert.throws(
+    () => storage.lifecycle.authorization.status(pending.id, 'agent:foreign'),
+    /not found|Not found|unavailable/i
+  )
+  // A request whose time ran out is reported as expired to its source session.
+  const late = storage.lifecycle.authorization.request(
+    {
+      kind: 'lifecycle',
+      changeSetId: proposal.id,
+      version: proposal.version,
+      validationId: validation.prepared.id
+    },
+    'user:local'
+  )
+  advance(late.expiresAt - Date.now() + 60 * 60_000)
+  assert.equal(
+    storage.lifecycle.authorization.status(late.id, 'user:local').state,
+    'expired'
+  )
+})
+
+test('debug validation keeps the validator session open and logs the finish', async t => {
+  const { storage, create, propose, registry } = await setup(t)
+  const lines: string[] = []
+  storage.lifecycle.jobs.setDebug(line => lines.push(line))
+  const prepared = storage.lifecycle.prepare(propose([create()]).id, 1)
+  const running = storage.lifecycle.jobs.start(prepared.id, 'test')
+  storage.lifecycle.jobs.cancel(prepared.id)
+  assert.equal(storage.lifecycle.jobs.get(prepared.id).state, 'cancelled')
+  assert.equal(registry.get(running.validatorSessionId!)?.status, 'ready')
+  // The kept session must give its slot to the next chat.
+  assert.equal(
+    (registry.get(running.validatorSessionId!) as { retired?: boolean })
+      .retired,
+    true
+  )
+  assert.ok(lines.some(line => line.endsWith('cancel')))
+})
+
+test('without debug validation the validator session closes at the end', async t => {
+  const { storage, create, propose, registry } = await setup(t)
+  const prepared = storage.lifecycle.prepare(propose([create()]).id, 1)
+  const running = storage.lifecycle.jobs.start(prepared.id, 'test')
+  storage.lifecycle.jobs.cancel(prepared.id)
+  assert.equal(registry.get(running.validatorSessionId!)?.status, 'closed')
+})
+
+test('debug validation logs the reason of an incomplete finish', async t => {
+  const { storage, create, propose } = await setup(t)
+  const lines: string[] = []
+  storage.lifecycle.jobs.setDebug(line => lines.push(line))
+  const prepared = storage.lifecycle.prepare(propose([create()]).id, 1)
+  storage.lifecycle.jobs.start(prepared.id, 'test')
+  storage.lifecycle.jobs.close()
+  assert.ok(
+    lines.some(
+      line =>
+        line.startsWith(`[validation ${prepared.id.slice(0, 8)}] finish`) &&
+        line.includes('Server stopped.')
+    )
+  )
+})
+
+test('lifecycle: an affected artifact outside the subjects is named in the error and found by preview', async t => {
+  const { storage, create } = await setup(t)
+  const plan = create('draft')
+  const review = create('draft', [{ kind: 'references', targetId: plan.id }])
+  // A supplements link expands the set; the subjects do not name this artifact.
+  const linked = create('draft', [{ kind: 'supplements', targetId: plan.id }])
+  // Accepted artifacts without tasks no longer enter every change set (ADR 0119).
+  const general = create('accepted')
+  const changeSet = {
+    storeId: storage.storeId,
+    command: 'archive' as const,
+    subjectIds: [plan.id, review.id],
+    expectedVersions: [plan, review].map(item => ({
+      id: item.id,
+      version: item.metadataVersion
+    })),
+    relationChanges: [],
+    targetStatuses: [plan, review].map(item => ({
+      artifactId: item.id,
+      status: 'archived' as const
+    })),
+    supplementDispositions: [],
+    reason: 'Archive a replaced plan and its review'
+  }
+  assert.throws(
+    () =>
+      storage.lifecycle.propose({ requestId: randomUUID(), changeSet }, USER),
+    (error: Error) => {
+      assert.match(
+        error.message,
+        new RegExp(`missing_expected_version \\[${linked.id}@v1\\]`)
+      )
+      return true
+    }
+  )
+  const preview = storage.graph.previewChangeSet(changeSet)
+  assert.ok(preview.affectedIds.includes(linked.id))
+  assert.ok(!preview.affectedIds.includes(general.id))
+  assert.deepEqual(
+    preview.errors.map(item => item.code),
+    ['missing_expected_version']
+  )
+  const proposal = storage.lifecycle.propose(
+    {
+      requestId: randomUUID(),
+      changeSet: { ...changeSet, expectedVersions: preview.expectedVersions }
+    },
+    USER
+  )
+  assert.equal(proposal.version, 1)
+})
+
+type FakeRequester = {
+  id: string
+  status: string
+  prompts: string[]
+  emit: (status: string) => void
+}
+
+async function requesterSetup(t: Parameters<typeof setup>[0], status: string) {
+  const context = await setup(t)
+  const listeners: Array<(item: { event: unknown }) => void> = []
+  const requester = (
+    context.registry as unknown as { create: () => FakeRequester }
+  ).create() as FakeRequester & {
+    onEvent: (listener: (item: { event: unknown }) => void) => () => void
+    prompt: (blocks: unknown, display: { text: string }) => void
+  }
+  requester.status = status
+  requester.prompts = []
+  requester.onEvent = listener => {
+    listeners.push(listener)
+    return () => listeners.splice(listeners.indexOf(listener), 1)
+  }
+  requester.prompt = (_blocks, display) => {
+    requester.prompts.push(display.text)
+  }
+  requester.emit = next => {
+    requester.status = next
+    for (const listener of listeners.slice()) {
+      listener({ event: { type: 'status', status: next } })
+    }
+  }
+  const prepared = context.storage.lifecycle.prepare(
+    context.propose([context.create()]).id,
+    1
+  )
+  context.storage.lifecycle.jobs.start(
+    prepared.id,
+    'test',
+    undefined,
+    requester.id
+  )
+  return { ...context, requester, prepared }
+}
+
+test('a ready requester chat gets a prompt when the validation ends', async t => {
+  const { storage, requester, prepared } = await requesterSetup(t, 'ready')
+  storage.lifecycle.jobs.cancel(prepared.id)
+  assert.equal(requester.prompts.length, 1)
+  assert.match(requester.prompts[0], new RegExp(`${prepared.id}.*cancelled`))
+})
+
+test('a busy requester chat gets the prompt after its turn ends', async t => {
+  const { storage, requester, prepared } = await requesterSetup(t, 'busy')
+  storage.lifecycle.jobs.cancel(prepared.id)
+  assert.equal(requester.prompts.length, 0)
+  requester.emit('ready')
+  assert.equal(requester.prompts.length, 1)
+})
+
+test('a requester that read the final state gets no prompt', async t => {
+  const { storage, requester, prepared } = await requesterSetup(t, 'busy')
+  storage.lifecycle.jobs.cancel(prepared.id)
+  storage.lifecycle.jobs.observe(prepared.id, requester.id)
+  requester.emit('ready')
+  assert.equal(requester.prompts.length, 0)
+})
+
+test('a closed requester chat gets no prompt', async t => {
+  const { storage, requester, prepared } = await requesterSetup(t, 'closed')
+  storage.lifecycle.jobs.cancel(prepared.id)
+  assert.equal(requester.prompts.length, 0)
+})
+
+test('no requester prompt goes out while the server stops', async t => {
+  const { storage, requester } = await requesterSetup(t, 'ready')
+  storage.lifecycle.jobs.close()
+  assert.equal(requester.prompts.length, 0)
+})
+
+test('a stale validation tells the validator it is no user rejection and ends incomplete', async t => {
+  const { storage, create, propose, registry } = await setup(t)
+  const subject = create()
+  const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+  const running = storage.lifecycle.jobs.start(prepared.id, 'test')
+  // A metadata change of a subject needs the author: the validation becomes stale.
+  storage.updateMetadata(
+    subject.id,
+    {
+      requestId: randomUUID(),
+      expectedVersion: storage.get(subject.id).metadataVersion,
+      metadata: { title: 'Renamed subject', tags: ['changed'] }
+    },
+    USER
+  )
+  const session = registry.get(running.validatorSessionId!) as unknown as {
+    policy: (request: unknown) => { allow: boolean; reason: string }
+  }
+  const decision = session.policy({
+    toolCall: {
+      toolCallId: 'call-1',
+      name: 'mcp__githuman_artifacts__validations_manifest',
+      rawInput: { id: prepared.id }
+    },
+    options: [{ optionId: 'allow', kind: 'allow_once', name: 'Allow' }]
+  })
+  assert.equal(decision.allow, false)
+  assert.match(decision.reason, /stale.*not a user rejection/)
+  await new Promise(resolve => setImmediate(resolve))
+  const after = storage.lifecycle.jobs.get(prepared.id)
+  assert.equal(after.state, 'incomplete')
+  assert.match(after.reason ?? '', /stale/)
+})
+
+test('a store change outside the affected set keeps a running validation fresh', async t => {
+  const { storage, create, propose } = await setup(t)
+  const prepared = storage.lifecycle.prepare(propose([create()]).id, 1)
+  storage.lifecycle.jobs.start(prepared.id, 'test')
+  const epoch = storage.catalog.validationEpoch()
+  // A general accepted document is a relevant store change outside the set (ADR 0119).
+  create('accepted')
+  create('draft')
+  assert.ok(storage.catalog.validationEpoch() > epoch)
+  assert.doesNotThrow(() =>
+    storage.lifecycle.assertFresh(
+      storage.lifecycle.repository.validation(prepared.id)
+    )
+  )
+})
+
+test('read_next packs small documents into one call and completes coverage', async t => {
+  const { storage, propose } = await setup(t)
+  const small = (relations: Artifact['relations'] = []) =>
+    storage.create(
+      {
+        requestId: randomUUID(),
+        body: 'Короткий текст 🧪\n'.repeat(20),
+        metadata: { title: 'Small', tags: [], relations }
+      },
+      USER
+    )
+  const subject = small()
+  for (let index = 0; index < 3; index++) {
+    small([{ kind: 'supplements', targetId: subject.id }])
+  }
+  const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+  assert.equal(prepared.manifest.requiredContentIds.length, 4)
+  const sessionId = storage.lifecycle.jobs.start(
+    prepared.id,
+    'test'
+  ).validatorSessionId!
+  const page = storage.lifecycle.jobs.readNext(prepared.id, sessionId)
+  assert.equal(page.items.length, 4)
+  assert.equal(page.remaining, 0)
+  for (const item of page.items) {
+    assert.equal(
+      item.text,
+      storage.readVerifiedFile(item.key).content.toString('utf8')
+    )
+  }
+  assert.deepEqual(
+    storage.lifecycle.jobs.readNext(prepared.id, sessionId).items,
+    []
+  )
+  storage.lifecycle.jobs.submit(prepared.id, sessionId, {
+    verdict: 'pass',
+    findings: [],
+    resolutions: []
+  })
+  assert.equal(storage.lifecycle.jobs.get(prepared.id).state, 'pass')
+})
+
+test('read_next splits a large document on UTF-8 boundaries', async t => {
+  const { storage, create, propose } = await setup(t)
+  const subject = create()
+  const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+  const sessionId = storage.lifecycle.jobs.start(
+    prepared.id,
+    'test'
+  ).validatorSessionId!
+  const parts: Buffer[] = []
+  let calls = 0
+  for (;;) {
+    const page = storage.lifecycle.jobs.readNext(prepared.id, sessionId)
+    calls++
+    for (const item of page.items) {
+      assert.ok(Buffer.byteLength(item.text) <= 24 * 1024)
+      parts.push(Buffer.from(item.text))
+    }
+    if (page.remaining === 0) break
+  }
+  const content = storage.readVerifiedFile(subject.id).content
+  assert.equal(calls, Math.ceil(content.length / (24 * 1024)))
+  assert.ok(Buffer.concat(parts).equals(content))
+})
+
+test('a stopped validator stores metrics and names the stop reason and last failure', async t => {
+  const { storage, create, propose, registry, app } = await setup(t)
+  const prepared = storage.lifecycle.prepare(propose([create()]).id, 1)
+  const running = storage.lifecycle.jobs.start(prepared.id, 'test')
+  const session = registry.get(running.validatorSessionId!) as unknown as {
+    emit: (event: unknown) => void
+  }
+  session.emit({
+    type: 'tool',
+    toolCallId: 'call-1',
+    title: 'mcp__githuman_artifacts__validations_read',
+    status: 'pending'
+  })
+  session.emit({
+    type: 'tool',
+    toolCallId: 'call-1',
+    status: 'failed',
+    output: 'Read context sequentially without skipping bytes.'
+  })
+  session.emit({ type: 'usage', used: 1234, size: 1_000_000, cost: 0.12 })
+  session.emit({ type: 'stop', stopReason: 'end_turn' })
+  const view = storage.lifecycle.jobs.get(prepared.id)
+  assert.equal(view.state, 'incomplete')
+  assert.match(view.reason ?? '', /stop reason end_turn/)
+  assert.match(view.reason ?? '', /validations_read: Read context sequentially/)
+  assert.equal(view.metrics?.toolCalls, 1)
+  assert.equal(view.metrics?.failedToolCalls, 1)
+  assert.equal(view.metrics?.contextTokens, 1234)
+  assert.equal(view.metrics?.costUsd, 0.12)
+  assert.equal(view.metrics?.stopReason, 'end_turn')
+  assert.ok(view.metrics.finishedAt >= view.metrics.startedAt)
+  // Fastify drops fields outside the response schema; the HTTP body must keep metrics.
+  const response = await app.inject({
+    method: 'GET',
+    url: `/api/artifact-validations/${prepared.id}`
+  })
+  assert.equal(response.statusCode, 200)
+  assert.deepEqual(response.json(), JSON.parse(JSON.stringify(view)))
+})
+
+test('a new supplement during validation rebases it and the validator reads only the new document', async t => {
+  const { storage, create, propose } = await setup(t)
+  const subject = create()
+  const proposal = propose([subject])
+  const prepared = storage.lifecycle.prepare(proposal.id, proposal.version)
+  const sessionId = storage.lifecycle.jobs.start(
+    prepared.id,
+    'test'
+  ).validatorSessionId!
+  for (;;) {
+    if (
+      storage.lifecycle.jobs.readNext(prepared.id, sessionId).remaining === 0
+    ) {
+      break
+    }
+  }
+  const added = create('draft', [{ kind: 'supplements', targetId: subject.id }])
+  const page = storage.lifecycle.jobs.readNext(prepared.id, sessionId)
+  assert.equal(page.changes?.generation, 2)
+  assert.deepEqual(
+    page.changes?.added.map(artifact => artifact.id),
+    [added.id]
+  )
+  assert.deepEqual(
+    page.items.map(item => item.key),
+    [added.id]
+  )
+  const view = storage.lifecycle.jobs.get(prepared.id)
+  assert.equal(view.generation, 2)
+  assert.equal(view.version, proposal.version + 1)
+  const next = storage.lifecycle.repository.proposal(proposal.id)
+  assert.deepEqual(next.actor, { kind: 'system', id: 'validation-rebase' })
+  assert.ok(next.changeSet.expectedVersions.some(item => item.id === added.id))
+  for (;;) {
+    if (
+      storage.lifecycle.jobs.readNext(prepared.id, sessionId).remaining === 0
+    ) {
+      break
+    }
+  }
+  storage.lifecycle.jobs.submit(prepared.id, sessionId, {
+    verdict: 'pass',
+    findings: [],
+    resolutions: []
+  })
+  assert.equal(storage.lifecycle.jobs.get(prepared.id).state, 'pass')
+})
+
+test('submit after a rebase waits until the validator receives the changes', async t => {
+  const { storage, create, propose } = await setup(t)
+  const subject = create()
+  const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+  const sessionId = storage.lifecycle.jobs.start(
+    prepared.id,
+    'test'
+  ).validatorSessionId!
+  for (;;) {
+    if (
+      storage.lifecycle.jobs.readNext(prepared.id, sessionId).remaining === 0
+    ) {
+      break
+    }
+  }
+  create('draft', [{ kind: 'supplements', targetId: subject.id }])
+  const report = { verdict: 'pass' as const, findings: [], resolutions: [] }
+  assert.throws(
+    () => storage.lifecycle.jobs.submit(prepared.id, sessionId, report),
+    /manifest changed \(generation 2\).*read_next/
+  )
+  assert.equal(storage.lifecycle.jobs.get(prepared.id).state, 'running')
+})
+
+test('a new required supplement decision makes a running validation stale', async t => {
+  const { storage, create } = await setup(t)
+  const base = create('accepted')
+  const subject = create('draft', [{ kind: 'replaces', targetId: base.id }])
+  const preview = storage.graph.previewChangeSet({
+    storeId: storage.storeId,
+    command: 'accept',
+    subjectIds: [subject.id],
+    expectedVersions: [],
+    relationChanges: [],
+    targetStatuses: [
+      { artifactId: subject.id, status: 'accepted' },
+      { artifactId: base.id, status: 'superseded' }
+    ],
+    supplementDispositions: [],
+    reason: 'Replace the base'
+  })
+  const proposal = storage.lifecycle.propose(
+    {
+      requestId: randomUUID(),
+      changeSet: {
+        storeId: storage.storeId,
+        command: 'accept',
+        subjectIds: [subject.id],
+        expectedVersions: preview.expectedVersions,
+        relationChanges: [],
+        targetStatuses: [
+          { artifactId: subject.id, status: 'accepted' },
+          { artifactId: base.id, status: 'superseded' }
+        ],
+        supplementDispositions: [],
+        reason: 'Replace the base'
+      }
+    },
+    USER
+  )
+  const prepared = storage.lifecycle.prepare(proposal.id, proposal.version)
+  const sessionId = storage.lifecycle.jobs.start(
+    prepared.id,
+    'test'
+  ).validatorSessionId!
+  // An accepted supplement of the replaced base needs an explicit disposition.
+  create('accepted', [{ kind: 'supplements', targetId: base.id }])
+  assert.throws(
+    () => storage.lifecycle.jobs.readNext(prepared.id, sessionId),
+    /VALIDATION_STALE/
+  )
+  assert.equal(
+    storage.lifecycle.repository.proposal(proposal.id).version,
+    proposal.version
+  )
+})
+
+test('a validation follows its set at most five generations', async t => {
+  const { storage, create, propose } = await setup(t)
+  const subject = create()
+  const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+  const sessionId = storage.lifecycle.jobs.start(
+    prepared.id,
+    'test'
+  ).validatorSessionId!
+  for (let generation = 2; generation <= 5; generation++) {
+    create('draft', [{ kind: 'supplements', targetId: subject.id }])
+    assert.equal(
+      storage.lifecycle.jobs.readNext(prepared.id, sessionId).changes
+        ?.generation,
+      generation
+    )
+  }
+  create('draft', [{ kind: 'supplements', targetId: subject.id }])
+  assert.throws(
+    () => storage.lifecycle.jobs.readNext(prepared.id, sessionId),
+    /VALIDATION_STALE/
+  )
+})
+
+test('a change to the subject itself makes a running validation stale, not rebased', async t => {
+  const { storage, create, propose } = await setup(t)
+  const subject = create()
+  const proposal = propose([subject])
+  const prepared = storage.lifecycle.prepare(proposal.id, proposal.version)
+  const sessionId = storage.lifecycle.jobs.start(
+    prepared.id,
+    'test'
+  ).validatorSessionId!
+  storage.catalog.transaction(() =>
+    storage.catalog.appendMetadata(
+      { ...subject, tags: ['changed'], metadataVersion: 3 },
+      randomUUID(),
+      USER,
+      'metadata_updated'
+    )
+  )
+  assert.throws(
+    () => storage.lifecycle.jobs.readNext(prepared.id, sessionId),
+    /VALIDATION_STALE/
+  )
+  // The author owns decisions about subjects: the server adds no version.
+  const stored = storage.lifecycle.repository.proposal(proposal.id)
+  assert.equal(stored.version, proposal.version)
+  assert.equal(stored.actor.kind, 'user')
+  assert.equal(storage.lifecycle.jobs.get(prepared.id).generation, undefined)
+})
+
+test('a newer proposal version makes the validation of the older one stale', async t => {
+  const { storage, create, propose } = await setup(t)
+  const proposal = propose([create()])
+  const prepared = storage.lifecycle.prepare(proposal.id, proposal.version)
+  const sessionId = storage.lifecycle.jobs.start(
+    prepared.id,
+    'test'
+  ).validatorSessionId!
+  const newer = storage.lifecycle.propose(
+    {
+      requestId: randomUUID(),
+      id: proposal.id,
+      expectedVersion: proposal.version,
+      changeSet: {
+        ...proposal.changeSet,
+        command: 'accept',
+        reason: 'The author changed it'
+      }
+    },
+    USER
+  )
+  assert.equal(newer.version, proposal.version + 1)
+  assert.throws(
+    () => storage.lifecycle.jobs.readNext(prepared.id, sessionId),
+    /VALIDATION_STALE/
+  )
+  // No rebase version: the latest version stays the one of the author.
+  const stored = storage.lifecycle.repository.proposal(proposal.id)
+  assert.equal(stored.version, newer.version)
+  assert.equal(stored.actor.kind, 'user')
+})
+
+// The preview refuses this command with `unsupported_command`, which no rebase can fix.
+test('a validation of a historical command never rebases', async t => {
+  const { storage, create, propose } = await setup(t)
+  const proposal = propose([create()])
+  const prepared = storage.lifecycle.prepare(proposal.id, proposal.version)
+  const repository = storage.lifecycle.repository
+  const read = repository.proposal.bind(repository)
+  repository.proposal = id => {
+    const value = read(id)
+    return {
+      ...value,
+      changeSet: { ...value.changeSet, command: 'submit_review' }
+    }
+  }
+  t.after(() => {
+    repository.proposal = read
+  })
+  assert.equal(
+    storage.lifecycle.rebaseInTransaction(repository.validation(prepared.id)),
+    undefined
+  )
 })

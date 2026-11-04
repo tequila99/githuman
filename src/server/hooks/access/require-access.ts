@@ -8,7 +8,7 @@ import type {
 } from '../../services/device.service.ts'
 import type { AllowedHosts } from '../../utils/allowed-hosts.ts'
 import { clientAddress, sameOrigin } from '../../utils/request-origin.ts'
-import { isLocalRequest } from './local-request.ts'
+import { isLocalRequest, isLoopbackHostHeader } from './local-request.ts'
 
 // Methods that do not change state; CSRF checks the others.
 const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS'])
@@ -93,8 +93,11 @@ export function createAccessHook(options: {
     const { host, origin } = request.headers
     const local = isLocalRequest(request)
     if (!local && !allowedHosts.allows(host)) {
+      // A loopback Host that fails here has a non-local Origin, proxy address or peer.
       throw new ForbiddenError(
-        `Unknown Host "${host ?? '-'}". Open the app by the IP address of this machine, or start the server with --allowed-host.`
+        isLoopbackHostHeader(host)
+          ? `The request to Host "${host}" is not local: its Origin, X-Forwarded-For or peer address is not on this machine.`
+          : `Unknown Host "${host ?? '-'}". Open the app by the IP address of this machine, or start the server with --allowed-host.`
       )
     }
     if (

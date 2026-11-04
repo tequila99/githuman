@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
+import { MAX_AGENT_SESSIONS } from '../../../../src/shared/agents/constants.ts'
 import {
   createSessionRegistry,
   type AgentStreamMessage
@@ -125,4 +126,24 @@ test('the state lists the requests still waiting and the auto-approve switch', a
   assert.equal(state.status, 'busy')
   assert.equal(state.autoApprove, false)
   assert.equal(state.permissions[0]?.diffs[0]?.path, '/repo/a.txt')
+})
+
+test('a retired session gives its slot to a new chat, the oldest first', t => {
+  const registry = createSessionRegistry({
+    presets: [preset],
+    repositoryPath: process.cwd()
+  })
+  t.after(() => registry.closeAll())
+  const sessions = Array.from({ length: MAX_AGENT_SESSIONS }, () =>
+    registry.create('fake', null)
+  )
+  assert.throws(() => registry.create('fake', null), /At most/)
+  registry.retire(sessions[2].id)
+  registry.retire(sessions[1].id)
+  const next = registry.create('fake', null)
+  // The first retired session goes, not the lowest index.
+  assert.equal(registry.get(sessions[2].id), undefined)
+  assert.ok(registry.get(sessions[1].id))
+  assert.ok(registry.get(next.id))
+  assert.equal(registry.list().length, MAX_AGENT_SESSIONS)
 })

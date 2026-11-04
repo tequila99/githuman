@@ -104,7 +104,15 @@ export const useAgentStore = defineStore('agent', () => {
   const activeChat = computed(() =>
     activeId.value === null ? null : (chats.value[activeId.value] ?? null)
   )
-  const canAddChat = computed(() => order.value.length < MAX_AGENT_SESSIONS)
+  // An idle validator is a finished one that debug mode keeps open: the server closes it to free a slot.
+  const canAddChat = computed(
+    () =>
+      order.value.length < MAX_AGENT_SESSIONS ||
+      list.value.some(
+        entry =>
+          entry.info.kind === 'validation' && entry.info.status === 'ready'
+      )
+  )
 
   function registerChat(info: AgentSessionInfo): AgentChatEntry {
     const existing = chats.value[info.id]

@@ -1,6 +1,10 @@
 import { test, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { createArtifactActions } from '@/stores/artifact-actions-store'
+import { createPinia, setActivePinia } from 'pinia'
+import {
+  createArtifactActions,
+  useArtifactActionsStore
+} from '@/stores/artifact-actions-store'
 import type { ArtifactActionInspection } from '@/api/types'
 
 let savedFetch: typeof fetch
@@ -105,6 +109,25 @@ test('commit binds exact reviewed version, validation and grant', async () => {
   })
   assert.ok((writes[0].body as { requestId: string }).requestId)
 })
+test('a committed action reports the applied outcome even when the read-back fails', async () => {
+  const value = {
+    ...inspection(),
+    phase: 'authorized' as const,
+    authorizationId: 'grant'
+  }
+  serve(value)
+  const model = createArtifactActions('store')
+  await model.select('pending')
+  const served = globalThis.fetch
+  globalThis.fetch = async (input, init) =>
+    init?.method === 'POST'
+      ? new Response('{}')
+      : new Response('{"message":"gone"}', { status: 404 })
+  await model.execute()
+  globalThis.fetch = served
+  assert.equal(model.state.outcome, 'applied')
+  assert.equal(model.state.unavailable, true)
+})
 test('lost approval response retains request identity for a deliberate retry', async () => {
   const value = inspection()
   const model = createArtifactActions('store')
@@ -163,4 +186,142 @@ test('late inspection cannot restore a selection after teardown', async () => {
   await reading
   assert.equal(model.state.inspection, null)
   assert.equal(model.state.stale, true)
+})
+
+function json(value: unknown, status = 200) {
+  return new Response(JSON.stringify(value), { status })
+}
+test('a failed read-back after a successful approve is not an approve failure', async () => {
+  const value = inspection()
+  let approved = false
+  globalThis.fetch = async (input, init) => {
+    if (init?.method === 'POST') {
+      approved = true
+      return json({})
+    }
+    if (approved) return json({ message: 'down' }, 500)
+    return json(
+      input === '/api/artifact-actions'
+        ? { storeId: 'store', items: [value.pending] }
+        : value
+    )
+  }
+  const model = createArtifactActions('store')
+  await model.select('pending')
+  model.state.confirmed = true
+  await model.approve()
+  assert.equal(model.state.outcome, 'granted')
+  assert.equal(model.state.error, null)
+  assert.ok(model.state.refreshError)
+  assert.equal(model.state.confirmed, false)
+  assert.equal(model.state.busy, false)
+})
+test('the selected action stays visible after it leaves the pending list', async () => {
+  const value = inspection()
+  let approved = false
+  globalThis.fetch = async (input, init) => {
+    if (init?.method === 'POST') {
+      approved = true
+      return json({})
+    }
+    if (input === '/api/artifact-actions') {
+      return json({ storeId: 'store', items: approved ? [] : [value.pending] })
+    }
+    return json(
+      approved ? { ...value, phase: 'authorized', canExecute: false } : value
+    )
+  }
+  const model = createArtifactActions('store')
+  await model.list()
+  await model.select('pending')
+  model.state.confirmed = true
+  await model.approve()
+  assert.equal(model.state.items.length, 0)
+  assert.equal(model.state.selectedId, 'pending')
+  assert.equal(model.state.inspection?.phase, 'authorized')
+})
+test('revoke keeps the selection and reports the end result', async () => {
+  const value = inspection()
+  const writes: { url: string; body: unknown }[] = []
+  globalThis.fetch = async (input, init) => {
+    if (init?.method === 'DELETE') {
+      writes.push({ url: typeof input === 'string' ? input : '', body: null })
+      return json({ revoked: true })
+    }
+    return json(
+      input === '/api/artifact-actions'
+        ? { storeId: 'store', items: [] }
+        : value
+    )
+  }
+  const model = createArtifactActions('store')
+  await model.select('pending')
+  await model.revoke()
+  assert.equal(writes.length, 1)
+  assert.equal(model.state.selectedId, 'pending')
+  assert.equal(model.state.outcome, 'revoked')
+  assert.equal(model.state.inspection, null)
+})
+test('a missing action becomes unavailable instead of an empty success', async () => {
+  globalThis.fetch = async () => json({ message: 'Not found' }, 404)
+  const model = createArtifactActions('store')
+  await model.select('gone')
+  assert.equal(model.state.unavailable, true)
+  assert.equal(model.state.inspection, null)
+})
+test('a late list from before stop cannot land after start', async () => {
+  const waiting: ((response: Response) => void)[] = []
+  globalThis.fetch = () =>
+    new Promise<Response>(done => {
+      waiting.push(done)
+    })
+  const model = createArtifactActions('store')
+  const first = model.list()
+  model.stop()
+  void model.start()
+  await Promise.resolve()
+  waiting[0]?.(json({ storeId: 'store', items: [inspection().pending] }))
+  await first
+  assert.deepEqual(model.state.items, [])
+})
+test('expiry clears the confirmation without a server answer', async () => {
+  let time = 1000
+  const value = inspection()
+  value.pending.expiresAt = 5000
+  serve(value)
+  const model = createArtifactActions('store', () => time)
+  await model.select('pending')
+  model.state.confirmed = true
+  assert.equal(model.nextExpiry(), 5000)
+  time = 5000
+  model.expire()
+  assert.equal(model.state.confirmed, false)
+  assert.equal(model.state.expired, true)
+  await assert.rejects(model.approve(), /stale|expired/)
+})
+test('the bootstrap takes the store identity from the server list', async () => {
+  setActivePinia(createPinia())
+  globalThis.fetch = async () =>
+    json({ storeId: 'server-store', items: [inspection().pending] })
+  const store = useArtifactActionsStore()
+  await store.bootstrap()
+  assert.ok(store.model)
+  assert.equal(store.model.state.items.length, 1)
+  const first = store.model
+  globalThis.fetch = async () => json({ storeId: 'other', items: [] })
+  await store.bootstrap()
+  assert.notEqual(store.model, first)
+  assert.equal(first.state.stale, true)
+})
+test('a failed bootstrap reports an error and can retry', async () => {
+  setActivePinia(createPinia())
+  globalThis.fetch = async () => json({ message: 'down' }, 500)
+  const store = useArtifactActionsStore()
+  await store.bootstrap()
+  assert.ok(store.error)
+  assert.equal(store.model, null)
+  globalThis.fetch = async () => json({ storeId: 's', items: [] })
+  await store.bootstrap()
+  assert.equal(store.error, null)
+  assert.ok(store.model)
 })
