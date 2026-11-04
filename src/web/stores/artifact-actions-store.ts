@@ -159,10 +159,18 @@ export function createArtifactActions(
     reset()
     return Promise.all([list(), refresh()])
   }
-  /** The nearest expiry of the queue or the selected action, for one timer. */
+  /**
+   * The nearest future expiry of the queue or the selected action, for one timer.
+   * A past expiry is skipped: a fast client clock would else restart the refetch at once.
+   */
   function nextExpiry(): number | null {
-    const times = state.items.map(item => item.expiresAt)
-    if (state.inspection) times.push(state.inspection.pending.expiresAt)
+    const current = now()
+    const times = state.items
+      .map(item => item.expiresAt)
+      .filter(at => at > current)
+    if (state.inspection && state.inspection.pending.expiresAt > current) {
+      times.push(state.inspection.pending.expiresAt)
+    }
     return times.length ? Math.min(...times) : null
   }
   /** Drops confirmation at once when the selected scope has expired. */

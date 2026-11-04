@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useArtifactCommandLabel } from '@/composables/artifacts/use-artifact-command-label'
 import { useArtifactTitles } from '@/composables/artifacts/use-artifact-titles'
 import type { ArtifactActionInspection } from '@/api/types'
 
@@ -16,6 +17,7 @@ const props = defineProps<{
   sessionLabel: string
 }>()
 const { t, te } = useI18n()
+const commandLabel = useArtifactCommandLabel()
 const change = computed(() => props.inspection.proposal?.changeSet ?? null)
 const titles = computed(
   () =>
@@ -63,7 +65,7 @@ const checkedOnly = computed(() => {
   <div v-if="change">
     <div class="row items-center no-wrap q-gutter-x-sm">
       <div class="text-subtitle2">
-        {{ t(`artifacts.actions.commands.${change.command}`) }}
+        {{ commandLabel(change.command) }}
       </div>
       <q-badge
         v-if="verdict"

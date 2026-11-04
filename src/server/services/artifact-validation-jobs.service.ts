@@ -114,11 +114,17 @@ export class ArtifactValidationJobsService {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
   }
-  private settled(id: string): void {
+  private settled(id: string, wake = true): void {
     for (const listener of this.listeners) {
       listener(id)
     }
-    this.wakeRequester(id)
+    // A user cancel is a user decision: the server must not restart the agent after it.
+    if (wake) {
+      this.wakeRequester(id)
+    } else {
+      this.requesters.delete(id)
+      this.observed.delete(id)
+    }
   }
   /** Records that the requester read the final state, so it needs no wake-up. */
   observe(id: string, sessionId: string): void {
@@ -516,7 +522,7 @@ export class ArtifactValidationJobsService {
     const cleanup = this.cleanup.get(id)
     this.cleanup.delete(id)
     cleanup?.()
-    this.settled(id)
+    this.settled(id, false)
   }
   close(): void {
     this.stopping = true

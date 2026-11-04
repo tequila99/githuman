@@ -249,6 +249,12 @@ export const AgentSessionInfoSchema = Type.Object(
       Type.String({
         description: 'Why the session could not start. Else null.'
       })
+    ),
+    retired: Type.Optional(
+      Type.Boolean({
+        description:
+          'The session is finished and open for inspection. A new chat closes it to get the slot.'
+      })
     )
   },
   { description: 'A chat session.' }

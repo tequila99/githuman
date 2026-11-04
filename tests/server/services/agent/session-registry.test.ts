@@ -147,3 +147,20 @@ test('a retired session gives its slot to a new chat, the oldest first', t => {
   assert.ok(registry.get(next.id))
   assert.equal(registry.list().length, MAX_AGENT_SESSIONS)
 })
+
+test('retire revokes the session: its open artifact requests close and the list marks it', t => {
+  const registry = createSessionRegistry({
+    presets: [preset],
+    repositoryPath: process.cwd()
+  })
+  t.after(() => registry.closeAll())
+  const session = registry.create('fake', null)
+  let closed = 0
+  registry.trackArtifactRequest(session.id, () => closed++)
+  assert.equal(registry.list()[0]?.retired, undefined)
+  registry.retire(session.id)
+  // revoke() closes tracked requests and drops the key, but keeps the session open.
+  assert.equal(closed, 1)
+  assert.ok(registry.get(session.id))
+  assert.equal(registry.list()[0]?.retired, true)
+})

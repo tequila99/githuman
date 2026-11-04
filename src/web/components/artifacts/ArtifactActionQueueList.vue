@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import TextButton from '@/components/buttons/TextButton.vue'
 import { useAppTheme } from '@/composables/use-app-theme'
+import { useArtifactCommandLabel } from '@/composables/artifacts/use-artifact-command-label'
 import { useArtifactSessionLabel } from '@/composables/artifacts/use-artifact-session-label'
 import { formatTime } from '@/utils/date'
 import type { ArtifactActionListItem } from '@/api/types'
@@ -19,15 +20,10 @@ const emit = defineEmits<{
   (e: 'pick', id: string): void
   (e: 'refresh'): void
 }>()
-const { t, te } = useI18n()
+const { t } = useI18n()
 const { isDark } = useAppTheme()
 const sessionLabel = useArtifactSessionLabel()
-
-/** A command the browser does not know yet shows as the server sent it. */
-function commandLabel(command: string): string {
-  const key = `artifacts.actions.commands.${command}`
-  return te(key) ? t(key) : command
-}
+const commandLabel = useArtifactCommandLabel()
 </script>
 
 <template>

@@ -64,8 +64,9 @@ export interface AgentSessionRegistry {
   list: () => AgentSessionInfo[]
   close: (id: string) => boolean
   /**
-   * Marks a finished session that stays open for inspection. A new session
-   * takes its slot: the registry closes the oldest retired session first.
+   * Marks a finished session that stays open for inspection and revokes its
+   * artifact key. A new session takes its slot: the registry closes the oldest
+   * retired session first.
    */
   retire: (id: string) => void
   closeAll: () => void
@@ -277,11 +278,18 @@ export function createSessionRegistry(options: {
       return session
     },
     get: id => sessions.get(id),
-    list: () => [...sessions.values()].map(session => session.info()),
+    list: () =>
+      [...sessions.values()].map(session => ({
+        ...session.info(),
+        ...(retired.has(session.id) ? { retired: true } : {})
+      })),
     close: closeSession,
     retire(id) {
       if (sessions.has(id)) {
         retired.add(id)
+        // A retired validator stays open for inspection, but its key must stop working.
+        revoke(id)
+        broadcast({ type: 'sessions' })
       }
     },
     closeAll,

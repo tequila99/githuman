@@ -325,3 +325,12 @@ test('a failed bootstrap reports an error and can retry', async () => {
   assert.equal(store.error, null)
   assert.ok(store.model)
 })
+
+test('nextExpiry skips expiries in the past', async () => {
+  const value = inspection()
+  value.pending.expiresAt = 900
+  serve(value)
+  const model = createArtifactActions('store', () => 1000)
+  await model.select('pending')
+  assert.equal(model.nextExpiry(), null)
+})

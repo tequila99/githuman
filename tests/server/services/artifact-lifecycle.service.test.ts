@@ -1225,14 +1225,21 @@ async function requesterSetup(t: Parameters<typeof setup>[0], status: string) {
 
 test('a ready requester chat gets a prompt when the validation ends', async t => {
   const { storage, requester, prepared } = await requesterSetup(t, 'ready')
-  storage.lifecycle.jobs.cancel(prepared.id)
+  storage.lifecycle.jobs.finish(prepared.id, 'incomplete', 'test')
   assert.equal(requester.prompts.length, 1)
-  assert.match(requester.prompts[0], new RegExp(`${prepared.id}.*cancelled`))
+  assert.match(requester.prompts[0], new RegExp(`${prepared.id}.*incomplete`))
+})
+
+test('a user cancel does not wake the requester chat', async t => {
+  const { storage, requester, prepared } = await requesterSetup(t, 'busy')
+  storage.lifecycle.jobs.cancel(prepared.id)
+  requester.emit('ready')
+  assert.equal(requester.prompts.length, 0)
 })
 
 test('a busy requester chat gets the prompt after its turn ends', async t => {
   const { storage, requester, prepared } = await requesterSetup(t, 'busy')
-  storage.lifecycle.jobs.cancel(prepared.id)
+  storage.lifecycle.jobs.finish(prepared.id, 'incomplete', 'test')
   assert.equal(requester.prompts.length, 0)
   requester.emit('ready')
   assert.equal(requester.prompts.length, 1)

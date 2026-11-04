@@ -7,6 +7,8 @@ import { useServerEvents } from '@/composables/use-server-events'
 
 // Upper bound of one timer: setTimeout overflows above 2^31 ms.
 const MAX_TIMER_MS = 2_147_483_647
+// Lower bound of one timer: a skewed clock must not turn expiry into a request loop.
+const MIN_EXPIRY_DELAY_MS = 1000
 
 /**
  * The single owner of the pending-action queue (ADR 0116). Mount it once in
@@ -33,7 +35,7 @@ export function useArtifactActions() {
         value.expire()
         invalidate()
       },
-      Math.min(Math.max(at - Date.now(), 0), MAX_TIMER_MS)
+      Math.min(Math.max(at - Date.now(), MIN_EXPIRY_DELAY_MS), MAX_TIMER_MS)
     )
   }
 
