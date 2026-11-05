@@ -9,7 +9,7 @@ import type { ArtifactTransitionOperation } from '@/api/types'
 const props = defineProps<{ operation: ArtifactTransitionOperation }>()
 const open = defineModel<boolean>({ required: true })
 const { t } = useI18n()
-const { report, text, titles, loading, error, load } =
+const { report, text, titles, loading, error, textError, load } =
   useArtifactTransitionResult(() => props.operation.validationId, open)
 </script>
 
@@ -32,6 +32,7 @@ const { report, text, titles, loading, error, load } =
           :titles="titles"
           :loading="loading"
           :error="error"
+          :text-error="textError"
         />
         <router-link
           v-if="operation.reportArtifactId"
@@ -48,7 +49,7 @@ const { report, text, titles, loading, error, load } =
       </q-card-section>
       <q-card-actions align="right">
         <DialogButton
-          v-if="error"
+          v-if="error || textError"
           :label="t('artifacts.transition.retry')"
           @click="load"
         />

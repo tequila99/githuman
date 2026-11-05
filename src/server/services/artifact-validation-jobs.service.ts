@@ -11,7 +11,7 @@ import type { ArtifactValidationReport } from '../../shared/artifacts/types.ts'
 import {
   ArtifactConflictError,
   ArtifactInputError,
-  ArtifactNotFoundError
+  ArtifactReportTextNotFoundError
 } from '../errors/artifacts.ts'
 import { ForbiddenError } from '../errors/http.ts'
 import type {
@@ -565,20 +565,7 @@ export class ArtifactValidationJobsService {
       throw new ArtifactInputError('Invalid report offset.')
     }
     const bytes = Buffer.from(JSON.stringify(value.report ?? null), 'utf8')
-    if (
-      offset > bytes.length ||
-      (offset < bytes.length && (bytes[offset] & 0xc0) === 0x80)
-    ) {
-      throw new ArtifactInputError('Invalid report offset.')
-    }
-    const end = chunkEnd(bytes, offset, CONTEXT_CHUNK_BYTES)
-    return {
-      id,
-      offset,
-      totalBytes: bytes.length,
-      text: bytes.subarray(offset, end).toString('utf8'),
-      nextOffset: end < bytes.length ? end : null
-    }
+    return reportChunk(id, bytes, offset)
   }
   /** Reads the Markdown text of a validation report in bounded chunks (ADR 0122). */
   reportText(id: string, offset = 0) {
@@ -588,23 +575,10 @@ export class ArtifactValidationJobsService {
     }
     const text = this.lifecycle.repository.reportText(id)
     if (text === undefined) {
-      throw new ArtifactNotFoundError()
+      throw new ArtifactReportTextNotFoundError()
     }
     const bytes = Buffer.from(text, 'utf8')
-    if (
-      offset > bytes.length ||
-      (offset < bytes.length && (bytes[offset] & 0xc0) === 0x80)
-    ) {
-      throw new ArtifactInputError('Invalid report offset.')
-    }
-    const end = chunkEnd(bytes, offset, CONTEXT_CHUNK_BYTES)
-    return {
-      id,
-      offset,
-      totalBytes: bytes.length,
-      text: bytes.subarray(offset, end).toString('utf8'),
-      nextOffset: end < bytes.length ? end : null
-    }
+    return reportChunk(id, bytes, offset)
   }
   history(id: string, afterSeq = 0, limit = 50) {
     this.lifecycle.repository.validation(id)
@@ -835,6 +809,9 @@ export class ArtifactValidationJobsService {
             manifestDigest: value.manifestDigest,
             changeDigest: value.manifest.changeDigest,
             validatorSessionId: sessionId,
+            ...(value.report?.reportArtifactId
+              ? { reportArtifactId: value.report.reportArtifactId }
+              : {}),
             text
           }
         })
@@ -847,7 +824,6 @@ export class ArtifactValidationJobsService {
     id: string,
     body: string
   ): ValidationReportTextSummary {
-    const bytes = Buffer.byteLength(body)
     if (
       typeof body !== 'string' ||
       body.includes('\0') ||
@@ -857,6 +833,7 @@ export class ArtifactValidationJobsService {
         'Report text must be valid UTF-8 text without NUL.'
       )
     }
+    const bytes = Buffer.byteLength(body)
     if (bytes > MAX_ARTIFACT_BODY_BYTES) {
       throw new ArtifactInputError('Report text is too large.')
     }
@@ -976,6 +953,24 @@ function chunkEnd(bytes: Buffer, offset: number, limit: number): number {
   let end = Math.min(offset + limit, bytes.length)
   while (end < bytes.length && (bytes[end] & 0xc0) === 0x80) end--
   return end
+}
+
+/** Returns one report chunk; the offset must start a UTF-8 character. */
+function reportChunk(id: string, bytes: Buffer, offset: number) {
+  if (
+    offset > bytes.length ||
+    (offset < bytes.length && (bytes[offset] & 0xc0) === 0x80)
+  ) {
+    throw new ArtifactInputError('Invalid report offset.')
+  }
+  const end = chunkEnd(bytes, offset, CONTEXT_CHUNK_BYTES)
+  return {
+    id,
+    offset,
+    totalBytes: bytes.length,
+    text: bytes.subarray(offset, end).toString('utf8'),
+    nextOffset: end < bytes.length ? end : null
+  }
 }
 
 function isStale(error: unknown): boolean {

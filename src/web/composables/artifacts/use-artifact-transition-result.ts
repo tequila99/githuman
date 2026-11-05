@@ -27,6 +27,7 @@ export function useArtifactTransitionResult(
   const titles = shallowRef<Record<string, string>>({})
   const loading = shallowRef(false)
   const error = shallowRef<string | null>(null)
+  const textError = shallowRef<string | null>(null)
   let generation = 0
   let controller: AbortController | null = null
 
@@ -39,17 +40,26 @@ export function useArtifactTransitionResult(
     const current = ++generation
     loading.value = true
     error.value = null
+    textError.value = null
     try {
       const view = await artifactActionsApi.validationView(id, request.signal)
       request.signal.throwIfAborted()
-      const [result, markdown] = await Promise.all([
+      // Separate loads: a failed report text must not hide the findings.
+      const [result, markdown] = await Promise.allSettled([
         readArtifactValidationReport(view, request.signal),
         readArtifactValidationReportText(view, request.signal)
       ])
       if (current !== generation) return
-      report.value = result
-      text.value = markdown
-      const ids = [...new Set(result?.findings.map(item => item.artifactId))]
+      if (result.status === 'rejected') throw result.reason
+      report.value = result.value
+      if (markdown.status === 'fulfilled') {
+        text.value = markdown.value
+      } else if (!request.signal.aborted) {
+        textError.value = errorMessage(markdown.reason)
+      }
+      const ids = [
+        ...new Set(result.value?.findings.map(item => item.artifactId))
+      ]
       const found = await Promise.allSettled(
         ids
           .slice(0, MAX_TITLE_LOOKUPS)
@@ -81,6 +91,7 @@ export function useArtifactTransitionResult(
     titles.value = {}
     loading.value = false
     error.value = null
+    textError.value = null
   }
 
   watch(
@@ -92,5 +103,5 @@ export function useArtifactTransitionResult(
     { immediate: true }
   )
   onUnmounted(reset)
-  return { report, text, titles, loading, error, load }
+  return { report, text, titles, loading, error, textError, load }
 }

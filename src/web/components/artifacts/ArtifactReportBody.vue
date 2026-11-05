@@ -10,6 +10,8 @@ defineProps<{
   titles: Record<string, string>
   loading: boolean
   error: string | null
+  /** Failure of the report text load only; findings stay visible. */
+  textError?: string | null
 }>()
 const { t } = useI18n()
 </script>
@@ -26,6 +28,7 @@ const { t } = useI18n()
     <div
       v-else-if="
         !text &&
+        !textError &&
         (!report || (!report.findings.length && !report.resolutions.length))
       "
     >
@@ -60,6 +63,9 @@ const { t } = useI18n()
           }}</li>
         </ul>
       </template>
+      <div v-if="textError" class="text-negative q-mt-md" role="alert">
+        {{ t('artifacts.transition.reportTextFailed') }}: {{ textError }}
+      </div>
       <template v-if="text">
         <div class="text-subtitle2 q-mt-md">{{
           t('artifacts.transition.reportText')

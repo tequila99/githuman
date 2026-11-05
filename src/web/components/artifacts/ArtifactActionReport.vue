@@ -9,7 +9,7 @@ const props = defineProps<{ validationId: string }>()
 const { t } = useI18n()
 // The report loads only when the user asks for it.
 const shown = ref(false)
-const { report, text, titles, loading, error, load } =
+const { report, text, titles, loading, error, textError, load } =
   useArtifactTransitionResult(() => props.validationId, shown)
 </script>
 
@@ -29,9 +29,10 @@ const { report, text, titles, loading, error, load } =
       :titles="titles"
       :loading="loading"
       :error="error"
+      :text-error="textError"
     />
     <TextButton
-      v-if="error"
+      v-if="error || textError"
       :label="t('artifacts.transition.retry')"
       @click="load"
     />

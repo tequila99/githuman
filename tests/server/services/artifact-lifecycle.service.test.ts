@@ -295,7 +295,7 @@ test('validation without report text has none to read', async t => {
   const validation = pass(propose([create('draft')]))
   assert.throws(
     () => storage.lifecycle.jobs.reportText(validation.prepared.id),
-    /not found/i
+    /no report text/i
   )
 })
 

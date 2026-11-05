@@ -15,6 +15,11 @@ export const ArtifactNotFoundError = createError(
   'Artifact not found.',
   404
 )
+export const ArtifactReportTextNotFoundError = createError(
+  'GHT_ARTIFACT_REPORT_TEXT_NOT_FOUND',
+  'The validation has no report text.',
+  404
+)
 export const ArtifactConflictError = createError(
   'GHT_ARTIFACT_CONFLICT',
   '%s',
