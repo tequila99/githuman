@@ -77,6 +77,8 @@ export default {
       resultLoading: 'Loading the validation result…',
       resultFailed: 'Could not load the validation result',
       resultEmpty: 'The validator saved no findings.',
+      reportText: 'Report text',
+      reportTextFailed: 'Could not load the report text',
       findings: 'Findings',
       resolutions: 'Resolutions',
       close: 'Close'

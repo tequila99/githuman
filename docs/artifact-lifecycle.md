@@ -32,9 +32,14 @@ ChangeSet: сервер проверяет предполагаемое пост
 5. `validations.submit` принимает verdict `pass|conflict|incomplete`, findings
    с точными цитатами и resolutions. Digest и validatorSessionId назначает сервер.
    Неполное чтение превращает результат в `incomplete`. Необязательный `report`
-   сохраняется отдельным изолированным draft; его создание не инвалидирует manifest.
-   Также доступен `validations.create_report({id,body})`.
-   Создание draft и связь с validation фиксируются одной транзакцией.
+   (Markdown-текст) сохраняется в таблице `artifact_validation_reports`, а не
+   в каталоге артефактов (ADR 0122). Также доступен
+   `validations.create_report({id,body})`. Запись текста и событие проверки
+   фиксируются одной транзакцией. На проверку приходится один неизменяемый
+   текст: тот же текст принимается повторно, другой даёт конфликт. Событие
+   хранит только `report.text = {sha256,bytes}`. Читать текст постранично
+   можно через `validations.report_text({id,offset})` и HTTP (см. таблицу).
+   Старые проверки с `reportArtifactId` читаются как раньше.
 6. Если во время проверки набор вырос, а меняется только его контекст, сервер
    не обрывает проверку (ADR 0121). Он выпускает версию предложения с
    актуальными `expectedVersions` от actor `system` и перестраивает манифест,
@@ -74,7 +79,7 @@ Manifest включает объединение текущего и предл�
 появилась из-за пакета. Перед commit сервер проверяет физические файлы.
 Manifest использует rulesVersion=3. Проверки старой версии требуют нового prepare;
 их metadata, история и отчёты остаются доступны для чтения. Свежесть проверяется
-до создания отдельного report-артефакта.
+до записи текста отчёта.
 
 ## Разрешения валидатора
 
@@ -106,6 +111,7 @@ Manifest использует rulesVersion=3. Проверки старой ве
 | GET `/api/artifact-validations/:id` | Статус и краткая сводка отчёта |
 | GET `/api/artifact-validations/:id/manifest` | Страницы manifest, `limit/cursor` |
 | GET `/api/artifact-validations/:id/report` | Полный структурированный отчёт блоками, `offset` |
+| GET `/api/artifact-validations/:id/report-text` | Markdown-текст отчёта блоками, `offset`; 404, если валидатор его не приложил |
 | GET `/api/artifact-validations/:id/history` | Immutable история, `afterSeq/limit` |
 | DELETE `/api/artifact-validations/:id` | Отменить проверку |
 | GET `/api/artifact-actions` | Store ID и pending actions для подтверждения; у каждого `summary` (`command`, `reason` до 300 символов, `documentCount`) для списка |

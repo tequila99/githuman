@@ -62,6 +62,16 @@ export const ArtifactToolSchemas = {
       description: 'Read the complete structured report in chunks.'
     }
   ),
+  'validations.report_text': Type.Object(
+    {
+      ...ArtifactParams.properties,
+      ...ArtifactValidationReportQuery.properties
+    },
+    {
+      additionalProperties: false,
+      description: 'Read the Markdown report text of a validation in chunks.'
+    }
+  ),
   'validations.history': Type.Object(
     { ...ArtifactParams.properties, ...ArtifactHistoryQuery.properties },
     {
@@ -108,7 +118,7 @@ export const ArtifactToolSchemas = {
     },
     {
       additionalProperties: false,
-      description: 'Create an isolated validation report draft.'
+      description: 'Attach a Markdown report text to the assigned validation.'
     }
   ),
   'actions.request': ArtifactAuthorizationRequestBody,

@@ -30,6 +30,11 @@ export interface ValidationMetrics {
   stopReason?: string
   lastFailure?: string
 }
+/** Size and digest of the Markdown report text stored for one validation. */
+export interface ValidationReportTextSummary {
+  sha256: string
+  bytes: number
+}
 export interface StoredValidation {
   id: string
   changeSetId: string
@@ -50,7 +55,9 @@ export interface StoredValidation {
     manifestDigest: string
     changeDigest: string
     validatorSessionId: string
+    /** Legacy standalone report artifact; new reports use `text` (ADR 0122). */
     reportArtifactId?: string
+    text?: ValidationReportTextSummary
   }
   reason?: string
   submissionDigest?: string
@@ -134,6 +141,32 @@ export class ArtifactValidationRepository {
         'INSERT INTO artifact_validation_current VALUES(?,?,?) ON CONFLICT(store_id,id) DO UPDATE SET payload_json=excluded.payload_json'
       )
       .run(this.storeId, value.id, payload)
+  }
+  reportText(id: string): string | undefined {
+    const row = this.db
+      .prepare(
+        'SELECT body FROM artifact_validation_reports WHERE store_id=? AND validation_id=?'
+      )
+      .get(this.storeId, id) as { body: string } | undefined
+    return row?.body
+  }
+  /** Stores the text once; the same text again is a no-op. Returns false for different text. */
+  appendReportText(
+    id: string,
+    body: string,
+    summary: ValidationReportTextSummary,
+    now: number
+  ): boolean {
+    const previous = this.reportText(id)
+    if (previous !== undefined) {
+      return previous === body
+    }
+    this.db
+      .prepare(
+        'INSERT INTO artifact_validation_reports(store_id,validation_id,sha256,bytes,body,created_at) VALUES(?,?,?,?,?,?)'
+      )
+      .run(this.storeId, id, summary.sha256, summary.bytes, body, now)
+    return true
   }
   history(id: string, afterSeq = 0, limit = 50) {
     return (
