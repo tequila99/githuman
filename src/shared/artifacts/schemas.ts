@@ -649,7 +649,7 @@ export const ArtifactValidationSubmitBody = Type.Object(
     report: Type.Optional(
       Type.String({
         maxLength: 131072,
-        description: 'Optional standalone draft Markdown report.'
+        description: 'Optional Markdown report text stored with the validation.'
       })
     )
   },
@@ -1088,7 +1088,24 @@ export const ArtifactValidationViewSchema = Type.Object(
             description: 'Number of cited findings.'
           }),
           reportArtifactId: Type.Optional(
-            lifecycleId('Standalone draft report artifact.')
+            lifecycleId('Legacy standalone report artifact (before ADR 0122).')
+          ),
+          text: Type.Optional(
+            Type.Object(
+              {
+                sha256: Type.String({
+                  description: 'SHA-256 of the Markdown report text.'
+                }),
+                bytes: Type.Integer({
+                  minimum: 0,
+                  description: 'UTF-8 size of the Markdown report text.'
+                })
+              },
+              {
+                description:
+                  'Markdown report text stored with the validation; read it with report-text.'
+              }
+            )
           )
         },
         {

@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import MarkdownContent from '@/components/MarkdownContent.vue'
 import type { readArtifactValidationReport } from '@/utils/artifact-validation-report'
 
 defineProps<{
   report: Awaited<ReturnType<typeof readArtifactValidationReport>>
+  /** Markdown report text stored with the validation (ADR 0122). */
+  text?: string | null
   titles: Record<string, string>
   loading: boolean
   error: string | null
+  /** Failure of the report text load only; findings stay visible. */
+  textError?: string | null
 }>()
 const { t } = useI18n()
 </script>
@@ -22,13 +27,15 @@ const { t } = useI18n()
     </div>
     <div
       v-else-if="
-        !report || (!report.findings.length && !report.resolutions.length)
+        !text &&
+        !textError &&
+        (!report || (!report.findings.length && !report.resolutions.length))
       "
     >
       {{ t('artifacts.transition.resultEmpty') }}
     </div>
     <template v-else>
-      <template v-if="report.findings.length">
+      <template v-if="report?.findings.length">
         <div class="text-subtitle2">{{
           t('artifacts.transition.findings')
         }}</div>
@@ -46,7 +53,7 @@ const { t } = useI18n()
           </q-item>
         </q-list>
       </template>
-      <template v-if="report.resolutions.length">
+      <template v-if="report?.resolutions.length">
         <div class="text-subtitle2 q-mt-md">{{
           t('artifacts.transition.resolutions')
         }}</div>
@@ -55,6 +62,15 @@ const { t } = useI18n()
             item
           }}</li>
         </ul>
+      </template>
+      <div v-if="textError" class="text-negative q-mt-md" role="alert">
+        {{ t('artifacts.transition.reportTextFailed') }}: {{ textError }}
+      </div>
+      <template v-if="text">
+        <div class="text-subtitle2 q-mt-md">{{
+          t('artifacts.transition.reportText')
+        }}</div>
+        <MarkdownContent :text="text" disable-images />
       </template>
     </template>
   </div>

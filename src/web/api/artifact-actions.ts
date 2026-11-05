@@ -80,5 +80,13 @@ export const artifactActionsApi = {
         '/report?offset=' +
         offset,
       signal
+    ),
+  reportText: (id: string, offset: number, signal?: AbortSignal) =>
+    apiGet<ArtifactReportChunk>(
+      '/api/artifact-validations/' +
+        encodeURIComponent(id) +
+        '/report-text?offset=' +
+        offset,
+      signal
     )
 }

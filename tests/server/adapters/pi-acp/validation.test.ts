@@ -200,7 +200,7 @@ for (const verdict of ['pass', 'conflict', 'incomplete'] as const) {
       )
       assert.ok(pages > 1, 'manifest must include multiple pages')
       assert.ok(reads > 1, 'content must include multiple chunks')
-      assert.ok(state.report?.reportArtifactId)
+      assert.ok(state.report?.text)
       assert.equal(storage.catalog.get(node.id)?.status, 'in_review')
       assert.ok(JSON.stringify(requests[0]).includes('tasks_get_context'))
     }

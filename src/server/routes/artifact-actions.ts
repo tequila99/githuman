@@ -189,6 +189,22 @@ export async function artifactActionRoutes(
   )
   app.get<{
     Params: { id: string }
+    Querystring: Static<typeof ArtifactValidationReportQuery>
+  }>(
+    '/api/artifact-validations/:id/report-text',
+    {
+      schema: {
+        tags: ['artifacts'],
+        summary: 'Read the Markdown report text of a validation in chunks',
+        params: ArtifactParams,
+        querystring: ArtifactValidationReportQuery,
+        response: { 200: ArtifactReportChunkSchema, ...ERROR_RESPONSES }
+      }
+    },
+    request => service.jobs.reportText(request.params.id, request.query.offset)
+  )
+  app.get<{
+    Params: { id: string }
     Querystring: Static<typeof ArtifactHistoryQuery>
   }>(
     '/api/artifact-validations/:id/history',

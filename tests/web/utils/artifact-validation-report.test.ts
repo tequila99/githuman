@@ -1,6 +1,9 @@
 import { test, beforeEach, afterEach } from 'node:test'
 import assert from 'node:assert/strict'
-import { readArtifactValidationReport } from '@/utils/artifact-validation-report'
+import {
+  readArtifactValidationReport,
+  readArtifactValidationReportText
+} from '@/utils/artifact-validation-report'
 import type { ArtifactValidationView, ArtifactReportChunk } from '@/api/types'
 
 const validation: ArtifactValidationView = {
@@ -98,6 +101,57 @@ test('does not read a report while a validator can still change it', async () =>
   serve([])
   await assert.rejects(
     readArtifactValidationReport({ ...validation, state: 'running' }),
+    /finish/
+  )
+})
+
+const markdown = '# Отчёт 🧪\n\nГотово.'
+const withText: ArtifactValidationView = {
+  ...validation,
+  report: {
+    verdict: 'pass',
+    findingCount: 1,
+    text: { sha256: 'digest', bytes: new TextEncoder().encode(markdown).length }
+  }
+}
+test('reads the report text in UTF-8 chunks', async () => {
+  const split = markdown.indexOf('🧪') + 2
+  const first = markdown.slice(0, split)
+  const offset = new TextEncoder().encode(first).length
+  const totalBytes = new TextEncoder().encode(markdown).length
+  serve([
+    {
+      id: validation.id,
+      offset: 0,
+      totalBytes,
+      nextOffset: offset,
+      text: first
+    },
+    {
+      id: validation.id,
+      offset,
+      totalBytes,
+      nextOffset: null,
+      text: markdown.slice(split)
+    }
+  ])
+  assert.equal(await readArtifactValidationReportText(withText), markdown)
+})
+test('a validation without report text yields no text and no request', async () => {
+  serve([])
+  assert.equal(await readArtifactValidationReportText(validation), null)
+})
+test('rejects report text whose size differs from the validation summary', async () => {
+  serve([chunk('# Other')])
+  await assert.rejects(
+    readArtifactValidationReportText(withText),
+    /does not match/
+  )
+})
+test('does not read report text while a validator can still change it', async () => {
+  serve([])
+  await assert.rejects(
+    readArtifactValidationReportText({ ...withText, state: 'running' }),
     /finish/
   )
 })
