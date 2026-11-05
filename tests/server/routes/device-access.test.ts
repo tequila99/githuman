@@ -253,3 +253,25 @@ test('an expired device loses its open stream', async t => {
   clock.now += DEVICE_IDLE_TTL_MS
   await ended
 })
+
+test('a loopback Host with a foreign Origin is refused as not local, not as an unknown Host', async t => {
+  const app = buildApp({ allowedHosts: [SERVER] })
+  t.after(() => app.close())
+  await app.ready()
+  const foreign = await app.inject({
+    method: 'POST',
+    url: '/api/artifact-actions',
+    headers: { host: '127.0.0.1:3847', origin: 'http://evil.example' },
+    payload: {}
+  })
+  assert.equal(foreign.statusCode, 403)
+  assert.match(foreign.json().message, /not local/)
+  assert.doesNotMatch(foreign.json().message, /Unknown Host/)
+  const unknown = await app.inject({
+    url: '/api/artifact-actions',
+    remoteAddress: '192.168.1.5',
+    headers: { host: 'other.example' }
+  })
+  assert.equal(unknown.statusCode, 403)
+  assert.match(unknown.json().message, /Unknown Host "other.example"/)
+})

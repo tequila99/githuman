@@ -18,6 +18,8 @@ import { useAgentStore } from '@/stores/agent-store'
 import { useNavDrawer } from '@/composables/use-nav-drawer'
 import AgentSidebar from '@/components/agent/AgentSidebar.vue'
 import MainHeader from '@/components/MainHeader.vue'
+import ArtifactActionsDialog from '@/components/artifacts/ArtifactActionsDialog.vue'
+import { useArtifactActions } from '@/composables/artifacts/use-artifact-actions'
 import MainMenu from '@/components/MainMenu.vue'
 import DeviceRequestDialog from '@/components/devices/DeviceRequestDialog.vue'
 import { useAccessStore } from '@/stores/access-store'
@@ -71,6 +73,9 @@ const repositoryEvents = useServerEvents(['files:changed'], () => {
 })
 onUnmounted(repositoryEvents.close)
 
+// One owner of the request queue for the whole shell, so it works on every page (ADR 0116).
+const artifactActions = useArtifactActions()
+const artifactActionsOpen = ref(false)
 const { enabled: agentEnabled } = storeToRefs(useAgentStore())
 // Only this machine answers pairing requests (ADR 0079).
 const { isLocal } = storeToRefs(useAccessStore())
@@ -94,7 +99,20 @@ const {
     <MainHeader
       v-show="!workspace.window.value"
       @resize="height => (headerHeight = height)"
+      :artifact-actions="{
+        count: artifactActions.count.value,
+        loading: artifactActions.loading.value,
+        failed: Boolean(artifactActions.error.value)
+      }"
       @toggle-drawer="toggleLeftDrawer"
+      @open-artifact-actions="artifactActionsOpen = true"
+    />
+    <ArtifactActionsDialog
+      v-model="artifactActionsOpen"
+      :model="artifactActions.model.value"
+      :loading="artifactActions.loading.value"
+      :error="artifactActions.error.value"
+      @retry="artifactActions.retry"
     />
     <MainMenu v-model="leftDrawerOpen" />
     <AgentSidebar v-if="agentEnabled" />

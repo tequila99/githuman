@@ -109,6 +109,7 @@ export type {
   PendingArtifactAction,
   ArtifactActionInspection,
   ArtifactActionList,
+  ArtifactActionListItem,
   ArtifactValidationInspection,
   ArtifactChangeSetPreview,
   ArtifactAuthorizationRequest,

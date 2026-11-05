@@ -32,9 +32,10 @@ branch/commits) с браузером файлов и подсветкой си�
 - `tests/server/`, `tests/cli/`, `tests/shared/`, `tests/web/` — `node:test`, зеркалируют
   структуру `src/`. `tests/web/` покрывает сторы, composables и utils
   фронтенда (алиас `@` подключает `tests/web/register-web-alias-loader.mjs`).
-  **Нет тестов для Vue-компонентов** и `tests/e2e/` не существует (несмотря
-  на `playwright.config.ts` и скрипт `test:e2e` — известный пробел, не
-  чинить молча, если не просили явно). Вёрстку проверять вручную в Chromium.
+  **Нет тестов для Vue-компонентов.** `tests/e2e/` — Playwright: сервер
+  поднимает `tests/e2e/fixture-server.ts` на временном git-репозитории с
+  засеянными артефактами (нужен `pnpm run build`), пока покрыт только
+  сценарий подтверждения пакетных действий. Вёрстку проверять вручную в Chromium.
 - `lint-rules/` — собственные правила oxlint (один JS-плагин `local`, правила
   собирает `lint-rules/index.js`, подключён в `oxlint.config.ts`; два плагина с
   одним именем oxlint не принимает), тесты к ним — `tests/lint-rules/` через
@@ -259,7 +260,9 @@ userPath)` напрямую.
   Как элементы контекста превращаются в блоки
   запроса и что значит `githuman://` — [docs/agent-context-uris.md](docs/agent-context-uris.md).
   Лимит чатов — `MAX_AGENT_SESSIONS`
-  (`src/shared/agents/constants.ts`), на сервере и в UI.
+  (`src/shared/agents/constants.ts`), на сервере и в UI. Завершённый валидатор,
+  оставленный открытым флагом `--debug-validation`, помечается `retire()` и
+  уступает слот: новый чат закрывает самый старый такой.
 - **`localStorage` — только через `@/utils/safe-storage`** (обёртка над Quasar
   `LocalStorage`, всё в `try/catch`: `setItem` может бросить при переполнении или
   отключённом хранилище, а страница обязана работать и без него). Прямого
@@ -422,6 +425,6 @@ userPath)` напрямую.
   карточек (ADR 0032). Поиск по файлам — в приложении через сервер
   (отдельный issue).
 - Нет тестов для Vue-компонентов (`vitest`/`@testing-library/vue` не
-  подключены) и `tests/e2e/` не существует.
+  подключены); e2e — один сценарий (`tests/e2e/artifact-actions.spec.ts`).
 - У файла с конфликтом слияния нет stage 0 в индексе: hunks на вкладке
   Unstaged показывают весь файл как добавленный, статуса конфликта в UI нет.

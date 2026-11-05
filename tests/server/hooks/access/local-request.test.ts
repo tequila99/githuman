@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import Fastify from 'fastify'
-import { isLocalRequest } from '../../../../src/server/hooks/access/local-request.ts'
+import {
+  isLocalRequest,
+  isLoopbackHostHeader
+} from '../../../../src/server/hooks/access/local-request.ts'
 
 async function localApp() {
   const app = Fastify()
@@ -101,4 +104,13 @@ test('a proxy on this machine forwards a remote client as not local', async t =>
     }),
     true
   )
+})
+
+test('a Host header names this machine only for loopback names', () => {
+  for (const host of ['localhost:3847', '127.0.0.1', '[::1]:3847']) {
+    assert.equal(isLoopbackHostHeader(host), true, host)
+  }
+  for (const host of [undefined, '', '192.168.1.5:3847', 'example.com']) {
+    assert.equal(isLoopbackHostHeader(host), false, String(host))
+  }
 })

@@ -828,3 +828,14 @@ test('artifact context deduplicates by store and document identity across title 
   store.addContext({ ...item, storeId: 'other' }, 'artifact-chat')
   assert.equal(store.chats['artifact-chat']?.pendingContext.length, 2)
 })
+
+test('only a retired validation chat frees a slot', async () => {
+  const chats = (retired: boolean) =>
+    Array.from({ length: MAX_AGENT_SESSIONS }, (_, index) =>
+      index === 0
+        ? session('v', { kind: 'validation', status: 'ready', retired })
+        : session('s' + index)
+    )
+  assert.equal(await storeWith(...chats(false)).then(s => s.canAddChat), false)
+  assert.equal(await storeWith(...chats(true)).then(s => s.canAddChat), true)
+})

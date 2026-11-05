@@ -38,6 +38,7 @@ import {
   type StoredTransition
 } from '../repositories/artifact-transition.repo.ts'
 import type { ArtifactLifecycleService } from './artifact-lifecycle.service.ts'
+import { graphIssuesMessage } from './artifact-graph-validation.ts'
 
 // Reconcile cadence; other processes cannot call this process, so it polls.
 const RECONCILE_INTERVAL_MS = 1000
@@ -252,7 +253,7 @@ export class ArtifactTransitionService {
     if (!preview.view.canConfirm) {
       throw new ArtifactConflictError(
         'The transition is blocked: ' +
-          preview.view.blockers.map(item => item.message).join(' ')
+          graphIssuesMessage(preview.view.blockers)
       )
     }
     const presetState = this.lifecycle.jobs.presetState(input.presetId)

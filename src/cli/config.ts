@@ -16,6 +16,8 @@ export interface ServeOptions {
   dbPrefix?: string
   /** Serves Swagger UI at `/api/docs` (`--api-docs`). */
   apiDocs?: boolean
+  /** Keeps validator sessions open and logs their events (`--debug-validation`). */
+  debugValidation?: boolean
   /** Extra exact host names that LAN requests may use (`--allowed-host`, ADR 0079). */
   allowedHosts?: string[]
 }
@@ -121,6 +123,7 @@ export function parseServeArgs(argv: string[]): ServeOptions {
       'notes-dir': { type: 'string' },
       'db-prefix': { type: 'string' },
       'api-docs': { type: 'boolean', default: false },
+      'debug-validation': { type: 'boolean', default: false },
       'allowed-host': { type: 'string', multiple: true }
     },
     strict: false
@@ -145,6 +148,7 @@ export function parseServeArgs(argv: string[]): ServeOptions {
   }
 
   const apiDocs = values['api-docs'] === true
+  const debugValidation = values['debug-validation'] === true
   const allowedHosts = resolveAllowedHosts(
     Array.isArray(values['allowed-host']) ? values['allowed-host'] : []
   )
@@ -155,6 +159,7 @@ export function parseServeArgs(argv: string[]): ServeOptions {
     open,
     dbPrefix,
     apiDocs,
+    debugValidation,
     allowedHosts,
     ...(typeof values['notes-dir'] === 'string'
       ? { notesDir: values['notes-dir'] }

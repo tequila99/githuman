@@ -476,6 +476,55 @@ test(
 )
 
 test(
+  'change_sets.preview gives an agent the versions that change_sets.propose requires',
+  { timeout: 30_000 },
+  async t => {
+    const { app, storage } = setup(t)
+    const { authorization } = await startSession(app)
+    const [artifact] = storage.list().items
+    const changeSet = {
+      storeId: storage.storeId,
+      command: 'archive',
+      subjectIds: [artifact.id],
+      expectedVersions: [],
+      relationChanges: [],
+      targetStatuses: [{ artifactId: artifact.id, status: 'archived' }],
+      supplementDispositions: [],
+      reason: 'Archive through the agent bridge'
+    }
+    const bridge = (operation: string, payload: object, headers = {}) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/agent/artifacts/${operation}`,
+        headers: { authorization, ...headers },
+        payload
+      })
+    const withoutKey = await app.inject({
+      method: 'POST',
+      url: '/api/agent/artifacts/change_sets.preview',
+      payload: changeSet
+    })
+    assert.equal(withoutKey.statusCode, 403)
+    const preview = await bridge('change_sets.preview', changeSet)
+    assert.equal(preview.statusCode, 200, preview.body)
+    const body = preview.json()
+    assert.deepEqual(body.expectedVersions, [
+      { id: artifact.id, version: artifact.metadataVersion }
+    ])
+    assert.deepEqual(
+      body.errors.map((item: { code: string }) => item.code),
+      ['missing_expected_version']
+    )
+    // Preview saves nothing; propose with its versions succeeds at once.
+    const proposed = await bridge('change_sets.propose', {
+      requestId: 'preview-then-propose',
+      changeSet: { ...changeSet, expectedVersions: body.expectedVersions }
+    })
+    assert.equal(proposed.statusCode, 200, proposed.body)
+  }
+)
+
+test(
   'a server on a pipe gives the agent session a clear error instead of silent missing tools',
   { timeout: 30_000 },
   async t => {
@@ -532,6 +581,7 @@ test(
     )
     const tools = (await client.listTools()).tools
     assert.ok(tools.some(tool => tool.name === 'change_sets_propose'))
+    assert.ok(tools.some(tool => tool.name === 'change_sets_preview'))
     assert.ok(!tools.some(tool => tool.name.startsWith('reviews_')))
     assert.ok(
       !JSON.stringify(
@@ -643,7 +693,15 @@ test(
       url: `/api/artifact-actions/${id}`
     })
     assert.equal(revoked.statusCode, 200, revoked.body)
-    assert.equal((await status()).statusCode, 404)
+    // The requester sees that the user rejected the request, not a bare "not found".
+    const afterRevoke = await status()
+    assert.equal(afterRevoke.statusCode, 200, afterRevoke.body)
+    assert.equal(afterRevoke.json().state, 'revoked')
+    assert.equal(afterRevoke.json().authorizationId, null)
+    // Another session learns nothing about a request that is not its own.
+    assert.throws(() =>
+      storage.lifecycle.authorization.status(id, 'another-session')
+    )
     assert.throws(() =>
       storage.lifecycle.authorization.assert(
         approved.json().authorizationId,

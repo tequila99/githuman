@@ -219,7 +219,7 @@ export async function artifactActionRoutes(
     },
     () => ({
       storeId: service.storage.storeId,
-      items: service.authorization.list()
+      items: service.listActions()
     })
   )
   app.get<{ Params: { id: string } }>(

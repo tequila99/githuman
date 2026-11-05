@@ -19,6 +19,17 @@ export interface ValidationManifest {
   artifacts: Artifact[]
   requiredContentIds: string[]
 }
+/** Counters of one validator run (ADR 0120). */
+export interface ValidationMetrics {
+  startedAt: number
+  finishedAt: number
+  toolCalls: number
+  failedToolCalls: number
+  contextTokens?: number
+  costUsd?: number
+  stopReason?: string
+  lastFailure?: string
+}
 export interface StoredValidation {
   id: string
   changeSetId: string
@@ -45,6 +56,9 @@ export interface StoredValidation {
   submissionDigest?: string
   eventKind?: string
   readCoverage?: { key: string; bytes: number }[]
+  metrics?: ValidationMetrics
+  /** Manifest generation; a rebase of a running validation increments it (ADR 0121). */
+  generation?: number
 }
 
 export class ArtifactValidationRepository {
@@ -218,6 +232,19 @@ export class ArtifactValidationRepository {
         'INSERT INTO artifact_authorization_events(store_id,id,kind,payload_json) VALUES(?,?,?,?)'
       )
       .run(this.storeId, id, kind, JSON.stringify(data))
+  }
+  /** What the revoke of a pending action left behind: who asked and when it would expire. */
+  revoked(id: string): { sessionId?: string; expiresAt?: number } | null {
+    const row = this.db
+      .prepare(
+        "SELECT payload_json FROM artifact_authorization_events WHERE store_id=? AND id=? AND kind='revoked' ORDER BY seq DESC LIMIT 1"
+      )
+      .get(this.storeId, id) as { payload_json: string } | undefined
+    if (!row) {
+      return null
+    }
+    const value: unknown = JSON.parse(row.payload_json)
+    return typeof value === 'object' && value !== null ? value : {}
   }
   consumed(id: string): boolean {
     return Boolean(

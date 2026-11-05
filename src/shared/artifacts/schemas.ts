@@ -1030,6 +1030,55 @@ export const ArtifactValidationViewSchema = Type.Object(
     reason: Type.Optional(
       Type.String({ description: 'Terminal outcome explanation.' })
     ),
+    generation: Type.Optional(
+      Type.Integer({
+        minimum: 1,
+        description:
+          'Manifest generation; it grows when a running validation follows its set.'
+      })
+    ),
+    metrics: Type.Optional(
+      Type.Object(
+        {
+          startedAt: Type.Number({
+            description: 'Validator start in Unix milliseconds.'
+          }),
+          finishedAt: Type.Number({
+            description: 'Terminal state time in Unix milliseconds.'
+          }),
+          toolCalls: Type.Integer({
+            minimum: 0,
+            description: 'Tool calls that the validator made.'
+          }),
+          failedToolCalls: Type.Integer({
+            minimum: 0,
+            description: 'Tool calls that failed.'
+          }),
+          contextTokens: Type.Optional(
+            Type.Integer({
+              minimum: 0,
+              description: 'Last reported context size in tokens.'
+            })
+          ),
+          costUsd: Type.Optional(
+            Type.Number({
+              minimum: 0,
+              description: 'Last reported session cost in US dollars.'
+            })
+          ),
+          stopReason: Type.Optional(
+            Type.String({ description: 'Agent stop reason of the last turn.' })
+          ),
+          lastFailure: Type.Optional(
+            Type.String({
+              description:
+                'Last failed tool and its output, cut to 300 characters.'
+            })
+          )
+        },
+        { description: 'Validator run metrics (ADR 0120).' }
+      )
+    ),
     report: Nullable(
       Type.Object(
         {
@@ -1087,10 +1136,31 @@ export const PendingArtifactActionSchema = Type.Object(
   },
   { description: 'One exact action awaiting explicit user approval.' }
 )
+export const ArtifactActionSummarySchema = Type.Object(
+  {
+    command: Type.String({ description: 'Lifecycle command of the package.' }),
+    reason: Type.String({
+      description: 'Reason the requester gave, cut to a list-sized length.'
+    }),
+    documentCount: Type.Integer({
+      description: 'Number of documents whose status changes.'
+    })
+  },
+  {
+    description: 'What the package does, in a few fields for the request list.'
+  }
+)
+export const ArtifactActionListItemSchema = Type.Object(
+  {
+    ...PendingArtifactActionSchema.properties,
+    summary: Nullable(ArtifactActionSummarySchema)
+  },
+  { description: 'A pending request with a summary of its package.' }
+)
 export const ArtifactActionListSchema = Type.Object(
   {
     storeId: lifecycleId('Owning store.'),
-    items: Type.Array(PendingArtifactActionSchema, {
+    items: Type.Array(ArtifactActionListItemSchema, {
       description: 'Live pending requests.'
     })
   },
@@ -1129,10 +1199,21 @@ export const ArtifactActionInspectionSchema = Type.Object(
   },
   { description: 'Reviewable current scope with server readiness checks.' }
 )
+export const ArtifactActionStatusStateSchema = Type.Union(
+  [
+    ...ArtifactActionPhaseSchema.anyOf,
+    Type.Literal('revoked'),
+    Type.Literal('expired')
+  ],
+  {
+    description:
+      'Phase of the request, or how it ended without a commit: the user rejected it, or its time ran out.'
+  }
+)
 export const ArtifactActionStatusSchema = Type.Object(
   {
     id: lifecycleId('Original pending request identifier.'),
-    state: ArtifactActionPhaseSchema,
+    state: ArtifactActionStatusStateSchema,
     authorizationId: Nullable(
       lifecycleId('Grant for this requesting session after approval.')
     ),

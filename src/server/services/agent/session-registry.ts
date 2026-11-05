@@ -63,6 +63,12 @@ export interface AgentSessionRegistry {
   get: (id: string) => AgentSession | undefined
   list: () => AgentSessionInfo[]
   close: (id: string) => boolean
+  /**
+   * Marks a finished session that stays open for inspection and revokes its
+   * artifact key. A new session takes its slot: the registry closes the oldest
+   * retired session first.
+   */
+  retire: (id: string) => void
   closeAll: () => void
   /**
    * Replays what every session buffered after `afterId` (oldest first), then
@@ -83,6 +89,8 @@ export function createSessionRegistry(options: {
 }): AgentSessionRegistry {
   const sessions = new Map<string, AgentSession>()
   const unsubscribeSession = new Map<string, () => void>()
+  // Finished sessions kept open for inspection; a new session may replace them.
+  const retired = new Set<string>()
   const listeners = new Set<AgentStreamListener>()
   const keys = new Map<string, string>()
   const sessionKeys = new Map<string, string>()
@@ -144,6 +152,18 @@ export function createSessionRegistry(options: {
     unsubscribeSession.get(id)?.()
     unsubscribeSession.delete(id)
     sessions.delete(id)
+    retired.delete(id)
+  }
+
+  function closeSession(id: string): boolean {
+    const session = sessions.get(id)
+    if (!session) {
+      return false
+    }
+    session.close()
+    drop(id)
+    broadcast({ type: 'sessions' })
+    return true
   }
 
   function closeAll(): void {
@@ -193,6 +213,13 @@ export function createSessionRegistry(options: {
       const preset = options.presets.find(p => p.id === presetId)
       if (!preset) {
         throw new UnknownAgentPresetError(`Unknown agent "${presetId}"`)
+      }
+      if (sessions.size >= MAX_AGENT_SESSIONS) {
+        // A Set keeps insertion order, so the first retired session is the oldest.
+        const [oldest] = retired
+        if (oldest !== undefined) {
+          closeSession(oldest)
+        }
       }
       if (sessions.size >= MAX_AGENT_SESSIONS) {
         throw new TooManyAgentSessionsError(
@@ -251,16 +278,19 @@ export function createSessionRegistry(options: {
       return session
     },
     get: id => sessions.get(id),
-    list: () => [...sessions.values()].map(session => session.info()),
-    close(id) {
-      const session = sessions.get(id)
-      if (!session) {
-        return false
+    list: () =>
+      [...sessions.values()].map(session => ({
+        ...session.info(),
+        ...(retired.has(session.id) ? { retired: true } : {})
+      })),
+    close: closeSession,
+    retire(id) {
+      if (sessions.has(id)) {
+        retired.add(id)
+        // A retired validator stays open for inspection, but its key must stop working.
+        revoke(id)
+        broadcast({ type: 'sessions' })
       }
-      session.close()
-      drop(id)
-      broadcast({ type: 'sessions' })
-      return true
     },
     closeAll,
     subscribe(listener, afterId = 0) {

@@ -138,7 +138,7 @@ export default defineConfig({
       // awaits internally via the test runner — not awaiting/void-ing it at
       // the call site is the standard, correct usage, not a bug. Casts on
       // `unknown`-typed Fastify/DB return values are also normal in tests.
-      files: ['tests/**/*.test.ts'],
+      files: ['tests/**/*.test.ts', 'tests/e2e/**'],
       rules: {
         'typescript/no-floating-promises': 'off',
         'typescript/unbound-method': 'off',
