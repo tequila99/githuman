@@ -1,28 +1,23 @@
 import { artifactActionsApi } from '@/api/artifact-actions'
-import type { ArtifactValidationView } from '@/api/types'
+import type { ArtifactReportChunk, ArtifactValidationView } from '@/api/types'
 import { isRecord } from '@/utils/guards'
 
 // Bound JSON allocation without silently dropping any findings.
 const MAX_REPORT_BYTES = 16 * 1024 * 1024
 
-export async function readArtifactValidationReport(
-  validation: ArtifactValidationView,
-  signal?: AbortSignal
-) {
-  if (validation.state === 'running' || validation.state === 'prepared') {
-    throw new Error(
-      'Wait for the validation to finish before reading its report.'
-    )
-  }
+type ChunkLoader = (offset: number) => Promise<ArtifactReportChunk>
+
+/** Reads all chunks of one report part and checks identity, size and continuation. */
+async function readChunks(id: string, load: ChunkLoader): Promise<string> {
   let offset = 0
   let total: number | null = null
   const chunks: string[] = []
   do {
-    const chunk = await artifactActionsApi.report(validation.id, offset, signal)
+    const chunk = await load(offset)
     const bytes = new TextEncoder().encode(chunk.text).length
     total ??= chunk.totalBytes
     if (
-      chunk.id !== validation.id ||
+      chunk.id !== id ||
       chunk.offset !== offset ||
       chunk.totalBytes !== total ||
       total > MAX_REPORT_BYTES ||
@@ -49,7 +44,44 @@ export async function readArtifactValidationReport(
     }
     offset = chunk.nextOffset
   } while (offset < total)
-  const value: unknown = JSON.parse(chunks.join(''))
+  return chunks.join('')
+}
+
+function assertFinished(validation: ArtifactValidationView) {
+  if (validation.state === 'running' || validation.state === 'prepared') {
+    throw new Error(
+      'Wait for the validation to finish before reading its report.'
+    )
+  }
+}
+
+/** Markdown report text of a validation (ADR 0122); null when the validator attached none. */
+export async function readArtifactValidationReportText(
+  validation: ArtifactValidationView,
+  signal?: AbortSignal
+): Promise<string | null> {
+  assertFinished(validation)
+  if (!validation.report?.text) {
+    return null
+  }
+  const text = await readChunks(validation.id, offset =>
+    artifactActionsApi.reportText(validation.id, offset, signal)
+  )
+  if (new TextEncoder().encode(text).length !== validation.report.text.bytes) {
+    throw new Error('The report text does not match its validation.')
+  }
+  return text
+}
+
+export async function readArtifactValidationReport(
+  validation: ArtifactValidationView,
+  signal?: AbortSignal
+) {
+  assertFinished(validation)
+  const raw = await readChunks(validation.id, offset =>
+    artifactActionsApi.report(validation.id, offset, signal)
+  )
+  const value: unknown = JSON.parse(raw)
   if (value === null && validation.report === null) return null
   if (
     !isRecord(value) ||

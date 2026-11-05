@@ -224,53 +224,78 @@ async function setup(
   }
 }
 
-test('report draft and validation link roll back together and retry without duplicate events', async t => {
+test('report text and validation event roll back together and retry without duplicates', async t => {
   const { storage, create, propose, pass } = await setup(t)
   const validation = pass(propose([create('draft')]))
   const jobs = storage.lifecycle.jobs
   const repository = storage.lifecycle.repository
+  const id = validation.prepared.id
   const before = storage.catalog.all().length
-  const history = repository.history(validation.prepared.id)
+  const history = repository.history(id)
   const append = repository.appendValidation.bind(repository)
   repository.appendValidation = () => {
     throw new Error('Commit failed')
   }
   assert.throws(
-    () =>
-      jobs.createReport(
-        validation.prepared.id,
-        validation.sessionId,
-        '# Report'
-      ),
+    () => jobs.createReport(id, validation.sessionId, '# Report'),
     /Commit failed/
   )
-  assert.equal(storage.catalog.all().length, before)
-  assert.deepEqual(repository.history(validation.prepared.id), history)
+  assert.equal(repository.reportText(id), undefined)
+  assert.deepEqual(repository.history(id), history)
   repository.appendValidation = append
-  const report = jobs.createReport(
-    validation.prepared.id,
-    validation.sessionId,
-    '# Report'
+  const report = jobs.createReport(id, validation.sessionId, '# Report')
+  assert.equal(report.bytes, Buffer.byteLength('# Report'))
+  assert.equal(repository.validation(id).report?.text?.sha256, report.sha256)
+  assert.equal(repository.validation(id).report?.reportArtifactId, undefined)
+  assert.equal(repository.reportText(id), '# Report')
+  assert.equal(storage.catalog.all().length, before)
+  const committed = repository.history(id)
+  assert.deepEqual(
+    jobs.createReport(id, validation.sessionId, '# Report'),
+    report
   )
-  assert.equal(
-    repository.validation(validation.prepared.id).report?.reportArtifactId,
-    report.id
-  )
-  const committed = repository.history(validation.prepared.id)
-  assert.equal(
-    jobs.createReport(validation.prepared.id, validation.sessionId, '# Report')
-      .id,
-    report.id
-  )
-  assert.deepEqual(repository.history(validation.prepared.id), committed)
+  assert.deepEqual(repository.history(id), committed)
   assert.throws(
-    () =>
-      jobs.createReport(
-        validation.prepared.id,
-        validation.sessionId,
-        '# Changed'
-      ),
-    /different operation/
+    () => jobs.createReport(id, validation.sessionId, '# Changed'),
+    /different content/
+  )
+  assert.equal(repository.reportText(id), '# Report')
+})
+
+test('report text is immutable and read in UTF-8 chunks', async t => {
+  const { db, storage, create, propose, pass } = await setup(t)
+  const validation = pass(propose([create('draft')]))
+  const jobs = storage.lifecycle.jobs
+  const id = validation.prepared.id
+  const text = 'Ж'.repeat(30_000)
+  jobs.createReport(id, validation.sessionId, text)
+  assert.throws(
+    () => db.prepare('UPDATE artifact_validation_reports SET body=?').run('x'),
+    /immutable/
+  )
+  const parts: string[] = []
+  let offset: number | null = 0
+  while (offset !== null) {
+    const chunk = jobs.reportText(id, offset)
+    assert.equal(chunk.totalBytes, Buffer.byteLength(text))
+    parts.push(chunk.text)
+    offset = chunk.nextOffset
+  }
+  assert.ok(parts.length > 1)
+  assert.equal(parts.join(''), text)
+  assert.throws(() => jobs.reportText(id, 1), /Invalid report offset/)
+  assert.throws(
+    () => jobs.createReport(id, validation.sessionId, 'a\0b'),
+    /without NUL/
+  )
+})
+
+test('validation without report text has none to read', async t => {
+  const { storage, create, propose, pass } = await setup(t)
+  const validation = pass(propose([create('draft')]))
+  assert.throws(
+    () => storage.lifecycle.jobs.reportText(validation.prepared.id),
+    /not found/i
   )
 })
 
@@ -320,79 +345,62 @@ test('inline report rejects invalid evidence before creation and rolls back a fa
   )
 })
 
-for (const phase of ['published', 'after_commit'] as const) {
-  test(`report ${phase} interruption preserves safe recovery and replay`, async t => {
-    let interrupted = false
-    const { storage, create, propose, pass, advance } = await setup(
-      t,
-      false,
-      current => {
-        if (interrupted && current === phase) throw new Error('Interrupted')
-      }
-    )
-    const validation = pass(propose([create('draft')]))
-    const before = storage.catalog.all().length
-    interrupted = true
-    assert.throws(() => validation.submit('pass', '# Report'), /Interrupted/)
-    interrupted = false
-    const history = storage.lifecycle.repository.history(validation.prepared.id)
-    if (phase === 'published') {
-      assert.equal(storage.catalog.all().length, before)
-      advance(31_000)
-      const recovery = storage.recover()
-      assert.equal(recovery.awaitingRetry.length, 1)
-      assert.equal(storage.catalog.all().length, before)
-    }
-    assert.equal(validation.submit('pass', '# Report').state, 'pass')
-    assert.equal(storage.catalog.all().length, before + 1)
-    if (phase === 'after_commit') {
-      assert.deepEqual(
-        storage.lifecycle.repository.history(validation.prepared.id),
-        history
-      )
-    }
-  })
-}
-
-test('report commit rechecks a lease that expires after file publication', async t => {
-  const clock: { advance?: (ms: number) => void; armed: boolean } = {
-    armed: false
-  }
-  const { storage, create, propose, pass, advance } = await setup(
-    t,
-    false,
-    phase => {
-      if (clock.armed && phase === 'before_commit') clock.advance?.(11 * 60_000)
-    }
-  )
+test('expired validation stores no report text and leaves no artifact', async t => {
+  const { storage, create, propose, pass, advance } = await setup(t)
   const validation = pass(propose([create('draft')]))
   const before = storage.catalog.all().length
   const history = storage.lifecycle.repository.history(validation.prepared.id)
-  clock.advance = advance
-  clock.armed = true
+  advance(11 * 60_000)
   assert.throws(() => validation.submit('pass', '# Expired'), /expired/)
   assert.equal(storage.catalog.all().length, before)
+  assert.equal(
+    storage.lifecycle.repository.reportText(validation.prepared.id),
+    undefined
+  )
   assert.deepEqual(
     storage.lifecycle.repository.history(validation.prepared.id),
     history
   )
 })
 
-test('standalone report can be submitted with or without the same inline body', async t => {
+test('report text can be submitted with or without the same inline body', async t => {
   const { storage, create, propose, pass } = await setup(t)
   for (const inline of [false, true]) {
     const validation = pass(propose([create('draft')]))
+    const before = storage.catalog.all().length
     const report = storage.lifecycle.jobs.createReport(
       validation.prepared.id,
       validation.sessionId,
       '# Report'
     )
+    const submitted = validation.submit('pass', inline ? '# Report' : undefined)
+    assert.deepEqual(submitted.report?.text, {
+      sha256: report.sha256,
+      bytes: report.bytes
+    })
+    assert.equal(storage.catalog.all().length, before)
     assert.equal(
-      validation.submit('pass', inline ? '# Report' : undefined).report
-        ?.reportArtifactId,
-      report.id
+      JSON.stringify(
+        storage.lifecycle.repository.validation(validation.prepared.id).report
+      ).includes('# Report'),
+      false
     )
   }
+})
+
+test('a different inline body conflicts with the stored report text', async t => {
+  const { storage, create, propose, pass } = await setup(t)
+  const validation = pass(propose([create('draft')]))
+  storage.lifecycle.jobs.createReport(
+    validation.prepared.id,
+    validation.sessionId,
+    '# Report'
+  )
+  assert.throws(() => validation.submit('pass', '# Other'), /different content/)
+  assert.equal(
+    storage.lifecycle.repository.reportText(validation.prepared.id),
+    '# Report'
+  )
 })
 
 test('lifecycle: complete coverage + pass + structured user action commits and replays exactly', async t => {

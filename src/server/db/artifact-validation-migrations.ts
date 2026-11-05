@@ -53,6 +53,11 @@ export function applyArtifactValidationMigrations(db: DatabaseSync): void {
       operation_id TEXT NOT NULL, payload_json TEXT NOT NULL,
       UNIQUE(store_id,operation_id)
     );
+    CREATE TABLE IF NOT EXISTS artifact_validation_reports (
+      store_id TEXT NOT NULL, validation_id TEXT NOT NULL, sha256 TEXT NOT NULL,
+      bytes INTEGER NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL,
+      PRIMARY KEY(store_id,validation_id)
+    );
     CREATE TABLE IF NOT EXISTS artifact_lifecycle_commits (
       seq INTEGER PRIMARY KEY AUTOINCREMENT, store_id TEXT NOT NULL,
       request_id TEXT NOT NULL, payload_hash TEXT NOT NULL, result_json TEXT NOT NULL,
@@ -71,6 +76,8 @@ export function applyArtifactValidationMigrations(db: DatabaseSync): void {
       'seq=NEW.seq OR (store_id=NEW.store_id AND request_id=NEW.request_id)',
     artifact_transition_consents:
       'seq=NEW.seq OR (store_id=NEW.store_id AND operation_id=NEW.operation_id)',
+    artifact_validation_reports:
+      'store_id=NEW.store_id AND validation_id=NEW.validation_id',
     artifact_lifecycle_commits:
       'seq=NEW.seq OR (store_id=NEW.store_id AND request_id=NEW.request_id)'
   })

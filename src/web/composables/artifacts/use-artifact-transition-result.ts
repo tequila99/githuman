@@ -8,7 +8,10 @@ import {
 import { artifactActionsApi } from '@/api/artifact-actions'
 import { artifactsApi } from '@/api/artifacts'
 import { errorMessage } from '@/utils/error-message'
-import { readArtifactValidationReport } from '@/utils/artifact-validation-report'
+import {
+  readArtifactValidationReport,
+  readArtifactValidationReportText
+} from '@/utils/artifact-validation-report'
 
 // Titles are looked up for at most this many distinct documents.
 const MAX_TITLE_LOOKUPS = 20
@@ -20,6 +23,7 @@ export function useArtifactTransitionResult(
   open: MaybeRefOrGetter<boolean>
 ) {
   const report = shallowRef<Report>(null)
+  const text = shallowRef<string | null>(null)
   const titles = shallowRef<Record<string, string>>({})
   const loading = shallowRef(false)
   const error = shallowRef<string | null>(null)
@@ -38,9 +42,13 @@ export function useArtifactTransitionResult(
     try {
       const view = await artifactActionsApi.validationView(id, request.signal)
       request.signal.throwIfAborted()
-      const result = await readArtifactValidationReport(view, request.signal)
+      const [result, markdown] = await Promise.all([
+        readArtifactValidationReport(view, request.signal),
+        readArtifactValidationReportText(view, request.signal)
+      ])
       if (current !== generation) return
       report.value = result
+      text.value = markdown
       const ids = [...new Set(result?.findings.map(item => item.artifactId))]
       const found = await Promise.allSettled(
         ids
@@ -69,6 +77,7 @@ export function useArtifactTransitionResult(
     ++generation
     controller?.abort()
     report.value = null
+    text.value = null
     titles.value = {}
     loading.value = false
     error.value = null
@@ -83,5 +92,5 @@ export function useArtifactTransitionResult(
     { immediate: true }
   )
   onUnmounted(reset)
-  return { report, titles, loading, error, load }
+  return { report, text, titles, loading, error, load }
 }

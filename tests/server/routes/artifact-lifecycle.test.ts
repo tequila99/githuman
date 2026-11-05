@@ -130,7 +130,7 @@ for (const { presetId, invalidSubmit } of ['validator', 'cursor'].flatMap(
         storage.list().items.some(item => item.title === 'escape'),
         false
       )
-      assert.ok(state.report?.reportArtifactId)
+      assert.ok(state.report?.text)
       const pending = await app.inject({
         method: 'POST',
         url: '/api/artifact-actions',
@@ -207,6 +207,25 @@ for (const { presetId, invalidSubmit } of ['validator', 'cursor'].flatMap(
       )
       assert.equal(report.statusCode, 200, report.body)
       assert.equal(JSON.parse(report.json().text).verdict, 'pass')
+      const reportText = await app.inject(
+        `/api/artifact-validations/${validationId}/report-text`
+      )
+      assert.equal(reportText.statusCode, 200, reportText.body)
+      // The schema drops extra fields, so the complete body is checked.
+      assert.deepEqual(Object.keys(reportText.json()).sort(), [
+        'id',
+        'nextOffset',
+        'offset',
+        'text',
+        'totalBytes'
+      ])
+      assert.equal(reportText.json().id, validationId)
+      assert.equal(reportText.json().nextOffset, null)
+      assert.equal(
+        reportText.json().totalBytes,
+        Buffer.byteLength(reportText.json().text)
+      )
+      assert.equal(reportText.json().totalBytes, state.report?.text?.bytes)
       const history = await app.inject(
         `/api/artifact-validations/${validationId}/history?limit=1`
       )

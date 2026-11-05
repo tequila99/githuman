@@ -9,10 +9,8 @@ const props = defineProps<{ validationId: string }>()
 const { t } = useI18n()
 // The report loads only when the user asks for it.
 const shown = ref(false)
-const { report, titles, loading, error, load } = useArtifactTransitionResult(
-  () => props.validationId,
-  shown
-)
+const { report, text, titles, loading, error, load } =
+  useArtifactTransitionResult(() => props.validationId, shown)
 </script>
 
 <template>
@@ -27,6 +25,7 @@ const { report, titles, loading, error, load } = useArtifactTransitionResult(
     </div>
     <ArtifactReportBody
       :report="report"
+      :text="text"
       :titles="titles"
       :loading="loading"
       :error="error"

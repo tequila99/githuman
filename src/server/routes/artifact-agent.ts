@@ -95,6 +95,14 @@ export async function artifactAgentRoutes(
       })
     ],
     [
+      'validations.report_text',
+      checked(ArtifactToolSchemas['validations.report_text'], (p, a) => {
+        const result = storage.lifecycle.jobs.reportText(p.id, p.offset)
+        storage.lifecycle.jobs.observe(p.id, a.id)
+        return result
+      })
+    ],
+    [
       'validations.history',
       checked(ArtifactToolSchemas['validations.history'], p =>
         storage.lifecycle.jobs.history(p.id, p.afterSeq, p.limit)
