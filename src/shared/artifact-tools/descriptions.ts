@@ -25,7 +25,7 @@ export const ARTIFACT_TOOL_DESCRIPTIONS: Readonly<
   'validations.get':
     'Read the validation state. While state is running, keep calling it within the same turn instead of ending the turn; the job can take minutes. The version can grow when the server follows a grown set: use the version from this response for later actions.',
   'validations.manifest':
-    'Read all manifest pages. Each artifact has contentRequired: true requires full reading; false provides metadata context with optional content reading. All artifacts remain subject to existence and version checks.',
+    'Read all manifest pages. Each artifact has contentRequired. When it is true, read the full content. When it is false, the artifact is metadata context and reading its content is optional. All artifacts remain subject to existence and version checks.',
   'validations.read':
     'Validator only. Read any assigned manifest artifact sequentially, including optional context. Content outside the manifest is forbidden. Only contentRequired artifacts count toward required coverage.',
   'validations.read_next':

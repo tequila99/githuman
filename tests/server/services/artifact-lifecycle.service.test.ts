@@ -1690,7 +1690,8 @@ for (const optionalRead of [false, true]) {
     assert.equal(response.statusCode, 200, response.body)
     assert.deepEqual(response.json(), manifest)
     for (const item of manifest.items) {
-      if (item.kind !== 'artifact' || !('contentRequired' in item)) continue
+      if (item.kind !== 'artifact') continue
+      assert.ok('contentRequired' in item)
       assert.equal(
         Value.Check(ArtifactValidationManifestArtifactSchema, item),
         true
