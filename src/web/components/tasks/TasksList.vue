@@ -91,13 +91,4 @@ function setQuery(value: string | null | undefined) {
   min-width: 0;
   min-height: 0;
 }
-.tasks-list__toolbar :deep(.q-btn) {
-  color: #757575;
-}
-.body--dark .tasks-list__toolbar :deep(.q-btn) {
-  color: #bdbdbd;
-}
-.tasks-list__toolbar :deep(.q-btn .q-icon) {
-  font-size: 20px;
-}
 </style>

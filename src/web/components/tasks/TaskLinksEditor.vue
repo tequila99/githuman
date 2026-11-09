@@ -3,9 +3,11 @@ import CloseButton from '@/components/buttons/CloseButton.vue'
 import AddButton from '@/components/buttons/AddButton.vue'
 import { useI18n } from 'vue-i18n'
 import type { TaskLink } from '@/api/types'
-
-// Matches the server limit on links per task.
-const MAX_LINKS = 20
+import {
+  TASK_LINK_LABEL_MAX_LENGTH,
+  TASK_LINK_MAX_COUNT,
+  TASK_LINK_URL_MAX_LENGTH
+} from '../../../shared/tasks/constants.ts'
 
 const props = defineProps<{ links: TaskLink[]; readonly: boolean }>()
 const emit = defineEmits<{ 'update:links': [links: TaskLink[]] }>()
@@ -53,7 +55,7 @@ function add() {
           class="col-7"
           dense
           outlined
-          maxlength="2048"
+          :maxlength="TASK_LINK_URL_MAX_LENGTH"
           :model-value="link.url"
           :label="t('tasks.links.url')"
           @update:model-value="
@@ -64,7 +66,7 @@ function add() {
           class="col"
           dense
           outlined
-          maxlength="200"
+          :maxlength="TASK_LINK_LABEL_MAX_LENGTH"
           :model-value="link.label ?? ''"
           :label="t('tasks.links.label')"
           @update:model-value="
@@ -75,7 +77,7 @@ function add() {
       </div>
       <div>
         <AddButton
-          :disable="links.length >= MAX_LINKS"
+          :disable="links.length >= TASK_LINK_MAX_COUNT"
           :label="t('tasks.links.add')"
           @click="add"
         />

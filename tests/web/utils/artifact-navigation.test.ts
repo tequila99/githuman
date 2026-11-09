@@ -1,4 +1,7 @@
-import { ARTIFACT_STATUSES } from '../../../src/shared/artifacts/constants.ts'
+import {
+  ARTIFACT_STATUSES,
+  INACTIVE_ARTIFACT_STATUSES
+} from '../../../src/shared/artifacts/constants.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -76,12 +79,12 @@ test('invalid identities, arrays and unknown options fall back without filesyste
   assert.equal(state.filters.status, 'active')
   assert.deepEqual(state.input.filters, {
     statuses: ARTIFACT_STATUSES.filter(
-      value => value !== 'archived' && value !== 'deleted'
+      value => !INACTIVE_ARTIFACT_STATUSES.includes(value)
     )
   })
 })
 
-test('absent and invalid status exclude archived and deleted; explicit statuses remain selectable', () => {
+test('absent and invalid status exclude inactive statuses; explicit statuses remain selectable', () => {
   for (const status of [
     undefined,
     null,
@@ -94,7 +97,7 @@ test('absent and invalid status exclude archived and deleted; explicit statuses 
     assert.deepEqual(
       state.input.filters?.statuses,
       ARTIFACT_STATUSES.filter(
-        value => value !== 'archived' && value !== 'deleted'
+        value => !INACTIVE_ARTIFACT_STATUSES.includes(value)
       )
     )
   }

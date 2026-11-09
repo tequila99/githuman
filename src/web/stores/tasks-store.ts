@@ -4,6 +4,7 @@ import { tasksApi, type TaskStateFilter } from '@/api/tasks'
 import type { Task, TaskList } from '@/api/types'
 import { singleFlight } from '@/utils/single-flight'
 import { errorMessage } from '@/utils/error-message'
+import { defaultTaskFilter } from '@/utils/task-filter'
 
 export const useTasksStore = defineStore('tasks', () => {
   const items = shallowRef<TaskList['items']>([])
@@ -12,7 +13,7 @@ export const useTasksStore = defineStore('tasks', () => {
   const loading = shallowRef(false)
   const error = shallowRef<string | null>(null)
   const query = shallowRef('')
-  const state = shallowRef<TaskStateFilter>('open')
+  const state = shallowRef<TaskStateFilter>(defaultTaskFilter().state)
   const tags = shallowRef<string[]>([])
   const tagMode = shallowRef<'all' | 'any'>('all')
 
@@ -51,6 +52,8 @@ export const useTasksStore = defineStore('tasks', () => {
   const refreshLoaded = singleFlight(async () => {
     const wanted = items.value.length
     const mine = ++generation
+    // Take over the loading flag: the request this one replaces cannot clear it any more.
+    loading.value = true
     try {
       let page = await tasksApi.list(filterOptions())
       let all = page.items
@@ -68,6 +71,8 @@ export const useTasksStore = defineStore('tasks', () => {
       error.value = null
     } catch (err) {
       if (mine === generation) error.value = errorMessage(err)
+    } finally {
+      if (mine === generation) loading.value = false
     }
   })
 

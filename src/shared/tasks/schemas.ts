@@ -1,25 +1,29 @@
 import { ARTIFACT_TYPE_ID_PATTERN_SOURCE } from '../utils/is-valid-artifact-type-id.ts'
 import { UUID_PATTERN_SOURCE } from '../utils/is-uuid.ts'
 import { Type } from '@sinclair/typebox'
+import {
+  TASK_DESCRIPTION_MAX_LENGTH,
+  TASK_LINK_LABEL_MAX_LENGTH,
+  TASK_LINK_MAX_COUNT,
+  TASK_LINK_URL_MAX_LENGTH,
+  TASK_TITLE_MAX_LENGTH
+} from './constants.ts'
 import { Nullable } from '../utils/schemas.ts'
 import {
   ArtifactActorSchema,
   ArtifactStatusSchema
 } from '../artifacts/schemas.ts'
 
-export const TASK_DESCRIPTION_MAX_LENGTH = 200_000
-export const TASK_LINK_MAX_COUNT = 20
-
 export const TaskLinkSchema = Type.Object(
   {
     url: Type.String({
       minLength: 1,
-      maxLength: 2048,
+      maxLength: TASK_LINK_URL_MAX_LENGTH,
       description: 'External HTTP or HTTPS URL without credentials.'
     }),
     label: Type.Optional(
       Type.String({
-        maxLength: 200,
+        maxLength: TASK_LINK_LABEL_MAX_LENGTH,
         description: 'Optional short label for the link.'
       })
     )
@@ -42,7 +46,7 @@ export const TaskInputSchema = Type.Object(
   {
     title: Type.String({
       minLength: 1,
-      maxLength: 1000,
+      maxLength: TASK_TITLE_MAX_LENGTH,
       description: 'Task title.'
     }),
     state: TaskStateSchema,

@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { withTransaction } from './transaction.ts'
 
 // Authoritative records remain append-only even when a caller bypasses the repository.
 const IMMUTABLE_KEYS: Record<string, string> = {
@@ -68,15 +69,17 @@ export function applyArtifactMigrations(db: DatabaseSync): void {
  * snapshot, so a rebuild of artifact_current rebuilds the index too.
  */
 function applyArtifactTaskIndex(db: DatabaseSync): void {
-  const existed = db
-    .prepare(
-      "SELECT 1 FROM sqlite_master WHERE type='table' AND name='artifact_task_links'"
-    )
-    .get()
   // One transaction: a crash must not leave the table without its backfill.
-  db.exec('BEGIN IMMEDIATE')
-  try {
-    db.exec(`
+  // The check runs inside it, so a second process cannot repeat the backfill.
+  withTransaction(
+    db,
+    () => {
+      const existed = db
+        .prepare(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='artifact_task_links'"
+        )
+        .get()
+      db.exec(`
     CREATE TABLE IF NOT EXISTS artifact_task_links (
       store_id TEXT NOT NULL, task_id TEXT NOT NULL, artifact_id TEXT NOT NULL,
       PRIMARY KEY(store_id,task_id,artifact_id)
@@ -95,19 +98,17 @@ function applyArtifactTaskIndex(db: DatabaseSync): void {
       DELETE FROM artifact_task_links WHERE store_id=OLD.store_id AND artifact_id=OLD.artifact_id;
     END;
   `)
-    // Databases from before the index hold artifacts but no links yet.
-    if (!existed) {
-      db.exec(`
+      // Databases from before the index hold artifacts but no links yet.
+      if (!existed) {
+        db.exec(`
       INSERT OR IGNORE INTO artifact_task_links
         SELECT c.store_id, j.value, c.artifact_id
         FROM artifact_current c, json_each(c.snapshot_json,'$.taskIds') j;
     `)
-    }
-    db.exec('COMMIT')
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+      }
+    },
+    { mode: 'immediate' }
+  )
 }
 
 export function protectArtifactTables(

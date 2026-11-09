@@ -2,6 +2,7 @@
 import FormDialogCard from '@/components/FormDialogCard.vue'
 import { shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { TASK_TITLE_MAX_LENGTH } from '../../../shared/tasks/constants.ts'
 import { tasksApi } from '@/api/tasks'
 import type { Task } from '@/api/types'
 import { errorMessage } from '@/utils/error-message'
@@ -56,7 +57,7 @@ function reset() {
         v-model="title"
         autofocus
         outlined
-        maxlength="1000"
+        :maxlength="TASK_TITLE_MAX_LENGTH"
         :readonly="busy"
         :label="t('tasks.titleField')"
       />

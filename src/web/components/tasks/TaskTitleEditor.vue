@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { TASK_TITLE_MAX_LENGTH } from '../../../shared/tasks/constants.ts'
 
 defineProps<{ title: string; readonly: boolean }>()
 const emit = defineEmits<{ 'update:title': [title: string] }>()
@@ -24,7 +25,7 @@ const editingTitle = shallowRef(false)
     autofocus
     borderless
     dense
-    maxlength="1000"
+    :maxlength="TASK_TITLE_MAX_LENGTH"
     @blur="editingTitle = false"
     @keydown.enter.prevent="editingTitle = false"
     input-class="text-h5"

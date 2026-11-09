@@ -3,7 +3,10 @@ import type {
   LocationQueryRaw,
   RouteLocationRaw
 } from 'vue-router'
-import { ARTIFACT_STATUSES } from '../../shared/artifacts/constants.ts'
+import {
+  ARTIFACT_STATUSES,
+  INACTIVE_ARTIFACT_STATUSES
+} from '../../shared/artifacts/constants.ts'
 import { isCalendarDate, localDayStartIso, localDayEndIso } from '@/utils/date'
 import { isUuid } from '../../shared/utils/is-uuid.ts'
 import type { ArtifactSearchInput } from '@/api/types'
@@ -118,7 +121,7 @@ export function artifactRouteState(query: LocationQuery) {
           ? [...ARTIFACT_STATUSES]
           : status === 'active'
             ? ARTIFACT_STATUSES.filter(
-                value => value !== 'deleted' && value !== 'archived'
+                value => !INACTIVE_ARTIFACT_STATUSES.includes(value)
               )
             : [status],
       ...(filters.typeIds.length ? { typeIds: filters.typeIds } : {}),
