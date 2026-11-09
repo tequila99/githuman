@@ -22,6 +22,8 @@
 @import 'artifact-status';
 
 :root {
+  --app-divider: rgba(128, 128, 128, 0.25);
+  --app-selection-tint: rgba(25, 118, 210, 0.1);
   --app-icon-neutral: #757575;
   --app-icon-active: var(--q-primary);
   --app-icon-danger: #c10015;
@@ -103,6 +105,27 @@ html[data-code-font='fira'] {
   color: var(--app-icon-neutral);
 }
 
+// Keep overlays circular, including counts with more than one digit.
+.q-badge.app-icon-badge {
+  top: 0;
+  right: 0;
+  transform: translate(50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  min-width: 18px;
+  min-height: 18px;
+  aspect-ratio: 1;
+  padding: 2px;
+  border-radius: 50%;
+  font-family: var(--font-agent);
+  font-size: 9px;
+  font-style: normal;
+  line-height: 1;
+  font-weight: 500;
+}
+
 // Diff line colors (see githuman/src/web/styles/globals.css)
 :root {
   --diff-added-bg: #e6ffed;
@@ -179,7 +202,7 @@ body.body--dark {
     font-size: 13px;
   }
   .q-item + .q-item {
-    border-top: 1px solid rgba(128, 128, 128, 0.25);
+    border-top: 1px solid var(--app-divider);
   }
   .q-item__label {
     font-size: 13px;

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { mdiClose, mdiPlus } from '@mdi/js'
+import AddButton from '@/components/buttons/AddButton.vue'
+import CloseButton from '@/components/buttons/CloseButton.vue'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import type { TerminalInfo } from '../../../shared/terminal/types.ts'
 import { MAX_TERMINAL_SESSIONS } from '../../../shared/terminal/constants.ts'
@@ -44,35 +45,25 @@ const { t } = useI18n()
           <span class="terminal-tab__name ellipsis">{{
             terminalDirectoryTitle(session.title)
           }}</span>
-          <q-btn
-            flat
-            round
-            dense
+          <CloseButton
             size="xs"
-            :icon="mdiClose"
-            class="app-icon-control q-ml-xs"
+            class="q-ml-xs"
             :disable="!connected"
-            :aria-label="t('terminal.closeTab')"
+            :label="t('terminal.closeTab')"
             @click.stop.prevent="emit('requestClose', session.id)"
           />
           <q-tooltip :delay="TOOLTIP_DELAY_MS">{{ session.title }}</q-tooltip>
         </div>
       </q-tab>
     </q-tabs>
-    <q-btn
-      flat
-      round
-      dense
+    <AddButton
       size="sm"
-      :icon="mdiPlus"
-      class="app-icon-control q-mx-xs"
+      class="q-mx-xs"
       :loading="busy"
       :disable="!connected || sessions.length >= MAX_TERMINAL_SESSIONS"
-      :aria-label="t('terminal.add')"
+      :tooltip="t('terminal.add')"
       @click="emit('create')"
-    >
-      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{ t('terminal.add') }}</q-tooltip>
-    </q-btn>
+    />
   </div>
 </template>
 <style scoped>

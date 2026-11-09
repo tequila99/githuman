@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { withTransaction } from './transaction.ts'
 
 // Authoritative records remain append-only even when a caller bypasses the repository.
 const IMMUTABLE_KEYS: Record<string, string> = {
@@ -59,6 +60,55 @@ export function applyArtifactMigrations(db: DatabaseSync): void {
     );
   `)
   protectArtifactTables(db, IMMUTABLE_KEYS)
+  applyArtifactTaskIndex(db)
+}
+
+/**
+ * Derived index from task to artifacts. Triggers on artifact_current keep it
+ * equal to the current taskIds of every artifact, whichever code writes the
+ * snapshot, so a rebuild of artifact_current rebuilds the index too.
+ */
+function applyArtifactTaskIndex(db: DatabaseSync): void {
+  // One transaction: a crash must not leave the table without its backfill.
+  // The check runs inside it, so a second process cannot repeat the backfill.
+  withTransaction(
+    db,
+    () => {
+      const existed = db
+        .prepare(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='artifact_task_links'"
+        )
+        .get()
+      db.exec(`
+    CREATE TABLE IF NOT EXISTS artifact_task_links (
+      store_id TEXT NOT NULL, task_id TEXT NOT NULL, artifact_id TEXT NOT NULL,
+      PRIMARY KEY(store_id,task_id,artifact_id)
+    );
+    CREATE INDEX IF NOT EXISTS artifact_task_links_artifact ON artifact_task_links(store_id,artifact_id);
+    CREATE TRIGGER IF NOT EXISTS artifact_task_links_insert AFTER INSERT ON artifact_current BEGIN
+      INSERT OR IGNORE INTO artifact_task_links
+        SELECT NEW.store_id, j.value, NEW.artifact_id FROM json_each(NEW.snapshot_json,'$.taskIds') j;
+    END;
+    CREATE TRIGGER IF NOT EXISTS artifact_task_links_update AFTER UPDATE OF snapshot_json ON artifact_current BEGIN
+      DELETE FROM artifact_task_links WHERE store_id=OLD.store_id AND artifact_id=OLD.artifact_id;
+      INSERT OR IGNORE INTO artifact_task_links
+        SELECT NEW.store_id, j.value, NEW.artifact_id FROM json_each(NEW.snapshot_json,'$.taskIds') j;
+    END;
+    CREATE TRIGGER IF NOT EXISTS artifact_task_links_delete AFTER DELETE ON artifact_current BEGIN
+      DELETE FROM artifact_task_links WHERE store_id=OLD.store_id AND artifact_id=OLD.artifact_id;
+    END;
+  `)
+      // Databases from before the index hold artifacts but no links yet.
+      if (!existed) {
+        db.exec(`
+      INSERT OR IGNORE INTO artifact_task_links
+        SELECT c.store_id, j.value, c.artifact_id
+        FROM artifact_current c, json_each(c.snapshot_json,'$.taskIds') j;
+    `)
+      }
+    },
+    { mode: 'immediate' }
+  )
 }
 
 export function protectArtifactTables(

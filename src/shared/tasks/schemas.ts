@@ -1,37 +1,99 @@
 import { ARTIFACT_TYPE_ID_PATTERN_SOURCE } from '../utils/is-valid-artifact-type-id.ts'
 import { UUID_PATTERN_SOURCE } from '../utils/is-uuid.ts'
 import { Type } from '@sinclair/typebox'
+import {
+  TASK_DESCRIPTION_MAX_LENGTH,
+  TASK_LINK_LABEL_MAX_LENGTH,
+  TASK_LINK_MAX_COUNT,
+  TASK_LINK_URL_MAX_LENGTH,
+  TASK_TITLE_MAX_LENGTH
+} from './constants.ts'
 import { Nullable } from '../utils/schemas.ts'
-import { ArtifactActorSchema } from '../artifacts/schemas.ts'
+import {
+  ArtifactActorSchema,
+  ArtifactStatusSchema
+} from '../artifacts/schemas.ts'
 
+export const TaskLinkSchema = Type.Object(
+  {
+    url: Type.String({
+      minLength: 1,
+      maxLength: TASK_LINK_URL_MAX_LENGTH,
+      description: 'External HTTP or HTTPS URL without credentials.'
+    }),
+    label: Type.Optional(
+      Type.String({
+        maxLength: TASK_LINK_LABEL_MAX_LENGTH,
+        description: 'Optional short label for the link.'
+      })
+    )
+  },
+  { additionalProperties: false, description: 'External task link.' }
+)
+export const TaskTagsSchema = Type.Array(
+  Type.String({
+    minLength: 1,
+    maxLength: 128,
+    description: 'Free-form tag.'
+  }),
+  { maxItems: 100, uniqueItems: true, description: 'Task tags.' }
+)
+export const TaskStateSchema = Type.Union(
+  [Type.Literal('open'), Type.Literal('closed')],
+  { description: 'Task state, independent of artifact lifecycle.' }
+)
 export const TaskInputSchema = Type.Object(
   {
     title: Type.String({
       minLength: 1,
-      maxLength: 1000,
+      maxLength: TASK_TITLE_MAX_LENGTH,
       description: 'Task title.'
     }),
-    externalUrl: Type.Union([Type.Null(), Type.String({ maxLength: 2048 })], {
-      description: 'Optional external HTTP or HTTPS URL.'
-    }),
-    state: Type.Union([Type.Literal('open'), Type.Literal('closed')], {
-      description: 'Task state, independent of artifact lifecycle.'
-    })
+    state: TaskStateSchema,
+    description: Type.Optional(
+      Type.String({
+        maxLength: TASK_DESCRIPTION_MAX_LENGTH,
+        description:
+          'Markdown description. Omitted on update keeps the current text.'
+      })
+    ),
+    links: Type.Optional(
+      Type.Array(TaskLinkSchema, {
+        maxItems: TASK_LINK_MAX_COUNT,
+        description:
+          'External links. Omitted on update keeps the current links.'
+      })
+    ),
+    tags: Type.Optional(
+      Type.Array(TaskTagsSchema.items, {
+        maxItems: 100,
+        uniqueItems: true,
+        description: 'Task tags. Omitted on update keeps the current tags.'
+      })
+    ),
+    externalUrl: Type.Optional(
+      Type.Union([Type.Null(), Type.String({ maxLength: 2048 })], {
+        description:
+          'Deprecated. Use links. A URL becomes the only link; null removes all links.'
+      })
+    )
   },
   {
     additionalProperties: false,
-    description: 'Editable minimal task definition.'
+    description: 'Editable task definition.'
   }
 )
 export const TaskSchema = Type.Object(
   {
-    ...TaskInputSchema.properties,
-    externalUrl: Nullable(
-      Type.String({ description: 'Optional external HTTP or HTTPS URL.' })
-    ),
+    title: TaskInputSchema.properties.title,
+    state: TaskStateSchema,
+    description: Type.String({ description: 'Markdown description.' }),
+    links: Type.Array(TaskLinkSchema, { description: 'External links.' }),
+    tags: TaskTagsSchema,
     storeId: Type.String({ description: 'Owning artifact store.' }),
     id: Type.String({ description: 'Stable task UUID.' }),
-    version: Type.Integer({ description: 'Task definition version.' })
+    version: Type.Integer({ description: 'Task definition version.' }),
+    createdAt: Type.String({ description: 'Task creation time, ISO 8601.' })
   },
   { description: 'Persistent task definition.' }
 )
@@ -87,6 +149,27 @@ export const DefinitionParams = Type.Object(
   },
   { additionalProperties: false, description: 'Definition path parameter.' }
 )
+export const TaskListQuery = Type.Object(
+  {
+    ...DefinitionQuery.properties,
+    state: Type.Optional(TaskStateSchema),
+    tags: Type.Optional(
+      Type.Array(
+        Type.String({ maxLength: 128, description: 'Required tag.' }),
+        {
+          maxItems: 100,
+          description: 'Selected tags; see tagMode.'
+        }
+      )
+    ),
+    tagMode: Type.Optional(
+      Type.Union([Type.Literal('all'), Type.Literal('any')], {
+        description: 'Require every selected tag (all, default) or any (any).'
+      })
+    )
+  },
+  { additionalProperties: false, description: 'Task page options.' }
+)
 export const TaskCreateBody = Type.Object(
   {
     requestId: Type.String({
@@ -137,7 +220,20 @@ export const TaskListSchema = Type.Object(
   {
     storeId: Type.String({ description: 'Owning store.' }),
     storeEpoch: Type.Integer({ description: 'Store revision.' }),
-    items: Type.Array(TaskSchema, { description: 'Task definitions.' }),
+    items: Type.Array(
+      Type.Object(
+        {
+          ...TaskSchema.properties,
+          artifactCount: Type.Integer({
+            minimum: 0,
+            description:
+              'Number of artifacts bound to this task, in every status.'
+          })
+        },
+        { description: 'Task catalog entry with its artifact count.' }
+      ),
+      { description: 'Task definitions.' }
+    ),
     nextCursor: Nullable(Type.String({ description: 'Next page cursor.' }))
   },
   { description: 'Task catalog page.' }
@@ -374,4 +470,29 @@ export const TaskChatLinksPageSchema = Type.Object(
     )
   },
   { description: 'Task session links page.' }
+)
+
+export const TaskArtifactSchema = Type.Object(
+  {
+    id: Type.String({ description: 'Artifact UUID.' }),
+    title: Type.String({ description: 'Current artifact title.' }),
+    typeId: Type.String({ description: 'Artifact type identifier.' }),
+    status: ArtifactStatusSchema,
+    createdAt: Type.String({
+      description: 'Artifact creation time, ISO 8601.'
+    }),
+    exclusive: Type.Boolean({
+      description: 'The artifact belongs to this task and to no other task.'
+    })
+  },
+  { description: 'Artifact bound to a task.' }
+)
+export const TaskArtifactsSchema = Type.Object(
+  {
+    taskId: Type.String({ description: 'Task identifier.' }),
+    items: Type.Array(TaskArtifactSchema, {
+      description: 'Every artifact bound to the task, in any status.'
+    })
+  },
+  { description: 'Artifacts bound to a task.' }
 )

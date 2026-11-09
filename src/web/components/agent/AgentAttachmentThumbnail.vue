@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { mdiClose } from '@mdi/js'
+import CloseButton from '@/components/buttons/CloseButton.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { attachmentSrc, type AttachmentItem } from '@/utils/attachments'
@@ -16,16 +16,14 @@ const src = computed(() => attachmentSrc(props.item))
       fit="cover"
       class="fit rounded-borders"
     />
-    <q-btn
-      round
-      dense
+    <CloseButton
       unelevated
       size="xs"
       color="grey-8"
-      :icon="mdiClose"
-      class="app-icon-control agent-attachment-thumb-remove"
-      :aria-label="t('agent.context.remove')"
+      class="agent-attachment-thumb-remove"
+      :label="t('agent.context.remove')"
       @click="emit('remove')"
+      :flat="false"
     />
   </div>
 </template>

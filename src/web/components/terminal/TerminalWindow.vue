@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { mdiClose } from '@mdi/js'
+import CloseButton from '@/components/buttons/CloseButton.vue'
 import { TERMINAL_WINDOW_ID } from '@/constants/windows/constants'
 import { ref, computed, defineAsyncComponent, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -105,11 +105,9 @@ watch(
     <q-banner v-if="store.error" dense class="bg-red-2 text-dark text-caption">
       {{ errorText }}
       <template #action>
-        <q-btn
-          class="app-icon-control"
-          flat
-          dense
-          :icon="mdiClose"
+        <CloseButton
+          :round="false"
+          :label="t('common.close')"
           @click="store.error = null"
         />
       </template>

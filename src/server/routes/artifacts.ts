@@ -17,10 +17,12 @@ import {
   ArtifactHistorySchema,
   ArtifactListQuery,
   ArtifactListSchema,
+  ArtifactMetadataUpdateBody,
   ArtifactParams,
   ArtifactSchema
 } from '../../shared/artifacts/schemas.ts'
 import { ERROR_RESPONSES } from '../../shared/http/schemas.ts'
+import { artifactUserActor } from '../utils/artifact-actor.ts'
 import type { ArtifactStorageService } from '../services/artifact-storage.service.ts'
 
 export async function artifactRoutes(
@@ -149,6 +151,24 @@ export async function artifactRoutes(
       }
     },
     request => service.get(request.params.id)
+  )
+  typed.patch(
+    '/api/artifacts/:id/metadata',
+    {
+      schema: {
+        tags: ['artifacts'],
+        summary: 'Update versioned artifact metadata',
+        params: ArtifactParams,
+        body: ArtifactMetadataUpdateBody,
+        response: { 200: ArtifactSchema, ...ERROR_RESPONSES }
+      }
+    },
+    request =>
+      service.updateMetadata(
+        request.params.id,
+        request.body,
+        artifactUserActor(request)
+      )
   )
   typed.get(
     '/api/artifacts/:id/content',

@@ -159,7 +159,7 @@ test('switching a status to All discards an in-flight old page and searches ever
   const store = useArtifactsStore()
   await store.search(artifactRouteState({ status: 'draft' }).input)
   const more = store.loadMore()
-  await store.search(artifactRouteState({}).input)
+  await store.search(artifactRouteState({ status: 'all' }).input)
   pending.resolve(json(page('Late draft')))
   await more
   assert.equal(store.catalog?.items.length, 1)

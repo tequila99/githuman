@@ -26,7 +26,8 @@ import {
   TaskCreateAndActivateBody,
   TaskUpdateBody,
   ArtifactTypeCreateBody,
-  ArtifactTypeUpdateBody
+  ArtifactTypeUpdateBody,
+  TaskListQuery
 } from '../tasks/schemas.ts'
 import { MAX_ARTIFACT_BODY_BYTES } from '../artifacts/constants.ts'
 
@@ -182,7 +183,7 @@ export const ArtifactToolSchemas = {
     { ...ArtifactParams.properties, ...DefinitionQuery.properties },
     { additionalProperties: false, description: 'Read immutable ancestry.' }
   ),
-  'tasks.list': DefinitionQuery,
+  'tasks.list': TaskListQuery,
   'tasks.get': DefinitionParams,
   'tasks.create': TaskCreateBody,
   'tasks.get_context': Type.Object(

@@ -603,3 +603,38 @@ test('review C1 safety: shared BM25 changes foreign-store ranking, so existing g
     /Restart pagination/
   )
 })
+
+test('unbound candidates exclude deleted and bound artifacts before pagination', t => {
+  const { storage, create, search } = setup(t)
+  const task = storage.tasks.create(
+    randomUUID(),
+    { title: 'Candidate task', externalUrl: null, state: 'open' },
+    USER
+  )
+  const statuses = [
+    'draft',
+    'in_review',
+    'accepted',
+    'rejected',
+    'superseded',
+    'archived'
+  ] as const
+  const expected = statuses.map(
+    status => create(status, 'candidate', status).id
+  )
+  create('Bound', 'candidate', 'draft', [], [task.id])
+  create('Deleted', 'candidate', 'deleted')
+  const found: string[] = []
+  let cursor: string | undefined
+  do {
+    const page = search.search({
+      filters: { statuses: [...statuses], unbound: true },
+      limit: 2,
+      cursor
+    })
+    found.push(...page.items.map(item => item.id))
+    cursor = page.nextCursor ?? undefined
+  } while (cursor)
+  assert.equal(found.length, expected.length)
+  assert.deepEqual(found.sort(), expected.sort())
+})

@@ -23,15 +23,15 @@ export default {
       original: 'Original Markdown file',
       history: 'Metadata and full history (JSON)'
     },
-    addToAgent: 'Add document to agent chat',
+    addToAgent: 'Add artifact to agent chat',
     content: {
-      loading: 'Reading the document…',
-      failed: 'Could not read the document text',
-      integrity: 'The stored document failed its integrity check',
+      loading: 'Reading the artifact…',
+      failed: 'Could not read the artifact text',
+      integrity: 'The stored artifact failed its integrity check',
       hint: 'The metadata and the history stay available. Retry or Refresh reads the text again; background updates do not.',
       retry: 'Retry',
-      verifying: 'Checking the document text',
-      blocked: 'Unavailable: the stored document failed its integrity check'
+      verifying: 'Checking the artifact text',
+      blocked: 'Unavailable: the stored artifact failed its integrity check'
     },
     transition: {
       button: 'Status: {status}. Change status',
@@ -52,7 +52,7 @@ export default {
       yes: 'Yes',
       no: 'No',
       refresh: 'Refresh consequences',
-      refreshed: 'The documents changed, so the consequences were refreshed.',
+      refreshed: 'The artifacts changed, so the consequences were refreshed.',
       expired: 'This preview expired. Refresh the consequences.',
       startFailed: 'Could not start the change',
       stages: {
@@ -69,7 +69,7 @@ export default {
       cancelRequested: 'Cancelling…',
       retry: 'Retry',
       dismiss: 'Dismiss',
-      report: 'Open the validation report document',
+      report: 'Open the validation report artifact',
       loadFailed: 'Could not load the status menu',
       loadingMenu: 'Loading status menu…',
       reload: 'Reload',
@@ -94,11 +94,11 @@ export default {
       verdict: 'Verdict',
       validator: 'Validator',
       queueUntil: 'until {time}',
-      queueDocuments: '{count} document | {count} documents',
+      queueDocuments: '{count} artifact | {count} artifacts',
       applied:
         'Applied: the change was committed and this authorization is consumed.',
       confirmScope:
-        'I reviewed this exact action, its affected documents and supplement decisions.',
+        'I reviewed this exact action, its affected artifacts and supplement decisions.',
       approve: 'Authorize this action',
       apply: 'Apply approved action',
       queueTitle: 'Artifact action requests',
@@ -112,8 +112,8 @@ export default {
       timeLeft:
         'The request expires at {time}. The permission shares this deadline and is not extended.',
       expired: 'This request expired. Ask the agent for a new one.',
-      changes: 'Documents that change: {count}',
-      checkedOnly: 'Documents checked without a status change: {count}',
+      changes: 'Artifacts that change: {count}',
+      checkedOnly: 'Artifacts checked without a status change: {count}',
       relationChanges: 'Relationship lists replaced: {count}',
       details: 'Technical details',
       scopeFailed: 'Could not read the request',
@@ -123,7 +123,7 @@ export default {
         'Permission passed to the agent. The agent applies it in its own session. You can still revoke it while it exists.',
       grantedRefreshFailed:
         'The permission was granted, but the result could not be read back: {error}',
-      revokedNote: 'Request rejected. No documents changed.',
+      revokedNote: 'Request rejected. No artifacts changed.',
       refreshScope: 'Refresh',
       reject: 'Reject',
       reportTitle: 'Validation report',
@@ -183,9 +183,10 @@ export default {
       actions: { created: 'Created', metadata_updated: 'Metadata updated' }
     },
     title: 'Artifacts',
+    activeStatuses: 'All except archived and deleted',
     allStatuses: 'All statuses',
-    document: 'Document',
-    search: 'Search documents',
+    document: 'Artifact',
+    search: 'Search artifacts',
     status: 'Status',
     type: 'Type ID',
     task: 'Task ID',
@@ -194,14 +195,15 @@ export default {
     createdFrom: 'Created from',
     createdTo: 'Created to',
     group: 'Group loaded results',
+    groupByTask: 'Group by task',
     typos: 'Include typo matches',
     refresh: 'Refresh',
     more: 'Load more',
-    select: 'Select a document to read it.',
-    empty: 'No matching documents.',
-    agentCreates: 'Ask an agent to create a document.',
+    select: 'Select an artifact to read it.',
+    empty: 'No matching artifacts.',
+    agentCreates: 'Ask an agent to create an artifact.',
     currentMetadata: 'Current metadata.',
-    identity: 'Document ID',
+    identity: 'Artifact ID',
     store: 'Store ID',
     noTask: 'No task',
     fuzzyMatch: 'Typo match',
@@ -217,6 +219,79 @@ export default {
       deleted: 'Deleted'
     },
     groups: { none: 'No grouping', type: 'Type', task: 'Task' }
+  },
+  markdown: {
+    unsupported: 'This text cannot be edited visually and is shown read-only.',
+    insertLink: 'Insert link to a note or artifact',
+    findLink: 'Find a note or artifact to link',
+    noMatches: 'No matching notes or artifacts'
+  },
+  tasks: {
+    title: 'Tasks',
+    search: 'Search tasks',
+    refresh: 'Refresh tasks',
+    empty: 'No tasks.',
+    more: 'Load more',
+    new: 'New task',
+    create: 'Create',
+    cancel: 'Cancel',
+    choose: 'Choose a task',
+    loading: 'Loading the task…',
+    titleField: 'Title',
+    description: 'Description',
+    addToAgent: 'Add task to agent chat',
+    copyId: 'Copy task ID',
+    idCopied: 'Task ID copied',
+    reload: 'Reload',
+    filter: { all: 'All', open: 'Open', closed: 'Closed' },
+    state: { label: 'State', open: 'Open', closed: 'Closed' },
+    transition: {
+      button: 'Task state: {state}. Change state',
+      menuTitle: 'Change state'
+    },
+    status: {
+      saved: 'Saved',
+      dirty: 'Unsaved changes',
+      saving: 'Saving…',
+      error: 'Not saved',
+      conflict: 'Conflict',
+      emptyTitle: 'Enter a title to save',
+      conflictHint:
+        'The task changed elsewhere. Reload to see the new version; your unsaved edits will be replaced.'
+    },
+    links: {
+      title: 'External links',
+      none: 'No links.',
+      url: 'URL',
+      label: 'Label',
+      add: 'Add link',
+      remove: 'Remove link'
+    },
+    artifacts: {
+      title: 'Artifacts',
+      tab: 'Artifacts',
+      none: 'No artifacts are linked to this task.',
+      count: 'Artifacts: {count}',
+      add: 'Add artifact',
+      remove: 'Unlink artifact',
+      removeHint: 'Unlink from this task. The artifact itself is kept.',
+      searchWithinTask: 'Search artifacts in this task',
+      search: 'Search artifacts',
+      noCandidates: 'No matching artifacts.',
+      activeHint:
+        'An accepted artifact needs a validated change set to change its tasks.',
+      closedHint: 'A closed task cannot get new artifacts.'
+    },
+    close: {
+      action: 'Close task',
+      title: 'Close this task?',
+      hint: 'A closed task cannot be reopened. Create a new task and link the artifacts to it if work continues.',
+      required: 'Artifacts used only by this task — archive them first',
+      requiredDone: 'All artifacts of this task are archived.',
+      optional: 'Artifacts also used by other tasks',
+      optionalHint: 'Archive these only if you want to.',
+      confirm: 'Close task'
+    }
   },
   notes: {
     externalAssets: {
@@ -414,6 +489,9 @@ export default {
   success: 'Action was successful',
 
   common: {
+    close: 'Close',
+    create: 'Create',
+    cancel: 'Cancel',
     copyPath: 'Copy file path',
     filters: {
       title: 'Filters',
@@ -630,9 +708,9 @@ export default {
       inheritance:
         'Selected task: {task}. New responses inherit it; MCP activation can also select a task for the current response. Explicit artifact tasks take precedence.',
       noInheritance:
-        'No task selected for new responses. Without a response activation or explicit tasks, new artifacts will be general documents.',
+        'No task selected for new responses. Without a response activation or explicit tasks, new artifacts will stay unassigned.',
       ambiguousInheritance:
-        'Select exactly one task to inherit it automatically. Otherwise, artifacts without explicit tasks will be general documents.',
+        'Select exactly one task to inherit it automatically. Otherwise, artifacts without explicit tasks will stay unassigned.',
       nextTurn:
         'Manual assignment changes apply to the next message. Only explicit MCP activation changes the task of the current reply.',
       reload: 'Reload assignment and discard draft',
@@ -763,7 +841,8 @@ export default {
       needsAnswer: 'waiting for your answer'
     },
     context: {
-      artifact: 'Document: {name}',
+      artifact: 'Artifact: {name}',
+      task: 'Task: {name}',
       add: 'Add to agent chat',
       file: 'File: {path}',
       directory: 'Folder: {path}/',

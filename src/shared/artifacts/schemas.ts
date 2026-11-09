@@ -334,6 +334,26 @@ export const ArtifactMetadataInputSchema = Type.Object(
   }
 )
 
+export const ArtifactMetadataUpdateBody = Type.Object(
+  {
+    requestId: Type.String({
+      minLength: 1,
+      maxLength: 128,
+      description: 'Idempotent command identifier.'
+    }),
+    expectedVersion: Type.Integer({
+      minimum: 1,
+      description: 'Expected artifact metadata version.'
+    }),
+    metadata: ArtifactMetadataInputSchema
+  },
+  {
+    additionalProperties: false,
+    description:
+      'Update versioned artifact metadata without rewriting the immutable original.'
+  }
+)
+
 export const ArtifactSchema = Type.Object(
   {
     storeId: Type.String({ description: 'Artifact store UUID.' }),
@@ -770,6 +790,9 @@ export const ArtifactSearchFiltersSchema = Type.Object(
         Type.String({ maxLength: 128, description: 'Artifact type ID.' }),
         { maxItems: 100, description: 'Allowed artifact types.' }
       )
+    ),
+    unbound: Type.Optional(
+      Type.Boolean({ description: 'Only artifacts without task bindings.' })
     ),
     taskIds: Type.Optional(
       Type.Array(ArtifactParams.properties.id, {

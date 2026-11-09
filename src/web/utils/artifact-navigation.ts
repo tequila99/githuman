@@ -3,7 +3,10 @@ import type {
   LocationQueryRaw,
   RouteLocationRaw
 } from 'vue-router'
-import { ARTIFACT_STATUSES } from '../../shared/artifacts/constants.ts'
+import {
+  ARTIFACT_STATUSES,
+  INACTIVE_ARTIFACT_STATUSES
+} from '../../shared/artifacts/constants.ts'
 import { isCalendarDate, localDayStartIso, localDayEndIso } from '@/utils/date'
 import { isUuid } from '../../shared/utils/is-uuid.ts'
 import type { ArtifactSearchInput } from '@/api/types'
@@ -61,7 +64,7 @@ export function artifactFilterQuery(
 ): LocationQueryRaw {
   const result: LocationQueryRaw = { ...query }
   const values: Record<string, string | string[] | null> = {
-    status: filters.status,
+    status: filters.status ?? 'all',
     typeId: filters.typeIds,
     taskId: filters.taskId,
     tag: filters.tags,
@@ -84,7 +87,10 @@ export function artifactFilterQuery(
 
 export function artifactRouteState(query: LocationQuery) {
   const status =
-    ARTIFACT_STATUSES.find(value => value === scalar(query, 'status')) ?? null
+    scalar(query, 'status') === 'all'
+      ? null
+      : (ARTIFACT_STATUSES.find(value => value === scalar(query, 'status')) ??
+        'active')
   const group = scalar(query, 'group')
   const storeId = scalar(query, 'storeId')
   const selectedId = scalar(query, 'selectedId')
@@ -110,7 +116,14 @@ export function artifactRouteState(query: LocationQuery) {
     limit: 50,
     filters: {
       // The API defaults to accepted when statuses are omitted.
-      statuses: status === null ? [...ARTIFACT_STATUSES] : [status],
+      statuses:
+        status === null
+          ? [...ARTIFACT_STATUSES]
+          : status === 'active'
+            ? ARTIFACT_STATUSES.filter(
+                value => !INACTIVE_ARTIFACT_STATUSES.includes(value)
+              )
+            : [status],
       ...(filters.typeIds.length ? { typeIds: filters.typeIds } : {}),
       ...(filters.taskId ? { taskIds: [filters.taskId] } : {}),
       ...(filters.tags.length

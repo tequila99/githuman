@@ -12,8 +12,11 @@ const task: Task = {
   id: 'task',
   version: 1,
   title: 'Task name',
-  externalUrl: null,
-  state: 'open'
+  description: '',
+  links: [],
+  tags: [],
+  state: 'open',
+  createdAt: '2026-01-01T00:00:00.000Z'
 }
 const type: ArtifactType = {
   storeId: 'store',
@@ -270,7 +273,7 @@ test('the discovery task page becomes the first catalog read without another HTT
   }
   const definitions = createArtifactDefinitions('store', undefined, {
     ...data(task),
-    items: [task]
+    items: [{ ...task, artifactCount: 0 }]
   })
   const release = definitions.retain()
   await new Promise(resolve => setImmediate(resolve))

@@ -106,14 +106,14 @@ const commandLabel = useArtifactCommandLabel()
   min-width: 0;
   min-height: 60px;
   padding: 10px 12px;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  border-bottom: 1px solid var(--app-divider);
 }
 .artifact-queue__item.q-item--active {
   color: inherit;
   box-shadow: inset 3px 0 var(--q-primary);
   background-image: linear-gradient(
-    rgba(25, 118, 210, 0.1),
-    rgba(25, 118, 210, 0.1)
+    var(--app-selection-tint),
+    var(--app-selection-tint)
   );
 }
 .artifact-queue__item:focus-visible {

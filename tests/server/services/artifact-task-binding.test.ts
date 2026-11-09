@@ -44,7 +44,7 @@ function setup(t: TestContext) {
   const task = (title: string) =>
     storage.tasks.create(
       'task-' + title,
-      { title, externalUrl: null, state: 'closed' },
+      { title, externalUrl: null, state: 'open' },
       ACTOR
     ).id
   const a = task('A'),
@@ -96,7 +96,7 @@ test('explicit, inherited, ambiguous and missing task contexts preserve create s
       .taskIds,
     []
   )
-  assert.equal(storage.tasks.get(a).state, 'closed')
+  assert.equal(storage.tasks.get(a).state, 'open')
   assert.throws(
     () => storage.create(input('unknown'), ACTOR, turn([randomUUID()])),
     ArtifactInputError
@@ -279,4 +279,22 @@ test('inherited direct IDs select their validation scope without including a sib
   // ADR 0119: a general accepted document no longer enters every change set.
   assert.ok(!preview.affectedIds.includes(general.id))
   assert.ok(!preview.affectedIds.includes(sibling.id))
+})
+
+test('a closed inherited task is not bound to a new artifact', t => {
+  const { storage, a, turn } = setup(t)
+  const context = turn([a])
+  storage.tasks.update(
+    a,
+    'close-a',
+    1,
+    { title: 'A', externalUrl: null, state: 'closed' },
+    ACTOR
+  )
+  const created = storage.create(input('after-close'), ACTOR, context)
+  assert.deepEqual(created.taskIds, [])
+  assert.throws(
+    () => storage.create(input('explicit-closed', [a]), ACTOR, context),
+    /closed/
+  )
 })

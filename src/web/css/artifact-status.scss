@@ -1,4 +1,4 @@
-// Artifact status colors. One variable per status; change a color here only.
+// Artifact and task status colors. One variable per status; change a color here only.
 // White text stays readable on every value in both themes.
 :root {
   --artifact-status-draft: rgb(25, 118, 210);
@@ -8,4 +8,6 @@
   --artifact-status-superseded: rgb(123, 31, 162);
   --artifact-status-archived: rgb(84, 110, 122);
   --artifact-status-deleted: rgb(97, 97, 97);
+  --task-state-open: rgb(46, 125, 50);
+  --task-state-closed: rgb(84, 110, 122);
 }

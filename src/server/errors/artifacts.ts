@@ -1,4 +1,5 @@
 import createError from '@fastify/error'
+import { ARTIFACT_ERROR_CODES } from '../../shared/artifacts/error-codes.ts'
 
 // @fastify/error matches instanceof by code, so a subclass cannot be told apart.
 // Markers keep the public code GHT_ARTIFACT_CONFLICT while callers still can.
@@ -21,7 +22,22 @@ export const ArtifactReportTextNotFoundError = createError(
   404
 )
 export const ArtifactConflictError = createError(
-  'GHT_ARTIFACT_CONFLICT',
+  ARTIFACT_ERROR_CODES.versionConflict,
+  '%s',
+  409
+)
+export const ArtifactActiveGraphChangeError = createError(
+  ARTIFACT_ERROR_CODES.activeGraphChange,
+  '%s',
+  409
+)
+export const TaskClosedError = createError(
+  ARTIFACT_ERROR_CODES.taskClosed,
+  '%s',
+  409
+)
+export const TaskHasActiveArtifactsError = createError(
+  ARTIFACT_ERROR_CODES.taskHasActiveArtifacts,
   '%s',
   409
 )

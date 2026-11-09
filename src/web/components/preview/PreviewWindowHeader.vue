@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import CloseButton from '@/components/buttons/CloseButton.vue'
 import {
   mdiCheckboxBlankOutline,
   mdiCheckboxMultipleBlankOutline,
-  mdiClose,
   mdiEyeOutline,
   mdiFolderOpenOutline,
   mdiWindowMinimize
@@ -78,14 +78,12 @@ const { t } = useI18n()
         Ctrl+Win+↑</q-tooltip
       ></q-btn
     >
-    <q-btn
-      flat
-      dense
+    <CloseButton
       size="sm"
-      class="app-icon-control window-header__control"
-      :icon="mdiClose"
-      :aria-label="t('windows.closeAll')"
+      class="window-header__control"
+      :label="t('windows.closeAll')"
       @click="emit('closeAll')"
+      :round="false"
     />
   </div>
 </template>

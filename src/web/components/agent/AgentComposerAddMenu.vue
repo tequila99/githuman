@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { mdiAt, mdiFileUploadOutline, mdiPlus } from '@mdi/js'
+import AddButton from '@/components/buttons/AddButton.vue'
+import { mdiAt, mdiFileUploadOutline } from '@mdi/js'
 import { useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 defineProps<{ disabled: boolean }>()
@@ -23,13 +24,9 @@ function onFilesPicked(event: Event) {
       hidden
       @change="onFilesPicked"
     />
-    <q-btn
-      round
-      dense
-      flat
+    <AddButton
       size="sm"
-      :icon="mdiPlus"
-      class="app-icon-control q-ma-xs"
+      class="q-ma-xs"
       :disable="disabled"
       :aria-label="t('agent.attach.menu')"
     >
@@ -53,7 +50,7 @@ function onFilesPicked(event: Event) {
           </q-item>
         </q-list>
       </q-menu>
-    </q-btn>
+    </AddButton>
   </div>
 </template>
 <style scoped>

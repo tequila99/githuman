@@ -97,6 +97,10 @@ export type {
 
 export type {
   Task,
+  TaskInput,
+  TaskLink,
+  TaskArtifact,
+  TaskArtifacts,
   TaskList,
   ArtifactType,
   ArtifactTypeList
