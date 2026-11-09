@@ -48,7 +48,7 @@ import { ArtifactTransitionRepository } from '../repositories/artifact-transitio
 import { ArtifactTransitionService } from './artifact-transition.service.ts'
 
 // Manifest changes invalidate all earlier semantic conclusions.
-const VALIDATION_RULES_VERSION = 3
+const VALIDATION_RULES_VERSION = 4
 // The server is the author of a proposal version that only follows the grown set (ADR 0121).
 const REBASE_ACTOR: ArtifactActor = { kind: 'system', id: 'validation-rebase' }
 // Preview errors that a rebase can fix: they only name versions of the set context.
@@ -361,7 +361,7 @@ export class ArtifactLifecycleService {
       changeDigest: proposal.changeDigest,
       changeSet: proposal.changeSet,
       artifacts,
-      requiredContentIds: artifacts.map(item => item.id)
+      requiredContentIds: preview.contentRequiredIds
     }
   }
   /**

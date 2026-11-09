@@ -380,6 +380,24 @@ export const ArtifactSchema = Type.Object(
   }
 )
 
+export const ArtifactValidationManifestArtifactSchema = Type.Object(
+  {
+    ...ArtifactSchema.properties,
+    kind: Type.Literal('artifact', { description: 'Manifest artifact entry.' }),
+    contentRequired: Type.Boolean({
+      description:
+        'Whether validation requires complete reading of this artifact.'
+    }),
+    activePriority: Type.Array(ArtifactRelationSchema, {
+      description: 'Active replacement and supplement relationships.'
+    })
+  },
+  {
+    description:
+      'Artifact metadata and content requirements in a validation manifest.'
+  }
+)
+
 export const ArtifactEventSchema = Type.Object(
   {
     storeId: Type.String({ description: 'Artifact store UUID.' }),
@@ -527,6 +545,9 @@ export const ArtifactChangeSetPreviewSchema = Type.Object(
     }),
     affectedIds: Type.Array(Type.String(), {
       description: 'Artifacts affected by the proposed change.'
+    }),
+    contentRequiredIds: Type.Array(Type.String(), {
+      description: 'Affected artifacts whose complete content must be read.'
     }),
     requiredSupplementDispositions: Type.Array(Type.String(), {
       description: 'Active supplements requiring an explicit decision.'

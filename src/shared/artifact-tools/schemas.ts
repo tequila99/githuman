@@ -84,14 +84,16 @@ export const ArtifactToolSchemas = {
     { ...ArtifactParams.properties, ...DefinitionQuery.properties },
     {
       additionalProperties: false,
-      description: 'Read all manifest pages without truncation.'
+      description:
+        'Read all manifest pages; contentRequired marks artifacts requiring complete reading.'
     }
   ),
   'validations.read': Type.Object(
     { ...ArtifactParams.properties, ...ArtifactValidationReadBody.properties },
     {
       additionalProperties: false,
-      description: 'Read assigned context sequentially.'
+      description:
+        'Read any assigned manifest artifact sequentially; optional context does not affect required coverage.'
     }
   ),
   'validations.read_next': Type.Object(
@@ -99,7 +101,7 @@ export const ArtifactToolSchemas = {
     {
       additionalProperties: false,
       description:
-        'Read the next unread assigned content in manifest order, several documents per call.'
+        'Read the next unread required content in manifest order, several documents per call.'
     }
   ),
   'validations.submit': Type.Object(
