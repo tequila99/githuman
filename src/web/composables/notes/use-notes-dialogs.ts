@@ -1,3 +1,4 @@
+import NoteCreateDialog from '@/components/notes/NoteCreateDialog.vue'
 import { noteCreationPath, validNoteEntryName } from '@/utils/notes/entry-name'
 import { toValue, type MaybeRefOrGetter } from 'vue'
 import { useQuasar } from 'quasar'
@@ -22,15 +23,17 @@ export function useNotesDialogs(
   function create(folder: boolean, copy = false) {
     const parent = toValue(options.creationFolder)
     $q.dialog({
-      title: t(
-        folder ? 'notes.newFolder' : copy ? 'notes.saveCopy' : 'notes.newNote'
-      ),
-      message: t(folder ? 'notes.folderNameHint' : 'notes.noteNameHint', {
-        folder: parent || t('notes.root')
-      }),
-      prompt: { model: '', type: 'text', isValid: validNoteEntryName },
-      cancel: true,
-      persistent: true
+      component: NoteCreateDialog,
+      componentProps: {
+        folder,
+        copy,
+        title: t(
+          folder ? 'notes.newFolder' : copy ? 'notes.saveCopy' : 'notes.newNote'
+        ),
+        message: t(folder ? 'notes.folderNameHint' : 'notes.noteNameHint', {
+          folder: parent || t('notes.root')
+        })
+      }
     }).onOk(async (name: string) => {
       if (!validNoteEntryName(name)) return
       const target = noteCreationPath(parent, name, folder)

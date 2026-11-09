@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { mdiPlus } from '@mdi/js'
+import AddButton from '@/components/buttons/AddButton.vue'
 import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '@/stores/agent-store'
 import { AGENT_ICON } from '@/utils/agent-icon'
@@ -15,15 +15,15 @@ const store = useAgentStore()
     <div class="text-caption text-grey-6 q-mt-xs agent-empty__hint">
       {{ t('agent.emptyState.hint') }}
     </div>
-    <q-btn
+    <AddButton
       v-if="store.canAddChat"
       color="primary"
       unelevated
-      no-caps
-      :icon="mdiPlus"
-      class="app-icon-control q-mt-md"
+      class="q-mt-md"
       :label="t('agent.emptyState.add')"
       @click="store.openNewChatDialog()"
+      :dense="false"
+      :flat="false"
     />
   </div>
 </template>

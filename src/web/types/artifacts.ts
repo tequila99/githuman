@@ -1,7 +1,7 @@
 import type { Artifact } from '@/api/types'
 
 export interface ArtifactCatalogFilters {
-  status: Artifact['status'] | null
+  status: Artifact['status'] | 'active' | null
   typeIds: string[]
   taskId: string | null
   tags: string[]

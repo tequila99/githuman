@@ -6,6 +6,8 @@ import {
   TaskCreateBody,
   TaskUpdateBody,
   TaskListSchema,
+  TaskArtifactsSchema,
+  TaskListQuery,
   ArtifactTypeSchema,
   ArtifactTypeCreateBody,
   ArtifactTypeUpdateBody,
@@ -44,15 +46,18 @@ export async function artifactDefinitionRoutes(
       schema: {
         tags: ['tasks'],
         summary: 'List persistent tasks',
-        querystring: DefinitionQuery,
+        querystring: TaskListQuery,
         response: { 200: TaskListSchema, ...ERROR_RESPONSES }
       }
     },
     request =>
-      storage.tasks.list(
+      storage.tasks.listByState(
         request.query.limit,
         request.query.cursor,
-        request.query.search
+        request.query.search,
+        request.query.state,
+        request.query.tags,
+        request.query.tagMode
       )
   )
   typed.get(
@@ -66,6 +71,18 @@ export async function artifactDefinitionRoutes(
       }
     },
     request => storage.tasks.get(request.params.id)
+  )
+  typed.get(
+    '/api/tasks/:id/artifacts',
+    {
+      schema: {
+        tags: ['tasks'],
+        summary: 'List artifacts bound to a task in any status',
+        params: DefinitionParams,
+        response: { 200: TaskArtifactsSchema, ...ERROR_RESPONSES }
+      }
+    },
+    request => storage.tasks.artifacts(request.params.id)
   )
   typed.post(
     '/api/tasks',

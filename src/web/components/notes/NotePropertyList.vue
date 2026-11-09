@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { mdiClose } from '@mdi/js'
+import CloseButton from '@/components/buttons/CloseButton.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type {
@@ -47,14 +47,9 @@ const listItems = computed(() =>
     >
       <NotePropertyLink v-if="item.link" :link="item.link" />
       <span v-else>{{ item.value }}</span>
-      <q-btn
-        class="app-icon-control"
-        flat
-        round
-        dense
+      <CloseButton
         size="xs"
-        :icon="mdiClose"
-        :aria-label="t('notes.removePropertyValue', { value: item.value })"
+        :label="t('notes.removePropertyValue', { value: item.value })"
         @click="removeItem(index)"
       />
     </span>

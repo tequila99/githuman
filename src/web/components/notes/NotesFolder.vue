@@ -1,10 +1,10 @@
 <script setup lang="ts">
+import AddButton from '@/components/buttons/AddButton.vue'
 import {
   mdiArrowUp,
   mdiFileOutline,
   mdiFolderOutline,
-  mdiFolderPlusOutline,
-  mdiPlus
+  mdiFolderPlusOutline
 } from '@mdi/js'
 import { noteParentPath } from '../../../shared/notes/note-path.ts'
 import NoteContextMenu from './NoteContextMenu.vue'
@@ -96,13 +96,10 @@ const children = computed(() => noteFolderChildren(props.entries, props.folder))
       <template #title>{{ folder || t('notes.root') }}</template>
       {{ t('notes.folderEmpty') }}
       <template #actions>
-        <q-btn
-          class="app-icon-control"
-          flat
-          no-caps
-          :icon="mdiPlus"
+        <AddButton
           :label="t('notes.newNote')"
           @click="emit('create', false)"
+          :dense="false"
         />
         <q-btn
           class="app-icon-control"

@@ -63,7 +63,7 @@ test(
     const actor = { kind: 'user' as const, id: 'local' }
     const a = storage.tasks.create(
       'task-a',
-      { title: 'A', externalUrl: null, state: 'closed' },
+      { title: 'A', externalUrl: null, state: 'open' },
       actor
     ).id
     const b = storage.tasks.create(
@@ -171,7 +171,7 @@ test(
       await until(async () => (await info(first)).status === 'ready')
       assert.deepEqual(artifact(name)?.taskIds, [])
     }
-    assert.equal(storage.tasks.get(a).state, 'closed')
+    assert.equal(storage.tasks.get(a).state, 'open')
     assert.equal(storage.history(initialId).items.length, 1)
     assert.deepEqual((await info(first)).taskIds, [])
     assign(first, [b])

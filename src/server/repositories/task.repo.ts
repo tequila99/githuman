@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite'
 import type { ArtifactActor } from '../../shared/artifacts/types.ts'
 import type { Task, ArtifactType } from '../../shared/tasks/types.ts'
 import { ArtifactConflictError } from '../errors/artifacts.ts'
+import { normalizeStoredTask } from '../../shared/tasks/normalize.ts'
 
 export type Definition = Task | ArtifactType
 export interface DefinitionEvent<T> {
@@ -9,6 +10,30 @@ export interface DefinitionEvent<T> {
   requestId: string
   actor: ArtifactActor
   createdAt: string
+}
+
+interface VersionedRow {
+  snapshot_json: string
+  first_at: string
+}
+
+// The first version time is the creation time of a snapshot that stores none.
+function currentSql(kind: 'task' | 'artifact_type'): string {
+  return `SELECT c.snapshot_json, (SELECT v.created_at FROM ${kind}_versions v
+    WHERE v.store_id=c.store_id AND v.id=c.id AND v.version=1) AS first_at
+    FROM ${kind}_current c WHERE c.store_id=?`
+}
+
+// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- The caller supplies the domain type for stored JSON.
+function parseDefinition<T extends Definition>(
+  kind: 'task' | 'artifact_type',
+  json: string,
+  firstVersionAt?: string
+): T {
+  const value = JSON.parse(json) as Definition
+  return (
+    kind === 'task' ? normalizeStoredTask(value as Task, firstVersionAt) : value
+  ) as T
 }
 
 export class TaskRepository {
@@ -25,20 +50,18 @@ export class TaskRepository {
     id: string
   ): T | undefined {
     const row = this.db
-      .prepare(
-        `SELECT snapshot_json FROM ${kind}_current WHERE store_id=? AND id=?`
-      )
-      .get(this.storeId, id) as { snapshot_json: string } | undefined
-    return row ? (JSON.parse(row.snapshot_json) as T) : undefined
+      .prepare(`${currentSql(kind)} AND c.id=?`)
+      .get(this.storeId, id) as unknown as VersionedRow | undefined
+    return row
+      ? parseDefinition<T>(kind, row.snapshot_json, row.first_at)
+      : undefined
   }
   all<T extends Definition>(kind: 'task' | 'artifact_type'): T[] {
     return (
       this.db
-        .prepare(
-          `SELECT snapshot_json FROM ${kind}_current WHERE store_id=? ORDER BY id`
-        )
-        .all(this.storeId) as { snapshot_json: string }[]
-    ).map(row => JSON.parse(row.snapshot_json) as T)
+        .prepare(`${currentSql(kind)} ORDER BY c.id`)
+        .all(this.storeId) as unknown as VersionedRow[]
+    ).map(row => parseDefinition<T>(kind, row.snapshot_json, row.first_at))
   }
   history<T extends Definition>(
     kind: 'task' | 'artifact_type',
@@ -56,7 +79,7 @@ export class TaskRepository {
         created_at: string
       }[]
     ).map(row => ({
-      snapshot: JSON.parse(row.snapshot_json) as T,
+      snapshot: parseDefinition<T>(kind, row.snapshot_json),
       requestId: row.request_id,
       actor: JSON.parse(row.actor_json) as ArtifactActor,
       createdAt: row.created_at
@@ -185,6 +208,14 @@ export class TaskRepository {
         JSON.stringify(actor),
         now
       )
+  }
+  artifactCounts(taskIds: string[]): Map<string, number> {
+    if (!taskIds.length) return new Map()
+    const rows = this.db
+      .prepare(`SELECT task_id, COUNT(*) AS count FROM artifact_task_links
+      WHERE store_id=? AND task_id IN (${taskIds.map(() => '?').join(',')}) GROUP BY task_id`)
+      .all(this.storeId, ...taskIds) as { task_id: string; count: number }[]
+    return new Map(rows.map(row => [row.task_id, row.count]))
   }
   chatHistory() {
     return (

@@ -9,6 +9,10 @@ export const ARTIFACT_STATUSES = [
   'deleted'
 ] as const
 
+// Statuses of documents that no longer take part in active work.
+export const INACTIVE_ARTIFACT_STATUSES: readonly (typeof ARTIFACT_STATUSES)[number][] =
+  ['archived', 'deleted', 'superseded']
+
 // Bound document allocation before serialization and filesystem reads.
 export const MAX_ARTIFACT_BYTES = 2 * 1024 * 1024
 // Leave room for the immutable frontmatter.

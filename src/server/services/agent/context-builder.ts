@@ -281,6 +281,47 @@ async function buildNoteItem(
   }
 }
 
+async function buildTaskItem(
+  item: Extract<AgentContextItem, { kind: 'task' }>,
+  deps: ContextBuilderDeps
+): Promise<ContentBlock> {
+  try {
+    const storage = deps.artifacts
+    if (!storage || item.storeId !== storage.storeId) {
+      throw new AgentContextError(
+        'Artifact store is unavailable or has changed'
+      )
+    }
+    const task = storage.tasks.get(item.taskId)
+    const { items } = storage.tasks.artifacts(item.taskId)
+    const links = task.links.map(
+      link => `- ${link.label ? link.label + ': ' : ''}${link.url}`
+    )
+    const artifacts = items.map(
+      artifact =>
+        `- ${artifact.title} (id ${artifact.id}, type ${artifact.typeId}, status ${artifact.status})`
+    )
+    const text = [
+      `Task: ${task.title}`,
+      `ID: ${task.id}`,
+      `State: ${task.state}`,
+      `External links:\n${links.join('\n') || '(none)'}`,
+      `Description:\n${task.description || '(empty)'}`,
+      'Linked artifacts (bodies are not embedded; read them with artifacts.get and artifacts.get_content):\n' +
+        (artifacts.join('\n') || '(none)')
+    ].join('\n\n')
+    return embed(
+      deps,
+      `githuman://task/${encodeURIComponent(item.storeId)}/${encodeURIComponent(task.id)}`,
+      `Task ${task.title}:`,
+      'text/markdown',
+      text
+    )
+  } catch (error) {
+    throw asContextError(error)
+  }
+}
+
 async function buildArtifactItem(
   item: Extract<AgentContextItem, { kind: 'artifact' }>,
   deps: ContextBuilderDeps
@@ -326,6 +367,7 @@ function buildItem(
 ): Promise<ContentBlock> {
   if (item.kind === 'artifact') return buildArtifactItem(item, deps)
   if (item.kind === 'note') return buildNoteItem(item, deps)
+  if (item.kind === 'task') return buildTaskItem(item, deps)
   if (item.kind === 'diff') {
     return buildDiffItem(item, deps)
   }

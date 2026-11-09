@@ -1,20 +1,22 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import ArtifactCatalogItem from './ArtifactCatalogItem.vue'
+import VirtualInfiniteList from '@/components/VirtualInfiniteList.vue'
 import { useI18n } from 'vue-i18n'
 import { useArtifactDefinitionsStore } from '@/stores/artifact-definitions-store'
 import { useAppTheme } from '@/composables/use-app-theme'
 import type { ArtifactSearchItem } from '@/api/types'
-
-// Match the regular catalog row before Quasar measures its actual height.
-const ROW_HEIGHT_ESTIMATE = 60
 
 const props = defineProps<{
   items: ArtifactSearchItem[]
   selectedId: string | undefined
   grouping: string
   storeId: string | null
-  scrollTarget: Element
+  loading: boolean
+  hasMore: boolean
+  disabled: boolean
+  searchKey: string
+  loadMore: () => Promise<void>
 }>()
 defineEmits<{ select: [item: ArtifactSearchItem] }>()
 const { t } = useI18n()
@@ -58,15 +60,17 @@ const rows = computed(() => {
 </script>
 
 <template>
-  <q-virtual-scroll
+  <VirtualInfiniteList
     :items="rows"
-    :scroll-target="scrollTarget"
-    :virtual-scroll-item-size="ROW_HEIGHT_ESTIMATE"
+    :loading="loading"
+    :has-more="hasMore"
+    :disabled="disabled"
+    :reset-key="searchKey"
+    :load-more="loadMore"
     class="artifact-catalog artifact-summary"
     :class="{
       'artifact-summary--dark': isDark
     }"
-    role="list"
   >
     <template #default="{ item: row }">
       <q-item-label
@@ -74,6 +78,7 @@ const rows = computed(() => {
         :key="row.key"
         header
         class="artifact-catalog__group"
+        :class="{ 'artifact-catalog__group--task': grouping === 'task' }"
       >
         {{ row.label ? groupLabel(row.label) : t('artifacts.noTask') }}
       </q-item-label>
@@ -83,10 +88,11 @@ const rows = computed(() => {
         :item="row.item"
         :selected="row.item.id === selectedId"
         :store-id="storeId"
-        @select="$emit('select', $event)"
+        @select="$emit('select', row.item)"
       />
     </template>
-  </q-virtual-scroll>
+    <template #empty><slot name="empty" /></template>
+  </VirtualInfiniteList>
 </template>
 
 <style scoped>
@@ -100,7 +106,11 @@ const rows = computed(() => {
   font-weight: 600;
   letter-spacing: 0.01em;
   color: inherit;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+  border-bottom: 1px solid var(--app-divider);
   background-color: rgba(128, 128, 128, 0.12);
+}
+.artifact-catalog__group--task {
+  font-size: 13px;
+  font-weight: 500;
 }
 </style>

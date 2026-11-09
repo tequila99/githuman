@@ -24,8 +24,12 @@ const { t } = useI18n()
     "
     @click="emit('open')"
   >
-    <q-badge v-if="count" color="primary" floating rounded>{{ count }}</q-badge>
-    <q-badge v-else-if="failed" color="negative" floating rounded>!</q-badge>
+    <q-badge v-if="count" color="primary" floating class="app-icon-badge">{{
+      count
+    }}</q-badge>
+    <q-badge v-else-if="failed" color="negative" floating class="app-icon-badge"
+      >!</q-badge
+    >
     <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
       t('nav.artifactActions')
     }}</q-tooltip>

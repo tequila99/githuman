@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { mdiCheck, mdiClose, mdiPlus } from '@mdi/js'
+import CloseButton from '@/components/buttons/CloseButton.vue'
+import { mdiCheck, mdiPlus } from '@mdi/js'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { NotePropertyValue } from '../../../shared/notes/document.ts'
@@ -46,14 +47,7 @@ const types = computed(() =>
       :aria-label="t('notes.addProperty')"
       :disable="!name.trim()"
     />
-    <q-btn
-      class="app-icon-control"
-      flat
-      dense
-      :icon="mdiClose"
-      :aria-label="t('notes.done')"
-      @click="cancel"
-    />
+    <CloseButton :label="t('notes.done')" @click="cancel" :round="false" />
   </form>
   <button v-else type="button" class="note-properties-add" @click="start"
     ><q-icon class="app-icon-neutral" :name="mdiPlus" size="20px" />{{

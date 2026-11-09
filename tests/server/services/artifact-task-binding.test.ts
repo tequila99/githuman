@@ -44,7 +44,7 @@ function setup(t: TestContext) {
   const task = (title: string) =>
     storage.tasks.create(
       'task-' + title,
-      { title, externalUrl: null, state: 'closed' },
+      { title, externalUrl: null, state: 'open' },
       ACTOR
     ).id
   const a = task('A'),
@@ -96,7 +96,7 @@ test('explicit, inherited, ambiguous and missing task contexts preserve create s
       .taskIds,
     []
   )
-  assert.equal(storage.tasks.get(a).state, 'closed')
+  assert.equal(storage.tasks.get(a).state, 'open')
   assert.throws(
     () => storage.create(input('unknown'), ACTOR, turn([randomUUID()])),
     ArtifactInputError

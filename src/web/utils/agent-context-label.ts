@@ -6,6 +6,7 @@ export function contextLabel(item: AgentContextItem, t: Translate): string {
   if (item.kind === 'artifact') {
     return t('agent.context.artifact', { name: item.name })
   }
+  if (item.kind === 'task') return t('agent.context.task', { name: item.name })
   if (item.kind === 'note') return item.name
   if (item.kind === 'file') {
     return t('agent.context.file', { path: item.path })
