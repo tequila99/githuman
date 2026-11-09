@@ -544,9 +544,12 @@ test('send posts text with the pending context and clears it; it stays on failur
 
 test('send is a no-op while the agent is not ready, or the text is blank', async () => {
   const store = await storeWith(session('s1'))
+  const context = { kind: 'review' as const, reviewId: 'r' }
+  store.addContext(context)
   const chat = chatState(store, 's1')
   chat.status = 'busy'
   assert.equal(await store.send('x'), false)
+  assert.deepEqual(store.chats.s1?.pendingContext, [context])
   chat.status = 'starting'
   assert.equal(await store.send('x'), false)
   chat.status = 'ready'
