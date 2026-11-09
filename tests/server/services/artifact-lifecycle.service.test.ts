@@ -1811,6 +1811,34 @@ test('0111: optional manifest content can supply exact finding evidence', async 
   )
 })
 
+test('0111: optional manifest content that was not read cannot supply finding evidence', async t => {
+  const { storage, create, propose, pass } = await setup(t)
+  const reference = create('draft')
+  const subject = create('draft', [
+    { kind: 'references', targetId: reference.id }
+  ])
+  const validation = pass(propose([subject]))
+  assert.throws(
+    () =>
+      storage.lifecycle.jobs.submit(
+        validation.prepared.id,
+        validation.sessionId,
+        {
+          verdict: 'conflict',
+          findings: [
+            {
+              artifactId: reference.id,
+              quote: 'Обязательный текст',
+              message: 'Conflicting context'
+            }
+          ],
+          resolutions: []
+        }
+      ),
+    /exact manifest text/
+  )
+})
+
 test('0111: optional metadata changes remain version checked without requiring body reads', async t => {
   const { storage, create, propose } = await setup(t)
   const reference = create('draft')
