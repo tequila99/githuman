@@ -138,6 +138,18 @@ export class ArtifactCatalogRepository {
       : undefined
   }
 
+  /** Artifacts that list the task, read through the task index. */
+  artifactsOfTask(taskId: string): Artifact[] {
+    const rows = this.db
+      .prepare(`SELECT c.snapshot_json FROM artifact_task_links l
+      JOIN artifact_current c ON c.store_id=l.store_id AND c.artifact_id=l.artifact_id
+      WHERE l.store_id=? AND l.task_id=? ORDER BY l.artifact_id`)
+      .all(this.storeId, taskId) as { snapshot_json: string }[]
+    return rows.map(row =>
+      normalizeArtifact(JSON.parse(row.snapshot_json) as Artifact)
+    )
+  }
+
   list(limit: number, after?: { createdAt: string; id: string }): Artifact[] {
     const rows = this.db
       .prepare(`SELECT c.snapshot_json FROM artifact_current c

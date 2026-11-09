@@ -1,17 +1,17 @@
 <script setup lang="ts">
+import AddButton from '@/components/buttons/AddButton.vue'
 import {
   mdiArchiveOutline,
+  mdiClipboardTextOutline,
   mdiCommentEditOutline,
   mdiConsoleLine,
   mdiEyeOutline,
   mdiFileDocumentOutline,
   mdiMonitorCellphone,
-  mdiPlus,
   mdiSwapHorizontal,
   mdiWeatherNight,
   mdiWhiteBalanceSunny
 } from '@mdi/js'
-import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
@@ -68,6 +68,12 @@ const { version } = storeToRefs(useAppInfoStore())
           /></q-item-section>
           <q-item-section>{{ t('notes.title') }}</q-item-section>
         </q-item>
+        <q-item v-ripple clickable :to="{ path: '/tasks' }">
+          <q-item-section avatar
+            ><q-icon class="app-icon-neutral" :name="mdiClipboardTextOutline"
+          /></q-item-section>
+          <q-item-section>{{ t('tasks.title') }}</q-item-section>
+        </q-item>
         <q-item v-ripple clickable :to="{ path: '/artifacts' }">
           <q-item-section avatar
             ><q-icon class="app-icon-neutral" :name="mdiArchiveOutline"
@@ -113,20 +119,11 @@ const { version } = storeToRefs(useAppInfoStore())
             </q-item-section>
             <q-item-section>{{ t('agent.chats.title') }}</q-item-section>
             <q-item-section v-if="agentStore.canAddChat" side>
-              <q-btn
-                flat
-                round
-                dense
+              <AddButton
                 size="sm"
-                :icon="mdiPlus"
-                class="app-icon-control"
-                :aria-label="t('agent.chats.add')"
+                :tooltip="t('agent.chats.add')"
                 @click.stop="agentStore.openNewChatDialog()"
-              >
-                <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
-                  t('agent.chats.add')
-                }}</q-tooltip>
-              </q-btn>
+              />
             </q-item-section>
           </template>
 

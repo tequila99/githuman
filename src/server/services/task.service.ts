@@ -7,6 +7,8 @@ import type {
   Task,
   TaskInput,
   TaskChatLink,
+  TaskArtifact,
+  TaskArtifacts,
   TaskActivationRequest,
   TaskCreateAndActivateRequest,
   TaskActivationResult,
@@ -19,8 +21,12 @@ import {
   TaskCreateAndActivateBody
 } from '../../shared/tasks/schemas.ts'
 import { isCredentialFreeWebUrl } from '../../shared/utils/web-url.ts'
+import { resolveTaskFields } from '../../shared/tasks/normalize.ts'
+import { INACTIVE_ARTIFACT_STATUSES } from '../../shared/artifacts/constants.ts'
 import {
   ArtifactConflictError,
+  TaskClosedError,
+  TaskHasActiveArtifactsError,
   ArtifactInputError,
   ArtifactNotFoundError
 } from '../errors/artifacts.ts'
@@ -36,17 +42,80 @@ export class TaskService extends ArtifactDefinitionService<Task> {
   constructor(options: DefinitionServiceOptions) {
     super(options, 'task')
   }
+  private artifactsOf: ((taskId: string) => TaskArtifact[]) | undefined
   attachSessions(registry: AgentSessionRegistry): void {
     this.registry = registry
   }
+  attachArtifacts(read: (taskId: string) => TaskArtifact[]): void {
+    this.artifactsOf = read
+  }
+  artifacts(taskId: string): TaskArtifacts {
+    this.get(taskId)
+    return {
+      taskId,
+      items: this.options.catalog.readSnapshot(
+        () => this.artifactsOf?.(taskId) ?? []
+      )
+    }
+  }
+  listByState(
+    limit: number | undefined,
+    cursor: string | undefined,
+    search: string | undefined,
+    state: Task['state'] | undefined,
+    tags: string[] = [],
+    tagMode: 'all' | 'any' = 'all'
+  ) {
+    const key = [
+      state && `state:${state}`,
+      tags.length && `tags:${tagMode}:${JSON.stringify(tags)}`
+    ]
+      .filter(Boolean)
+      .join(':')
+    const hasTags = (task: Task) =>
+      tagMode === 'any'
+        ? tags.some(tag => task.tags.includes(tag))
+        : tags.every(tag => task.tags.includes(tag))
+    return this.options.catalog.readSnapshot(() => {
+      const page = this.listPage(
+        limit,
+        cursor,
+        search,
+        key
+          ? {
+              key,
+              test: task =>
+                (!state || task.state === state) &&
+                (!tags.length || hasTags(task))
+            }
+          : undefined
+      )
+      const counts = this.options.repository.artifactCounts(
+        page.items.map(task => task.id)
+      )
+      return {
+        ...page,
+        items: page.items.map(task => ({
+          ...task,
+          artifactCount: counts.get(task.id) ?? 0
+        }))
+      }
+    })
+  }
   create(requestId: string, input: TaskInput, actor: ArtifactActor): Task {
     this.validate(input)
-    return this.mutate(requestId, { command: 'create', input }, actor, () => ({
+    return this.mutate(requestId, { command: 'create', input }, actor, () =>
+      this.newTask(input)
+    )
+  }
+  private newTask(input: TaskInput): Task {
+    return {
       storeId: this.options.catalog.storeId,
       id: randomUUID(),
-      ...input,
-      version: 1
-    }))
+      ...resolveTaskFields(input),
+      version: 1,
+      createdAt: new Date((this.options.now ?? Date.now)()).toISOString()
+    }
   }
   getContext(actor: ArtifactActor): TaskContext {
     const session = this.ownSession(actor)
@@ -110,14 +179,7 @@ export class TaskService extends ArtifactDefinitionService<Task> {
           )
         }
         const task: Task =
-          'input' in input
-            ? {
-                storeId: this.options.catalog.storeId,
-                id: randomUUID(),
-                ...input.input,
-                version: 1
-              }
-            : this.get(input.taskId)
+          'input' in input ? this.newTask(input.input) : this.get(input.taskId)
         const version = previous.version + 1
         const prepared = session.prepareTaskActivation(
           input.turnId,
@@ -176,19 +238,48 @@ export class TaskService extends ArtifactDefinitionService<Task> {
       () => {
         const previous = this.get(id)
         this.assertVersion(previous.version, expectedVersion)
-        return { ...previous, ...input, version: previous.version + 1 }
+        // A closed task stays closed: new work needs a new task.
+        if (previous.state === 'closed') {
+          throw new TaskClosedError('A closed task cannot be changed.')
+        }
+        if (input.state === 'closed') this.assertClosable(id)
+        return {
+          ...previous,
+          ...resolveTaskFields(input, previous),
+          version: previous.version + 1
+        }
       }
     )
+  }
+  // Artifacts bound only to this task must leave active use before it closes.
+  private assertClosable(id: string): void {
+    const pending = (this.artifactsOf?.(id) ?? []).filter(
+      artifact =>
+        artifact.exclusive &&
+        !INACTIVE_ARTIFACT_STATUSES.includes(artifact.status)
+    )
+    if (pending.length) {
+      throw new TaskHasActiveArtifactsError(
+        `Archive ${pending.length} artifact(s) bound only to this task first.`
+      )
+    }
   }
   private validate(input: TaskInput): void {
     assertDefinitionInput(TaskInputSchema, input)
     if (!input.title.trim()) {
       throw new ArtifactInputError('Task title is empty.')
     }
-    if (input.externalUrl !== null) {
+    if (input.links !== undefined && input.externalUrl !== undefined) {
+      throw new ArtifactInputError(
+        'Use links or the deprecated externalUrl, not both.'
+      )
+    }
+    const { links } = resolveTaskFields(input)
+    const urls = new Set<string>()
+    for (const { url } of links) {
       let valid = false
       try {
-        valid = isCredentialFreeWebUrl(new URL(input.externalUrl))
+        valid = isCredentialFreeWebUrl(new URL(url))
       } catch {
         /* Invalid URLs are rejected below. */
       }
@@ -197,6 +288,10 @@ export class TaskService extends ArtifactDefinitionService<Task> {
           'Task URL must use HTTP or HTTPS without credentials.'
         )
       }
+      if (urls.has(url)) {
+        throw new ArtifactInputError('Task links must be unique.')
+      }
+      urls.add(url)
     }
   }
   assignment(sessionId: string) {

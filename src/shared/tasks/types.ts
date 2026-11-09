@@ -4,9 +4,11 @@ import type {
   TaskInputSchema,
   ArtifactTypeSchema,
   ArtifactTypeInputSchema,
-  TaskChatLinkSchema
+  TaskChatLinkSchema,
+  TaskLinkSchema
 } from './schemas.ts'
 export type Task = Static<typeof TaskSchema>
+export type TaskLink = Static<typeof TaskLinkSchema>
 export type TaskInput = Static<typeof TaskInputSchema>
 export type ArtifactType = Static<typeof ArtifactTypeSchema>
 export type ArtifactTypeInput = Static<typeof ArtifactTypeInputSchema>
@@ -47,4 +49,10 @@ export type TaskContext = Static<
 >
 export type TaskActivationResult = Static<
   typeof import('./schemas.ts').TaskActivationResultSchema
+>
+export type TaskArtifact = Static<
+  typeof import('./schemas.ts').TaskArtifactSchema
+>
+export type TaskArtifacts = Static<
+  typeof import('./schemas.ts').TaskArtifactsSchema
 >

@@ -78,6 +78,26 @@ export const ContextItem = Type.Union(
     ),
     Type.Object(
       {
+        kind: Type.Literal('task', {
+          description: 'A task with its description and linked artifacts.'
+        }),
+        storeId: Type.String({
+          minLength: 1,
+          description: 'Artifact store identity.'
+        }),
+        taskId: Type.String({ minLength: 1, description: 'Stable task UUID.' }),
+        name: Type.String({
+          minLength: 1,
+          description: 'Display title when attached.'
+        })
+      },
+      {
+        additionalProperties: false,
+        description: 'Task context resolved by the server before sending.'
+      }
+    ),
+    Type.Object(
+      {
         kind: Type.Literal('note', { description: 'A project note.' }),
         noteId: Type.String({ minLength: 1, description: 'Stable note UUID.' }),
         storageId: Type.String({

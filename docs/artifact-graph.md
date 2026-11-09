@@ -39,8 +39,22 @@ Self-links, повтор kind+target и отсутствующая цель в �
 
 ## Задачи и типы
 
-Задача содержит `storeId`, UUID `id`, `title`, `externalUrl|null`, `state`
-(`open|closed`) и `version`. URL допускает HTTP/HTTPS без credentials.
+Задача содержит `storeId`, UUID `id`, `title`, `description` (Markdown),
+`links[]` (`{url, label?}`, до 20 уникальных), `state` (`open|closed`) и
+`version`. URL допускает HTTP/HTTPS без credentials. Устаревшее входное поле
+`externalUrl` превращается в единственную ссылку; старые снимки читаются с
+пустым описанием. Закрытая задача не меняется и не открывается повторно, к ней нельзя привязать
+новые артефакты; уже существующие привязки сохраняются. Закрыть задачу можно,
+только когда все артефакты, привязанные лишь к ней, неактивны (`archived`,
+`deleted`, `superseded`). Список артефактов задачи читается через производную
+таблицу `artifact_task_links`: триггеры на `artifact_current` поддерживают её
+при любой записи, а старая база заполняется при первой миграции.
+
+Клиент различает 409 по полю `code`, а не по тексту: `GHT_ARTIFACT_CONFLICT` —
+устарела версия; `GHT_TASK_CLOSED` — задача закрыта; `GHT_TASK_ACTIVE_ARTIFACTS` —
+остались активные артефакты только этой задачи; `GHT_ARTIFACT_ACTIVE_GRAPH_CHANGE` —
+у accepted-документа нельзя менять задачи без validated change set. Коды лежат в
+`src/shared/artifacts/error-codes.ts`.
 Закрытие задачи сохраняет все артефакты и их статусы.
 
 Тип содержит `storeId`, неизменяемый `id`, `label`, `active` и `version`.
@@ -98,10 +112,12 @@ Self-links, повтор kind+target и отсутствующая цель в �
 
 | Маршрут | Назначение |
 |---|---|
-| `GET /api/tasks` | Список задач; `search` — регистронезависимый поиск по названию и id. |
+| `GET /api/tasks` | Список задач; `search` — регистронезависимый поиск по названию и id, `state` — фильтр `open\|closed`. |
 | `GET /api/tasks/:id` | Текущая задача. |
-| `POST /api/tasks` | `{requestId, input: {title, externalUrl, state}}`. |
+| `POST /api/tasks` | `{requestId, input: {title, state, description?, links?}}`. |
 | `PATCH /api/tasks/:id` | `{requestId, expectedVersion, input}`. |
+| `GET /api/tasks/:id/artifacts` | Все артефакты задачи в любом статусе; `exclusive` — привязан только к этой задаче. |
+| `PATCH /api/artifacts/:id/metadata` | `{requestId, expectedVersion, metadata}`; привязка и отвязка задач. Для `accepted` изменение `taskIds` отклоняется (нужен validated change set). |
 | `GET /api/tasks/:id/history` | Страницы истории определений. |
 | `GET /api/tasks/:id/sessions` | Связи с чатами, включая недоступные. |
 | `GET /api/tasks/:id/sessions/history` | История назначений с title snapshot и actor. |

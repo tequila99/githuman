@@ -1,4 +1,7 @@
-import { ARTIFACT_STATUSES } from '../../../src/shared/artifacts/constants.ts'
+import {
+  ARTIFACT_STATUSES,
+  INACTIVE_ARTIFACT_STATUSES
+} from '../../../src/shared/artifacts/constants.ts'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -73,11 +76,15 @@ test('invalid identities, arrays and unknown options fall back without filesyste
   assert.equal(state.selection, null)
   assert.equal(state.group, 'none')
   assert.equal(state.input.query, '')
-  assert.equal(state.filters.status, null)
-  assert.deepEqual(state.input.filters, { statuses: [...ARTIFACT_STATUSES] })
+  assert.equal(state.filters.status, 'active')
+  assert.deepEqual(state.input.filters, {
+    statuses: ARTIFACT_STATUSES.filter(
+      value => !INACTIVE_ARTIFACT_STATUSES.includes(value)
+    )
+  })
 })
 
-test('nullable and invalid status select every lifecycle status, including archived and deleted', () => {
+test('absent and invalid status exclude inactive statuses; explicit statuses remain selectable', () => {
   for (const status of [
     undefined,
     null,
@@ -86,8 +93,13 @@ test('nullable and invalid status select every lifecycle status, including archi
     ['draft', 'accepted']
   ]) {
     const state = artifactRouteState(status === undefined ? {} : { status })
-    assert.equal(state.filters.status, null)
-    assert.deepEqual(state.input.filters?.statuses, [...ARTIFACT_STATUSES])
+    assert.equal(state.filters.status, 'active')
+    assert.deepEqual(
+      state.input.filters?.statuses,
+      ARTIFACT_STATUSES.filter(
+        value => !INACTIVE_ARTIFACT_STATUSES.includes(value)
+      )
+    )
   }
   for (const status of ARTIFACT_STATUSES) {
     const state = artifactRouteState({ status })
@@ -122,7 +134,8 @@ test('applying and resetting filters preserves search, selection and unrelated w
     q: 'project',
     uiPane: 'content',
     uiWindow: 'preview',
-    other: ['one', 'two']
+    other: ['one', 'two'],
+    status: 'all'
   })
   assert.deepEqual(
     artifactFilterQuery(query, {
@@ -152,7 +165,7 @@ test('applying and resetting filters preserves search, selection and unrelated w
   )
   assert.equal(
     artifactFiltersActive(artifactRouteState({ q: 'search' }).filters),
-    false
+    true
   )
   assert.equal(
     artifactFiltersActive(artifactRouteState({ group: 'type' }).filters),
@@ -198,4 +211,18 @@ test('malformed calendar dates cannot crash URL parsing', () => {
     assert.equal(state.input.filters?.createdFrom, undefined)
     assert.equal(state.input.filters?.createdTo, undefined)
   }
+})
+
+test('resetting status explicitly restores all records and survives URL roundtrip', () => {
+  const filters = defaultArtifactFilters()
+  const query = artifactFilterQuery({}, filters)
+  assert.equal(query.status, 'all')
+  const state = artifactRouteState({ status: 'all' })
+  assert.equal(state.filters.status, null)
+  assert.deepEqual(state.input.filters?.statuses, [...ARTIFACT_STATUSES])
+  assert.equal(artifactFiltersActive(state.filters), false)
+  assert.equal(
+    artifactFilterQuery({}, artifactRouteState({}).filters).status,
+    'active'
+  )
 })

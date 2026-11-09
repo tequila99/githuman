@@ -1,19 +1,27 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { RouteLocationRaw } from 'vue-router'
 import type { ArtifactSearchItem } from '@/api/types'
-import { useAppTheme } from '@/composables/use-app-theme'
+import CatalogListItem from '@/components/CatalogListItem.vue'
 import { useArtifactDefinitionsStore } from '@/stores/artifact-definitions-store'
 import { formatDateTime } from '@/utils/date'
 import ArtifactStatusBadge from './ArtifactStatusBadge.vue'
 import ArtifactTypeIcon from './ArtifactTypeIcon.vue'
 
+// A bound artifact of a task has no search fields and no task list.
+type CatalogItem = Pick<
+  ArtifactSearchItem,
+  'title' | 'status' | 'typeId' | 'createdAt'
+> & { taskIds?: readonly string[] }
+
 const props = defineProps<{
-  item: ArtifactSearchItem
+  item: CatalogItem
   selected: boolean
   storeId: string | null
+  // The title becomes a link and the row stops being clickable.
+  to?: RouteLocationRaw
 }>()
-defineEmits<{ select: [item: ArtifactSearchItem] }>()
-const { isDark } = useAppTheme()
+defineEmits<{ select: [item: CatalogItem] }>()
 const definitions = useArtifactDefinitionsStore()
 const labels = computed(() =>
   props.storeId ? definitions.forStore(props.storeId) : null
@@ -28,96 +36,55 @@ function taskLabel(id: string) {
 </script>
 
 <template>
-  <q-item
-    role="listitem"
+  <CatalogListItem
+    :title="item.title"
+    :selected="selected"
+    :to="to"
     :data-status="item.status"
-    clickable
-    :dark="isDark"
     class="artifact-catalog__item"
-    :active="selected"
-    :aria-current="selected ? 'true' : undefined"
     @click="$emit('select', item)"
   >
-    <q-item-section side class="artifact-catalog__side">
+    <template #icon>
       <ArtifactTypeIcon
         :type-id="item.typeId"
         size="18px"
         class="artifact-catalog__icon"
       />
-    </q-item-section>
-    <q-item-section class="artifact-catalog__main">
-      <q-item-label
-        class="artifact-summary__title artifact-catalog__title ellipsis"
-        :title="item.title"
-        >{{ item.title }}</q-item-label
+    </template>
+    <template #metadata>
+      <ArtifactStatusBadge :status="item.status" />
+      <span class="artifact-catalog__type">{{ typeLabel }}</span>
+      <time
+        class="artifact-catalog__date"
+        :datetime="item.createdAt"
+        :title="item.createdAt"
+        >{{ formatDateTime(item.createdAt) }}</time
       >
-      <q-item-label
-        caption
-        class="artifact-summary__caption artifact-catalog__metadata"
+      <span
+        v-for="taskId in item.taskIds ?? []"
+        :key="taskId"
+        class="artifact-catalog__task ellipsis"
+        :title="taskLabel(taskId)"
+        >{{ taskLabel(taskId) }}</span
       >
-        <ArtifactStatusBadge :status="item.status" />
-        <span class="artifact-catalog__type ellipsis" :title="typeLabel">{{
-          typeLabel
-        }}</span>
-        <time
-          class="artifact-catalog__date"
-          :datetime="item.createdAt"
-          :title="item.createdAt"
-          >{{ formatDateTime(item.createdAt) }}</time
-        >
-        <span
-          v-for="taskId in item.taskIds"
-          :key="taskId"
-          class="artifact-catalog__task ellipsis"
-          :title="taskLabel(taskId)"
-          >{{ taskLabel(taskId) }}</span
-        >
-      </q-item-label>
-    </q-item-section>
-  </q-item>
+    </template>
+    <template v-if="$slots.side" #side><slot name="side" /></template>
+  </CatalogListItem>
 </template>
 
 <style scoped>
-.artifact-catalog__item {
-  min-width: 0;
-  min-height: 60px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(128, 128, 128, 0.25);
-}
-.artifact-catalog__item.q-item--active {
-  color: inherit;
-  box-shadow: inset 3px 0 var(--q-primary);
-  background-image: linear-gradient(
-    rgba(25, 118, 210, 0.1),
-    rgba(25, 118, 210, 0.1)
-  );
-}
-.artifact-catalog__item:focus-visible {
-  outline: 2px solid var(--q-primary);
-  outline-offset: -2px;
-}
-.artifact-catalog__side {
-  min-width: 0;
-  padding-right: 10px;
-}
-.artifact-catalog__main {
-  min-width: 0;
-}
-.artifact-catalog__title.ellipsis {
+.artifact-catalog__item :deep(.catalog-list-item__metadata) {
+  flex-wrap: nowrap;
+  overflow: hidden;
   white-space: nowrap;
-  overflow-wrap: normal;
 }
-.artifact-catalog__metadata {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-  max-width: 100%;
-  white-space: nowrap;
+.artifact-catalog__item :deep(.q-badge) {
+  flex-shrink: 0;
 }
 .artifact-catalog__type {
-  min-width: 0;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  max-width: 100%;
+  white-space: nowrap;
 }
 .artifact-catalog__task {
   min-width: 0;
@@ -127,9 +94,6 @@ function taskLabel(id: string) {
   flex: 0 0 auto;
 }
 .artifact-catalog__icon {
-  color: var(--app-icon-neutral);
-}
-.artifact-catalog__item.q-item--active .artifact-catalog__icon {
-  color: var(--q-primary);
+  color: inherit;
 }
 </style>

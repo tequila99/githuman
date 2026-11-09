@@ -41,21 +41,37 @@ export class ArtifactDefinitionService<T extends Definition> {
     if (!result) throw new ArtifactNotFoundError()
     return result
   }
-  list(limit = 50, cursor?: string, search = '') {
-    const needle = search.trim().toLocaleLowerCase()
+  list(
+    limit = 50,
+    cursor?: string,
+    search = '',
+    filter?: { key: string; test: (item: T) => boolean }
+  ) {
     return this.options.catalog.readSnapshot(() =>
-      artifactPage(this.matching(needle), {
-        storeId: this.options.catalog.storeId,
-        epoch: this.options.catalog.epoch(),
-        // The cursor carries the search text, so a cursor cannot cross searches.
-        query: needle ? `${this.kind}:search:${needle}` : this.kind,
-        limit,
-        cursor
-      })
+      this.listPage(limit, cursor, search, filter)
     )
   }
-  private matching(needle: string): T[] {
-    const items = this.options.repository.all<T>(this.kind)
+  protected listPage(
+    limit = 50,
+    cursor?: string,
+    search = '',
+    filter?: { key: string; test: (item: T) => boolean }
+  ) {
+    const needle = search.trim().toLocaleLowerCase()
+    return artifactPage(this.matching(needle, filter?.test), {
+      storeId: this.options.catalog.storeId,
+      epoch: this.options.catalog.epoch(),
+      // Bind the cursor to the search text and filter.
+      query: [this.kind, needle && `search:${needle}`, filter?.key]
+        .filter(Boolean)
+        .join(':'),
+      limit,
+      cursor
+    })
+  }
+  private matching(needle: string, test?: (item: T) => boolean): T[] {
+    const all = this.options.repository.all<T>(this.kind)
+    const items = test ? all.filter(test) : all
     if (!needle) return items
     return items.filter(item => {
       const name = 'title' in item ? item.title : item.label

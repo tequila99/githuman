@@ -30,6 +30,7 @@ import {
   ArtifactActorSchema,
   ArtifactMetadataInputSchema
 } from '../../shared/artifacts/schemas.ts'
+import type { TaskArtifact } from '../../shared/tasks/types.ts'
 import {
   MAX_ARTIFACT_BODY_BYTES,
   MAX_ARTIFACT_BYTES,
@@ -40,6 +41,8 @@ import {
 import { isUuid } from '../../shared/utils/is-uuid.ts'
 import {
   ArtifactConflictError,
+  ArtifactActiveGraphChangeError,
+  TaskClosedError,
   ArtifactInputError,
   ArtifactIntegrityError,
   ArtifactNotFoundError,
@@ -162,6 +165,7 @@ export class ArtifactStorageService {
     }
     this.types = new ArtifactTypeService(definitions)
     this.tasks = new TaskService(definitions)
+    this.tasks.attachArtifacts(taskId => this.artifactsOfTask(taskId))
     this.graphRepository = new ArtifactGraphRepository(options.db, this.catalog)
     this.graph = new ArtifactGraphService(this)
     this.lifecycle = new ArtifactLifecycleService(this, options.db, this.now)
@@ -309,7 +313,10 @@ export class ArtifactStorageService {
         actor.kind === 'agent' &&
         turn?.sessionId === actor.id &&
         turn.taskIds.length === 1
-      const taskIds = input.metadata.taskIds ?? (inherited ? turn.taskIds : [])
+      // A closed task cannot get new artifacts, so a closed inherited task is dropped.
+      const taskIds =
+        input.metadata.taskIds ??
+        (inherited && !this.isTaskClosed(turn.taskIds[0]) ? turn.taskIds : [])
       const now = new Date(this.now()).toISOString()
       const artifact: Artifact = {
         storeId: this.storeId,
@@ -755,6 +762,18 @@ export class ArtifactStorageService {
     }
   }
 
+  // The task index makes this independent of the store size.
+  private artifactsOfTask(taskId: string): TaskArtifact[] {
+    return this.catalog.artifactsOfTask(taskId).map(artifact => ({
+      id: artifact.id,
+      title: artifact.title,
+      typeId: artifact.typeId,
+      status: artifact.status,
+      createdAt: artifact.createdAt,
+      exclusive: artifact.taskIds.length === 1
+    }))
+  }
+
   updateMetadata(
     id: string,
     input: {
@@ -818,7 +837,7 @@ export class ArtifactStorageService {
           JSON.stringify(sortedTaskIds(updated.taskIds)) !==
             JSON.stringify(sortedTaskIds(previous.taskIds)))
       ) {
-        throw new ArtifactConflictError(
+        throw new ArtifactActiveGraphChangeError(
           'Active graph changes require a validated change set.'
         )
       }
@@ -867,6 +886,15 @@ export class ArtifactStorageService {
     }
   }
 
+  private isTaskClosed(taskId: string): boolean {
+    try {
+      return this.tasks.get(taskId).state === 'closed'
+    } catch (error) {
+      if (error instanceof ArtifactNotFoundError) return false
+      throw error
+    }
+  }
+
   private validateGraph(artifact: Artifact, previous?: Artifact): void {
     const type = this.reference(
       () => this.types.get(artifact.typeId),
@@ -877,7 +905,13 @@ export class ArtifactStorageService {
       throw new ArtifactInputError('Artifact type is inactive.')
     }
     for (const taskId of artifact.taskIds) {
-      this.reference(() => this.tasks.get(taskId), 'task', taskId)
+      const task = this.reference(() => this.tasks.get(taskId), 'task', taskId)
+      // Existing bindings of a closed task stay; only new ones are refused.
+      if (task.state === 'closed' && !previous?.taskIds.includes(taskId)) {
+        throw new TaskClosedError(
+          `Task ${taskId} is closed and cannot get new artifacts.`
+        )
+      }
     }
     const issues = artifactIssues(
       artifact,

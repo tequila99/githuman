@@ -15,6 +15,7 @@
 | `diff` | `githuman://diff/<source>/<path>` | `source` — `staged` или `unstaged`; `path` — путь файла в diff, может отсутствовать | `path` не кодируется. Без пути URI заканчивается на `/` |
 | `note` | `githuman://note/<storageId>/<noteId>` | текущий Markdown заметки по UUID и хранилищу | `encodeURIComponent` для обоих идентификаторов |
 | `artifact` | `githuman://artifact/<storeId>/<artifactId>` | immutable document и актуальные metadata/links, прочитанные сервером перед prompt | `encodeURIComponent` для обоих идентификаторов |
+| `task` | `githuman://task/<storeId>/<taskId>` | название, состояние, описание, внешние ссылки и список связанных артефактов (заголовок, id, тип, статус) без тел | `encodeURIComponent` для обоих идентификаторов |
 | `review` | `githuman://review/<id>` | `id` ревью | не кодируется |
 | `attachment` | `githuman://attachment/<имя>` | имя файла, которое прислал клиент (только текстовые вложения) | `encodeURIComponent` |
 

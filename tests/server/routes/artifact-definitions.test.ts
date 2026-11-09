@@ -35,7 +35,7 @@ async function setup(t: TestContext) {
     rmSync(root, { recursive: true, force: true })
   })
   await app.ready()
-  return { app, storage }
+  return { app, storage, db }
 }
 
 test('task and type APIs serialize complete definitions, lists and immutable history', async t => {
@@ -88,7 +88,10 @@ test('task and type APIs serialize complete definitions, lists and immutable his
   })
   assert.equal(inactive.statusCode, 200, inactive.body)
   for (const [url, expected] of [
-    ['/api/tasks', storage.tasks.list()],
+    [
+      '/api/tasks',
+      storage.tasks.listByState(undefined, undefined, undefined, undefined)
+    ],
     [`/api/tasks/${task.id}`, storage.tasks.get(task.id)],
     [`/api/tasks/${task.id}/history`, storage.tasks.historyPage(task.id)],
     ['/api/artifact-types', storage.types.list()],
@@ -340,4 +343,331 @@ test('definition lists search by name and identifier, and cursors stay bound to 
   assert.deepEqual(byId.json().items, [])
   const types = await app.inject('/api/artifact-types?search=ADR')
   assert.ok(types.json().items.length > 0)
+})
+
+test('task description and links round-trip, and legacy externalUrl input folds into links', async t => {
+  const { app } = await setup(t)
+  const created = await app.inject({
+    method: 'POST',
+    url: '/api/tasks',
+    payload: {
+      requestId: 'rich',
+      input: {
+        title: 'Rich',
+        state: 'open',
+        description: '# Plan\n\nText',
+        links: [
+          { url: 'https://example.org/1', label: ' Issue ' },
+          { url: 'https://example.org/2' }
+        ]
+      }
+    }
+  })
+  assert.equal(created.statusCode, 200, created.body)
+  assert.deepEqual(created.json(), {
+    storeId: created.json().storeId,
+    id: created.json().id,
+    version: 1,
+    createdAt: created.json().createdAt,
+    title: 'Rich',
+    state: 'open',
+    description: '# Plan\n\nText',
+    links: [
+      { url: 'https://example.org/1', label: 'Issue' },
+      { url: 'https://example.org/2' }
+    ],
+    tags: []
+  })
+  // Omitted description and links keep the current values.
+  const renamed = await app.inject({
+    method: 'PATCH',
+    url: `/api/tasks/${created.json().id}`,
+    payload: {
+      requestId: 'rename',
+      expectedVersion: 1,
+      input: { title: 'Renamed', state: 'open' }
+    }
+  })
+  assert.equal(renamed.statusCode, 200, renamed.body)
+  assert.equal(renamed.json().description, '# Plan\n\nText')
+  assert.equal(renamed.json().links.length, 2)
+  const legacy = await app.inject({
+    method: 'POST',
+    url: '/api/tasks',
+    payload: {
+      requestId: 'legacy',
+      input: {
+        title: 'Legacy',
+        state: 'open',
+        externalUrl: 'https://example.org/legacy'
+      }
+    }
+  })
+  assert.deepEqual(legacy.json().links, [{ url: 'https://example.org/legacy' }])
+  assert.equal(legacy.json().description, '')
+  const cleared = await app.inject({
+    method: 'PATCH',
+    url: `/api/tasks/${legacy.json().id}`,
+    payload: {
+      requestId: 'legacy-clear',
+      expectedVersion: 1,
+      input: { title: 'Legacy', state: 'open', externalUrl: null }
+    }
+  })
+  assert.deepEqual(cleared.json().links, [])
+})
+
+test('task links reject bad URLs, duplicates and mixing with externalUrl', async t => {
+  const { app } = await setup(t)
+  const create = (requestId: string, input: object) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/tasks',
+      payload: { requestId, input: { title: 'T', state: 'open', ...input } }
+    })
+  for (const [name, input] of [
+    ['credentials', { links: [{ url: 'https://u:p@example.org/' }] }],
+    ['scheme', { links: [{ url: 'file:///etc/passwd' }] }],
+    [
+      'duplicate',
+      { links: [{ url: 'https://a.org/' }, { url: 'https://a.org/' }] }
+    ],
+    ['both', { links: [], externalUrl: 'https://a.org/' }]
+  ] as const) {
+    const response = await create(name, input)
+    assert.equal(response.statusCode, 400, `${name}: ${response.body}`)
+  }
+})
+
+test('a closed task cannot be reopened or edited, and the task list filters by state', async t => {
+  const { app } = await setup(t)
+  const create = async (requestId: string, title: string) =>
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/api/tasks',
+        payload: { requestId, input: { title, state: 'open' } }
+      })
+    ).json()
+  const first = await create('a', 'Alpha')
+  await create('b', 'Beta')
+  const closed = await app.inject({
+    method: 'PATCH',
+    url: `/api/tasks/${first.id}`,
+    payload: {
+      requestId: 'close',
+      expectedVersion: 1,
+      input: { title: 'Alpha', state: 'closed' }
+    }
+  })
+  assert.equal(closed.statusCode, 200, closed.body)
+  for (const [requestId, input] of [
+    ['reopen', { title: 'Alpha', state: 'open' }],
+    ['edit', { title: 'Changed', state: 'closed' }]
+  ] as const) {
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/tasks/${first.id}`,
+      payload: { requestId, expectedVersion: 2, input }
+    })
+    assert.equal(response.statusCode, 409, response.body)
+  }
+  const only = async (state: string) =>
+    (await app.inject({ method: 'GET', url: `/api/tasks?state=${state}` }))
+      .json()
+      .items.map((item: { title: string }) => item.title)
+  assert.deepEqual(await only('closed'), ['Alpha'])
+  assert.deepEqual(await only('open'), ['Beta'])
+})
+
+test('a snapshot saved before descriptions existed reads with links and an empty description', async t => {
+  const { app, storage, db } = await setup(t)
+  const id = '11111111-1111-4111-8111-111111111111'
+  db.prepare('INSERT INTO task_current VALUES(?,?,?)').run(
+    storage.storeId,
+    id,
+    JSON.stringify({
+      storeId: storage.storeId,
+      id,
+      version: 1,
+      title: 'Old',
+      state: 'open',
+      externalUrl: 'https://example.org/old'
+    })
+  )
+  const response = await app.inject({ method: 'GET', url: `/api/tasks/${id}` })
+  assert.equal(response.statusCode, 200, response.body)
+  assert.deepEqual(response.json().links, [{ url: 'https://example.org/old' }])
+  assert.equal(response.json().description, '')
+  assert.equal('externalUrl' in response.json(), false)
+})
+
+test('a user binds and unbinds an artifact through the metadata route, and the task lists it', async t => {
+  const { app, storage } = await setup(t)
+  const actor = { kind: 'user' as const, id: 'local' }
+  const task = storage.tasks.create(
+    'bind-task',
+    { title: 'Bound', state: 'open' },
+    actor
+  )
+  const artifact = storage.create(
+    {
+      requestId: 'bind-artifact',
+      body: 'Body',
+      metadata: { title: 'Doc', tags: [] }
+    },
+    actor
+  )
+  const patch = (
+    requestId: string,
+    expectedVersion: number,
+    taskIds: string[]
+  ) =>
+    app.inject({
+      method: 'PATCH',
+      url: `/api/artifacts/${artifact.id}/metadata`,
+      payload: {
+        requestId,
+        expectedVersion,
+        metadata: { title: 'Doc', tags: [], taskIds }
+      }
+    })
+  const bound = await patch('bind', 1, [task.id])
+  assert.equal(bound.statusCode, 200, bound.body)
+  assert.deepEqual(bound.json().taskIds, [task.id])
+  const listed = await app.inject({
+    method: 'GET',
+    url: `/api/tasks/${task.id}/artifacts`
+  })
+  assert.deepEqual(listed.json(), {
+    taskId: task.id,
+    items: [
+      {
+        id: artifact.id,
+        title: 'Doc',
+        typeId: 'generic',
+        status: 'draft',
+        createdAt: artifact.createdAt,
+        exclusive: true
+      }
+    ]
+  })
+  const stale = await patch('stale', 1, [])
+  assert.equal(stale.statusCode, 409, stale.body)
+  const unbound = await patch('unbind', 2, [])
+  assert.equal(unbound.statusCode, 200, unbound.body)
+  const empty = await app.inject({
+    method: 'GET',
+    url: `/api/tasks/${task.id}/artifacts`
+  })
+  assert.deepEqual(empty.json().items, [])
+})
+
+test('task tags round-trip, stay on omitted updates, and filter the list by all or any', async t => {
+  const { app } = await setup(t)
+  const create = async (requestId: string, title: string, tags: string[]) =>
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/api/tasks',
+        payload: { requestId, input: { title, state: 'open', tags } }
+      })
+    ).json()
+  const first = await create('a', 'Alpha', ['ui', 'bug'])
+  await create('b', 'Beta', ['ui'])
+  await create('c', 'Gamma', [])
+  assert.deepEqual(first.tags, ['ui', 'bug'])
+  const renamed = await app.inject({
+    method: 'PATCH',
+    url: `/api/tasks/${first.id}`,
+    payload: {
+      requestId: 'rename',
+      expectedVersion: 1,
+      input: { title: 'Alpha 2', state: 'open' }
+    }
+  })
+  assert.deepEqual(renamed.json().tags, ['ui', 'bug'])
+  const titles = async (query: string) =>
+    (await app.inject({ method: 'GET', url: `/api/tasks?${query}` }))
+      .json()
+      .items.map((item: { title: string }) => item.title)
+      .sort()
+  assert.deepEqual(await titles('tags=ui'), ['Alpha 2', 'Beta'])
+  assert.deepEqual(await titles('tags=ui&tags=bug'), ['Alpha 2'])
+  assert.deepEqual(await titles('tags=bug&tags=other&tagMode=any'), ['Alpha 2'])
+  assert.deepEqual(await titles('tags=bug&tags=other'), [])
+})
+
+test('task list serializes live artifact counts including shared artifacts and empty tasks', async t => {
+  const { app, storage } = await setup(t)
+  const actor = { kind: 'user' as const, id: 'local' }
+  const first = storage.tasks.create(
+    'count-first',
+    { title: 'First', state: 'open' },
+    actor
+  )
+  const second = storage.tasks.create(
+    'count-second',
+    { title: 'Second', state: 'open' },
+    actor
+  )
+  const empty = storage.tasks.create(
+    'count-empty',
+    { title: 'Empty', state: 'closed' },
+    actor
+  )
+  const own = storage.create(
+    {
+      requestId: 'count-own',
+      body: 'Own',
+      metadata: { title: 'Own', tags: [], taskIds: [first.id] }
+    },
+    actor
+  )
+  storage.create(
+    {
+      requestId: 'count-shared',
+      body: 'Shared',
+      metadata: { title: 'Shared', tags: [], taskIds: [first.id, second.id] }
+    },
+    actor
+  )
+  const counts = async () => {
+    const response = await app.inject('/api/tasks')
+    assert.equal(response.statusCode, 200, response.body)
+    return new Map(
+      response
+        .json()
+        .items.map((item: { id: string; artifactCount: number }) => [
+          item.id,
+          item.artifactCount
+        ])
+    )
+  }
+  assert.deepEqual(
+    await counts(),
+    new Map([
+      [first.id, 2],
+      [second.id, 1],
+      [empty.id, 0]
+    ])
+  )
+  const unbound = await app.inject({
+    method: 'PATCH',
+    url: `/api/artifacts/${own.id}/metadata`,
+    payload: {
+      requestId: 'count-unbind',
+      expectedVersion: own.metadataVersion,
+      metadata: { title: own.title, tags: [], taskIds: [] }
+    }
+  })
+  assert.equal(unbound.statusCode, 200, unbound.body)
+  assert.deepEqual(
+    await counts(),
+    new Map([
+      [first.id, 1],
+      [second.id, 1],
+      [empty.id, 0]
+    ])
+  )
 })

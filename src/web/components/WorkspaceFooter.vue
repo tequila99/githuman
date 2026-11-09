@@ -81,6 +81,7 @@ const tabs = computed(() =>
         <q-badge
           v-if="tab.name === 'agent' && status"
           floating
+          class="app-icon-badge"
           :color="status === 'attention' ? 'warning' : 'primary'"
           :label="status === 'attention' ? '!' : '…'"
           :aria-label="

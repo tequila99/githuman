@@ -24,6 +24,7 @@ const tagChoices = computed(() => [
   ...new Set([...props.tagOptions, ...pending.value.tags])
 ])
 const statuses = computed(() => [
+  { label: t('artifacts.activeStatuses'), value: 'active' },
   { label: t('artifacts.allStatuses'), value: null },
   ...ARTIFACT_STATUSES.map(value => ({
     label: t('artifacts.statuses.' + value),
@@ -79,7 +80,9 @@ function setTask(value: string | string[] | null) {
       :display-value="
         pending.status === null
           ? t('artifacts.allStatuses')
-          : t('artifacts.statuses.' + pending.status)
+          : pending.status === 'active'
+            ? t('artifacts.activeStatuses')
+            : t('artifacts.statuses.' + pending.status)
       "
       :label="t('artifacts.status')"
     />

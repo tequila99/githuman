@@ -12,5 +12,7 @@ defineProps<{ label: string }>()
     class="app-icon-control"
     :icon="mdiClose"
     :aria-label="label"
-  />
+  >
+    <slot />
+  </q-btn>
 </template>

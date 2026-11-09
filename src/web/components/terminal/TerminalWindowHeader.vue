@@ -1,8 +1,8 @@
 <script setup lang="ts">
+import CloseButton from '@/components/buttons/CloseButton.vue'
 import {
   mdiCheckboxBlankOutline,
   mdiCheckboxMultipleBlankOutline,
-  mdiClose,
   mdiConsoleLine,
   mdiDotsVertical,
   mdiWindowMinimize
@@ -98,20 +98,18 @@ const maximizeLabel = computed(() =>
         >{{ maximizeLabel }} · Ctrl+Win+↑</q-tooltip
       >
     </q-btn>
-    <q-btn
-      flat
-      dense
+    <CloseButton
       size="sm"
-      class="app-icon-control window-header__control"
-      :icon="mdiClose"
+      class="window-header__control"
       :disable="!connected"
-      :aria-label="t('terminal.closeAll')"
+      :label="t('terminal.closeAll')"
       @click="emit('closeAll')"
+      :round="false"
     >
       <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
         t('terminal.closeAll')
       }}</q-tooltip>
-    </q-btn>
+    </CloseButton>
   </div>
 </template>
 

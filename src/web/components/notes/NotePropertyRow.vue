@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { mdiClose } from '@mdi/js'
+import CloseButton from '@/components/buttons/CloseButton.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { NoteProperty } from '../../../shared/notes/document.ts'
@@ -18,15 +18,11 @@ const icon = computed(() => notePropertyIcon(notePropertyType(props.property)))
       }}</span></div
     >
     <slot />
-    <q-btn
+    <CloseButton
       v-if="removable"
-      class="app-icon-control note-property-remove"
-      flat
-      round
-      dense
+      class="note-property-remove"
       size="xs"
-      :icon="mdiClose"
-      :aria-label="t('notes.removeProperty') + ': ' + property.key"
+      :label="t('notes.removeProperty') + ': ' + property.key"
       @click="emit('remove')"
     />
   </div>

@@ -260,6 +260,9 @@ export class ArtifactSearchRepository {
       )
       params.push(JSON.stringify(filters.typeIds))
     }
+    if (filters.unbound) {
+      where.push("COALESCE(json_array_length(c.snapshot_json,'$.taskIds'),0)=0")
+    }
     if (filters.taskIds) {
       where.push(
         "EXISTS(SELECT 1 FROM json_each(c.snapshot_json,'$.taskIds') WHERE value IN (SELECT value FROM json_each(?)))"

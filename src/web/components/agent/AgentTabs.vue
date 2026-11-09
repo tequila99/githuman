@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { mdiClose } from '@mdi/js'
+import CloseButton from '@/components/buttons/CloseButton.vue'
 import AddButton from '@/components/buttons/AddButton.vue'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { useI18n } from 'vue-i18n'
@@ -62,14 +62,10 @@ function confirmClose(entry: AgentChatEntry) {
         <div class="row items-center no-wrap agent-tab__body">
           <AgentChatStatusDot :entry="entry" class="q-mr-xs" />
           <span class="agent-tab__name ellipsis">{{ entry.info.name }}</span>
-          <q-btn
-            flat
-            round
-            dense
+          <CloseButton
             size="xs"
-            :icon="mdiClose"
-            class="app-icon-control q-ml-xs"
-            :aria-label="t('agent.chats.close')"
+            class="q-ml-xs"
+            :label="t('agent.chats.close')"
             @click.stop.prevent="confirmClose(entry)"
           />
           <q-tooltip :delay="TOOLTIP_DELAY_MS">{{ entry.info.name }}</q-tooltip>

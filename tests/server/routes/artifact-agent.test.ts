@@ -935,3 +935,34 @@ test(
     assert.equal(own.json().sessionId, sessionId)
   }
 )
+
+test(
+  'tasks.list passes tag filters from the MCP schema to storage',
+  { timeout: 30_000 },
+  async t => {
+    const { app, storage } = setup(t)
+    const { authorization } = await startSession(app)
+    const actor = { kind: 'user' as const, id: 'local' }
+    for (const [title, tags] of [
+      ['tagged', ['x']],
+      ['plain', []]
+    ] as const) {
+      storage.tasks.create(
+        'task-' + title,
+        { title, externalUrl: null, state: 'open', tags: [...tags] },
+        actor
+      )
+    }
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/agent/artifacts/tasks.list',
+      headers: { authorization },
+      payload: { tags: ['x'], tagMode: 'all' }
+    })
+    assert.equal(response.statusCode, 200, response.body)
+    assert.deepEqual(
+      response.json().items.map((item: { title: string }) => item.title),
+      ['tagged']
+    )
+  }
+)

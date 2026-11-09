@@ -111,7 +111,7 @@ test('create-only leaves selection unchanged; activation replaces a frozen respo
   const before = createArtifact('before')
   const another = storage.tasks.create(
     'backlog',
-    { ...input, state: 'closed' },
+    { ...input, state: 'open' },
     actor
   )
   assert.equal(session.turnTaskContext, snapshot)
@@ -120,7 +120,7 @@ test('create-only leaves selection unchanged; activation replaces a frozen respo
   const result = storage.tasks.activate(request, actor)
   assert.equal(result.replayed, false)
   assert.deepEqual(result.assignment.taskIds, [another.id])
-  assert.equal(result.task.state, 'closed')
+  assert.equal(result.task.state, 'open')
   assert.deepEqual(snapshot.taskIds, [])
   assert.notEqual(session.turnTaskContext, snapshot)
   assert.ok(
@@ -141,7 +141,7 @@ test('create-only leaves selection unchanged; activation replaces a frozen respo
   })
   const repeated = storage.tasks.activate(activation(another.id), actor)
   assert.equal(repeated.assignment.version, 2)
-  assert.equal(repeated.task.state, 'closed')
+  assert.equal(repeated.task.state, 'open')
 })
 
 test('create-and-activate commits both records and replay cannot undo later manual choices or a new response', async t => {

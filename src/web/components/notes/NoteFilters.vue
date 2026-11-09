@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { mdiFilter, mdiFilterOutline, mdiFilterRemoveOutline } from '@mdi/js'
-import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
+import FilterButton from '@/components/buttons/FilterButton.vue'
+import ResetFiltersButton from '@/components/buttons/ResetFiltersButton.vue'
 import type { NoteTagFilter } from '@/types/notes'
 import type { NoteEntry } from '../../../shared/notes/types.ts'
 import NoteFilterDialog from './NoteFilterDialog.vue'
@@ -26,35 +26,11 @@ const options = computed(() => {
     role="group"
     :aria-label="t('common.filters.title')"
   >
-    <q-btn
-      class="app-icon-control"
-      flat
-      round
-      dense
-      :icon="active ? mdiFilter : mdiFilterOutline"
-      :color="active ? 'primary' : undefined"
-      :aria-label="t('common.filters.title')"
-      :aria-pressed="active"
-      @click="open = true"
-    >
-      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
-        t('common.filters.title')
-      }}</q-tooltip>
-    </q-btn>
-    <q-btn
-      class="app-icon-control"
+    <FilterButton :active="active" @click="open = true" />
+    <ResetFiltersButton
       v-if="active"
-      flat
-      round
-      dense
-      :icon="mdiFilterRemoveOutline"
-      :aria-label="t('common.filters.reset')"
       @click="filter = { ...filter, tags: [] }"
-    >
-      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
-        t('common.filters.reset')
-      }}</q-tooltip>
-    </q-btn>
+    />
     <NoteFilterDialog
       v-model="open"
       v-model:filter="filter"

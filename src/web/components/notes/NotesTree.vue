@@ -144,7 +144,7 @@ function select(path: string | null) {
   flex: 1;
   min-height: 0;
   min-width: 0;
-  border-right: 1px solid rgba(128, 128, 128, 0.25);
+  border-right: 1px solid var(--app-divider);
 }
 .notes-tree-list {
   min-height: 0;

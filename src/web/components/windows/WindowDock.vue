@@ -121,6 +121,7 @@ async function activate(app: WindowApplication) {
         <q-badge
           v-if="entry.badge"
           floating
+          class="app-icon-badge"
           :color="entry.active ? 'white' : 'primary'"
           :text-color="entry.active ? 'primary' : 'white'"
           >{{ entry.badge }}</q-badge

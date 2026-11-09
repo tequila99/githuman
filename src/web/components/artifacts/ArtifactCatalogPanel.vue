@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, useTemplateRef, watch } from 'vue'
-import type { QScrollArea } from 'quasar'
+import { mdiSourceBranch } from '@mdi/js'
+import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import { useI18n } from 'vue-i18n'
 import SearchInput from '@/components/SearchInput.vue'
 import RefreshButton from '@/components/buttons/RefreshButton.vue'
@@ -27,21 +27,6 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const store = useArtifactsStore()
-const scrollArea = useTemplateRef<QScrollArea>('catalogScroll')
-const scrollTarget = computed(() => scrollArea.value?.getScrollTarget() ?? null)
-
-async function loadMore(_index: number, done: () => void) {
-  try {
-    await store.loadMore()
-  } finally {
-    done()
-  }
-}
-// A new search starts from the top of the list.
-watch(
-  () => props.searchKey,
-  () => scrollArea.value?.setScrollPosition('vertical', 0)
-)
 </script>
 
 <template>
@@ -62,15 +47,39 @@ watch(
           @update:model-value="value => emit('update:filters', value)"
         />
       </div>
-      <SearchInput
-        debounce="300"
-        :model-value="query"
-        :placeholder="t('artifacts.search')"
-        :aria-label="t('artifacts.search')"
-        @update:model-value="
-          value => emit('update:query', value == null ? null : String(value))
-        "
-      />
+      <div class="row no-wrap items-center q-gutter-x-xs">
+        <SearchInput
+          class="col"
+          debounce="300"
+          :model-value="query"
+          :placeholder="t('artifacts.search')"
+          :aria-label="t('artifacts.search')"
+          @update:model-value="
+            value => emit('update:query', value == null ? null : String(value))
+          "
+        />
+        <q-btn
+          class="app-icon-control"
+          flat
+          dense
+          round
+          size="sm"
+          :icon="mdiSourceBranch"
+          :color="filters.group === 'task' ? 'primary' : undefined"
+          :aria-label="t('artifacts.groupByTask')"
+          :aria-pressed="filters.group === 'task'"
+          @click="
+            emit('update:filters', {
+              ...filters,
+              group: filters.group === 'task' ? 'none' : 'task'
+            })
+          "
+        >
+          <q-tooltip :delay="TOOLTIP_DELAY_MS">
+            {{ t('artifacts.groupByTask') }}
+          </q-tooltip>
+        </q-btn>
+      </div>
     </div>
     <q-separator />
     <ArtifactStatusBanners
@@ -79,41 +88,25 @@ watch(
       :stale="store.stale"
       :partial="Boolean(store.catalog?.partial)"
     />
-    <q-scroll-area
-      ref="catalogScroll"
+    <ArtifactCatalog
       class="col"
-      content-style="width: 100%"
-      content-active-style="width: 100%"
+      :items="store.catalog?.items ?? []"
+      :selected-id="selectedId"
+      :grouping="filters.group"
+      :store-id="store.storeId"
+      :loading="store.loading"
+      :has-more="Boolean(store.catalog?.nextCursor)"
+      :disabled="store.stale || Boolean(store.error) || !active"
+      :search-key="searchKey"
+      :load-more="store.loadMore"
+      @select="item => emit('select', item)"
     >
-      <q-infinite-scroll
-        v-if="scrollTarget"
-        :scroll-target="scrollTarget"
-        :offset="300"
-        :disable="
-          store.loading || store.stale || !store.catalog?.nextCursor || !active
-        "
-        @load="loadMore"
-      >
-        <ArtifactCatalog
-          :scroll-target="scrollTarget"
-          :items="store.catalog?.items ?? []"
-          :selected-id="selectedId"
-          :grouping="filters.group"
-          :store-id="store.storeId"
-          @select="item => emit('select', item)"
-        />
-        <div
-          v-if="!store.loading && !store.error && !store.catalog?.items.length"
-          class="q-pa-md text-grey"
-          >{{ t('artifacts.empty') }}</div
-        >
-        <template #loading>
-          <div class="row justify-center q-pa-sm">
-            <q-spinner color="primary" />
-          </div>
-        </template>
-      </q-infinite-scroll>
-    </q-scroll-area>
+      <template #empty>
+        <div v-if="!store.error" class="q-pa-md text-grey">{{
+          t('artifacts.empty')
+        }}</div>
+      </template>
+    </ArtifactCatalog>
   </section>
 </template>
 
