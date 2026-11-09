@@ -1,5 +1,6 @@
 import type { Static } from '@sinclair/typebox'
 import type {
+  ArtifactValidationManifestArtifactSchema,
   ArtifactActorSchema,
   ArtifactMetadataInputSchema,
   ArtifactSchema,
@@ -14,6 +15,9 @@ import type {
   ArtifactSourceAnchorSchema
 } from './schemas.ts'
 
+export type ArtifactValidationManifestArtifact = Static<
+  typeof ArtifactValidationManifestArtifactSchema
+>
 export type ArtifactActor = Static<typeof ArtifactActorSchema>
 export type ArtifactMetadataInput = Static<typeof ArtifactMetadataInputSchema>
 export type Artifact = Static<typeof ArtifactSchema>

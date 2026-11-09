@@ -1502,6 +1502,7 @@ test('0110: references targets join the set but do not expand it', () => {
     change([subject, middle], subject)
   )
   assert.deepEqual(result.affectedIds, [subject.id, middle.id].sort())
+  assert.deepEqual(result.contentRequiredIds, [subject.id])
   assert.equal(result.errors.length, 0)
   const missing = previewArtifactChangeSet(nodes, change([subject], subject))
   assert.deepEqual(
@@ -1586,6 +1587,7 @@ test('0119: an accepted document of the same task is context and does not expand
     change([subject, decision], subject)
   )
   assert.deepEqual(result.affectedIds, [decision.id, subject.id].sort())
+  assert.deepEqual(result.contentRequiredIds, [subject.id])
   assert.deepEqual(result.errors, [])
 })
 
@@ -1616,4 +1618,45 @@ test('0119: an old issue blocks only when it touches the set', () => {
     change([broken], broken)
   )
   assert.ok(touched.errors.some(error => error.code === 'missing_target'))
+})
+
+test('0111: structural paths promote reference targets regardless of traversal order', () => {
+  for (const reverse of [false, true]) {
+    const target = fixture('draft')
+    const bridge = fixture('draft', {
+      relations: [{ kind: 'parent', targetId: target.id }]
+    })
+    const subject = fixture('draft', {
+      relations: [
+        { kind: 'references', targetId: target.id },
+        { kind: 'parent', targetId: bridge.id }
+      ]
+    })
+    const nodes = [target, bridge, subject]
+    const result = previewArtifactChangeSet(
+      reverse ? [subject, bridge, target] : nodes,
+      change(nodes, subject)
+    )
+    assert.deepEqual(
+      result.contentRequiredIds,
+      nodes.map(node => node.id).sort()
+    )
+    assert.deepEqual(result.errors, [])
+  }
+})
+
+test('0111: removed structural relations still require old content', () => {
+  const target = fixture('draft')
+  const subject = fixture('draft', {
+    relations: [{ kind: 'parent', targetId: target.id }]
+  })
+  const input = change([target, subject], subject)
+  input.relationChanges = [
+    {
+      artifactId: subject.id,
+      relations: [{ kind: 'references', targetId: target.id }]
+    }
+  ]
+  const result = previewArtifactChangeSet([subject, target], input)
+  assert.deepEqual(result.contentRequiredIds, [subject.id, target.id].sort())
 })

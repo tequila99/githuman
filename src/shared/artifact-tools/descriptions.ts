@@ -24,14 +24,18 @@ export const ARTIFACT_TOOL_DESCRIPTIONS: Readonly<
     'Start the validator job and return at once. Do not end your turn and do not use sleep or Monitor: call validations.get repeatedly until state is not running. If you end the turn anyway, the server sends you a message when the job finishes.',
   'validations.get':
     'Read the validation state. While state is running, keep calling it within the same turn instead of ending the turn; the job can take minutes. The version can grow when the server follows a grown set: use the version from this response for later actions.',
+  'validations.manifest':
+    'Read all manifest pages. Each artifact has contentRequired: true requires full reading; false provides metadata context with optional content reading. All artifacts remain subject to existence and version checks.',
+  'validations.read':
+    'Validator only. Read any assigned manifest artifact sequentially, including optional context. Content outside the manifest is forbidden. Only contentRequired artifacts count toward required coverage.',
   'validations.read_next':
-    'Validator only. Return the next unread content of the assigned manifest in order, up to 24 KB, several small documents per call. Call it until remaining is 0 before validations.submit. Each item gives key, offset, text, totalBytes and nextOffset. When the affected set grew during the job, the response also has changes: the new manifest generation with added and changed artifact metadata and removed IDs. Check them together with the new content.',
+    'Validator only. Return the next unread required content of the assigned manifest in order, up to 24 KB, several small documents per call. Call it until remaining is 0 before validations.submit. Each item gives key, offset, text, totalBytes and nextOffset. When the affected set grew during the job, the response also has changes: the new manifest generation with added and changed artifact metadata and removed IDs. Check them together with the new content.',
   'validations.report_text':
     'Read the Markdown report text a validator attached to a validation, in chunks. Call it with offset from nextOffset until nextOffset is null. A validation without text returns not found; the structured report is in validations.report.',
   'validations.create_report':
     'Validator only. Attach one Markdown report text to the assigned validation. It is stored with the validation, not as an artifact. The same text again is accepted; different text is a conflict.',
   'change_sets.preview':
-    'Compute the affected artifacts of a change set without saving it. Returns affectedIds, the current expectedVersions of all affected artifacts, requiredSupplementDispositions and structural errors with artifact IDs. Call it before change_sets.propose; expectedVersions may be empty or partial here.',
+    'Compute the affected artifacts of a change set without saving it. Returns affectedIds, contentRequiredIds for mandatory full reading, the current expectedVersions of all affected artifacts, requiredSupplementDispositions and structural errors with artifact IDs. Call it before change_sets.propose; expectedVersions may be empty or partial here.',
   'change_sets.propose':
     'Save an immutable change set proposal. First call change_sets.preview with the same change set. Copy its expectedVersions and decide every requiredSupplementDisposition, then propose. Do not guess versions: on missing_expected_version or stale_version, call change_sets.preview again.',
   'artifacts.create':
