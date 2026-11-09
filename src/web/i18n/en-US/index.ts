@@ -739,6 +739,8 @@ export default {
       'This chat has ended. Close its tab and start a new chat to continue.',
     startFailed: 'Could not start the chat',
     sendFailed: 'Could not send the message',
+    sendBusy:
+      'The agent is replying. Your draft stays here. Wait for the reply to finish or stop it, then send your message.',
     resize: 'Resize the agent panel',
     modeHint: 'Shift+Tab switches the mode',
     diagram: {
