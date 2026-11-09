@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { mdiCancel, mdiPencilOutline } from '@mdi/js'
 import { computed, onMounted, shallowRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useQuasar } from 'quasar'
@@ -9,6 +8,8 @@ import { useDevicesStore } from '@/stores/devices-store'
 import { useNotifyError } from '@/composables/use-notify-error'
 import { formatDateTime } from '@/utils/date'
 import DialogHeader from '@/components/DialogHeader.vue'
+import EditButton from '@/components/buttons/EditButton.vue'
+import RevokeButton from '@/components/buttons/RevokeButton.vue'
 import QrCode from '@/components/devices/QrCode.vue'
 
 // Port of an http: page without an explicit port.
@@ -119,32 +120,33 @@ function revoke(device: Device) {
             :key="device.id"
             class="devices-dialog__device"
           >
-            <q-item-section>
-              <q-item-label class="ellipsis" :title="device.name">{{
-                device.name
-              }}</q-item-label>
-              <q-item-label caption lines="2" :title="lastSeen(device)">{{
-                lastSeen(device)
-              }}</q-item-label>
+            <q-item-section class="devices-dialog__details">
+              <q-item-label
+                class="devices-dialog__name ellipsis"
+                :title="device.name"
+                >{{ device.name }}</q-item-label
+              >
+              <q-item-label
+                class="devices-dialog__activity"
+                caption
+                lines="2"
+                :title="lastSeen(device)"
+                >{{ lastSeen(device) }}</q-item-label
+              >
             </q-item-section>
-            <q-item-section side>
+            <q-item-section side class="devices-dialog__actions">
               <div class="row no-wrap">
-                <q-btn
-                  class="app-icon-control"
-                  flat
-                  round
-                  dense
-                  :icon="mdiPencilOutline"
+                <EditButton
+                  class="devices-dialog__action"
+                  size="sm"
+                  :tooltip="t('devices.rename')"
                   :aria-label="t('devices.rename')"
                   @click="rename(device)"
                 />
-                <q-btn
-                  class="app-icon-control"
-                  flat
-                  round
-                  dense
-                  :icon="mdiCancel"
-                  color="negative"
+                <RevokeButton
+                  class="devices-dialog__action"
+                  size="sm"
+                  :tooltip="t('devices.revoke')"
                   :aria-label="t('devices.revoke')"
                   @click="revoke(device)"
                 />
@@ -168,6 +170,30 @@ function revoke(device: Device) {
 }
 .devices-dialog__device {
   height: 72px;
+  padding: 8px 12px;
+  font-family: var(--font-agent);
+  letter-spacing: normal;
+}
+.devices-dialog__details {
+  min-width: 0;
+}
+.devices-dialog__name {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px !important;
+}
+.devices-dialog__activity {
+  font-size: 11px;
+  line-height: 16px !important;
+  overflow-wrap: anywhere;
+}
+.devices-dialog__actions {
+  padding-left: 8px;
+}
+/* Smaller icon, same click area. */
+.devices-dialog__action {
+  min-width: 34px;
+  min-height: 34px;
 }
 
 .devices-dialog__address {
