@@ -38,7 +38,7 @@ async function created(task: Task) {
   select(task.id)
 }
 const events = useServerEvents(['artifacts:changed'], () => {
-  void store.refresh()
+  void store.refreshLoaded()
 })
 onMounted(() => void store.refresh())
 onBeforeUnmount(() => events.close())

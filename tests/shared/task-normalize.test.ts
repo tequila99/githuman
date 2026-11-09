@@ -16,6 +16,7 @@ const BASE = {
 test('a stored task without description and links reads as empty, and externalUrl becomes a link', () => {
   assert.deepEqual(normalizeStoredTask({ ...BASE }), {
     ...BASE,
+    createdAt: '',
     description: '',
     links: [],
     tags: []
@@ -24,6 +25,7 @@ test('a stored task without description and links reads as empty, and externalUr
     normalizeStoredTask({ ...BASE, externalUrl: 'https://a.org/1' }),
     {
       ...BASE,
+      createdAt: '',
       description: '',
       links: [{ url: 'https://a.org/1' }],
       tags: []

@@ -211,7 +211,14 @@ export async function artifactAgentRoutes(
     [
       'tasks.list',
       checked(ArtifactToolSchemas['tasks.list'], p =>
-        storage.tasks.listByState(p.limit, p.cursor, p.search, p.state)
+        storage.tasks.listByState(
+          p.limit,
+          p.cursor,
+          p.search,
+          p.state,
+          p.tags,
+          p.tagMode
+        )
       )
     ],
     [

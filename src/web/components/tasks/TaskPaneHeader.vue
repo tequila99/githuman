@@ -38,7 +38,7 @@ const tagOptions = computed(() => [
   ...new Set(tasks.items.flatMap(item => item.tags))
 ])
 const statusLabel = computed(() =>
-  props.error === 'empty-title'
+  props.status === 'invalid'
     ? t('tasks.status.emptyTitle')
     : t('tasks.status.' + props.status)
 )
@@ -81,7 +81,8 @@ function copyId() {
         role="status"
         class="text-caption text-grey"
         :class="{
-          'text-negative': status === 'error' || status === 'conflict'
+          'text-negative':
+            status === 'error' || status === 'invalid' || status === 'conflict'
         }"
         >{{ statusLabel }}</span
       >
@@ -121,7 +122,7 @@ function copyId() {
       </template>
     </q-banner>
     <div
-      v-else-if="status === 'error' && error !== 'empty-title'"
+      v-else-if="status === 'error'"
       role="alert"
       class="text-negative q-mt-sm"
       >{{ error }}</div

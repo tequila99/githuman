@@ -20,7 +20,13 @@ import { requestAttempt, type RequestAttempt } from '@/utils/request-attempt'
 const AUTOSAVE_DELAY_MS = 800
 const CONFLICT_STATUS = 409
 
-export type TaskEditStatus = 'saved' | 'dirty' | 'saving' | 'error' | 'conflict'
+export type TaskEditStatus =
+  | 'saved'
+  | 'dirty'
+  | 'saving'
+  | 'error'
+  | 'invalid'
+  | 'conflict'
 
 interface TaskDraft {
   title: string
@@ -139,8 +145,8 @@ export function useTaskEditor(id: MaybeRefOrGetter<string | null>) {
     }
     const input = inputOf(draft)
     if (!input.title) {
-      status.value = 'error'
-      error.value = 'empty-title'
+      status.value = 'invalid'
+      error.value = null
       return
     }
     const sent = JSON.stringify(input)

@@ -280,3 +280,21 @@ test('inherited direct IDs select their validation scope without including a sib
   assert.ok(!preview.affectedIds.includes(general.id))
   assert.ok(!preview.affectedIds.includes(sibling.id))
 })
+
+test('a closed inherited task is not bound to a new artifact', t => {
+  const { storage, a, turn } = setup(t)
+  const context = turn([a])
+  storage.tasks.update(
+    a,
+    'close-a',
+    1,
+    { title: 'A', externalUrl: null, state: 'closed' },
+    ACTOR
+  )
+  const created = storage.create(input('after-close'), ACTOR, context)
+  assert.deepEqual(created.taskIds, [])
+  assert.throws(
+    () => storage.create(input('explicit-closed', [a]), ACTOR, context),
+    /closed/
+  )
+})

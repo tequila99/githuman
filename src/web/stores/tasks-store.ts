@@ -16,7 +16,6 @@ export const useTasksStore = defineStore('tasks', () => {
   const tags = shallowRef<string[]>([])
   const tagMode = shallowRef<'all' | 'any'>('all')
 
-  let controller: AbortController | undefined
   // A new filter or refresh invalidates a page request that is still running.
   let generation = 0
 
@@ -30,23 +29,45 @@ export const useTasksStore = defineStore('tasks', () => {
   }
 
   const refresh = singleFlight(async () => {
-    controller?.abort()
-    controller = new AbortController()
     const mine = ++generation
     loading.value = true
     try {
-      const page = await tasksApi.list(filterOptions(), controller.signal)
+      const page = await tasksApi.list(filterOptions())
       if (mine !== generation) return
       items.value = page.items
       nextCursor.value = page.nextCursor
       storeId.value = page.storeId
       error.value = null
     } catch (err) {
-      if (mine === generation && !controller.signal.aborted) {
+      if (mine === generation) {
         error.value = errorMessage(err)
       }
     } finally {
       if (mine === generation) loading.value = false
+    }
+  })
+
+  // Re-reads as many pages as are loaded, so the list keeps its length and scroll position.
+  const refreshLoaded = singleFlight(async () => {
+    const wanted = items.value.length
+    const mine = ++generation
+    try {
+      let page = await tasksApi.list(filterOptions())
+      let all = page.items
+      while (all.length < wanted && page.nextCursor) {
+        page = await tasksApi.list({
+          cursor: page.nextCursor,
+          ...filterOptions()
+        })
+        all = [...all, ...page.items]
+      }
+      if (mine !== generation) return
+      items.value = all
+      nextCursor.value = page.nextCursor
+      storeId.value = page.storeId
+      error.value = null
+    } catch (err) {
+      if (mine === generation) error.value = errorMessage(err)
     }
   })
 
@@ -100,6 +121,7 @@ export const useTasksStore = defineStore('tasks', () => {
     tags,
     tagMode,
     refresh,
+    refreshLoaded,
     loadMore,
     setFilters,
     remember

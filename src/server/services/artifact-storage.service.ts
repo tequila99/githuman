@@ -313,7 +313,10 @@ export class ArtifactStorageService {
         actor.kind === 'agent' &&
         turn?.sessionId === actor.id &&
         turn.taskIds.length === 1
-      const taskIds = input.metadata.taskIds ?? (inherited ? turn.taskIds : [])
+      // A closed task cannot get new artifacts, so a closed inherited task is dropped.
+      const taskIds =
+        input.metadata.taskIds ??
+        (inherited && !this.isTaskClosed(turn.taskIds[0]) ? turn.taskIds : [])
       const now = new Date(this.now()).toISOString()
       const artifact: Artifact = {
         storeId: this.storeId,
@@ -879,6 +882,15 @@ export class ArtifactStorageService {
       if (error instanceof ArtifactNotFoundError) {
         throw new ArtifactInputError(`Unknown artifact ${kind} "${id}".`)
       }
+      throw error
+    }
+  }
+
+  private isTaskClosed(taskId: string): boolean {
+    try {
+      return this.tasks.get(taskId).state === 'closed'
+    } catch (error) {
+      if (error instanceof ArtifactNotFoundError) return false
       throw error
     }
   }
