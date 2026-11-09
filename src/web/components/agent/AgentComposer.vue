@@ -201,12 +201,13 @@ defineExpose({ focus: () => editor.value?.focus() })
           @cancel="store.cancel(chatId)"
         />
       </div>
-      <div
-        v-if="status === 'busy'"
-        class="agent-composer__hint text-caption q-px-sm q-pb-sm"
-        role="status"
-      >
-        {{ t('agent.sendBusy') }}
+      <div role="status">
+        <div
+          v-if="status === 'busy' && !isEmpty"
+          class="agent-composer__hint text-caption q-px-sm q-pb-sm"
+        >
+          {{ t('agent.sendBusy') }}
+        </div>
       </div>
     </div>
 
