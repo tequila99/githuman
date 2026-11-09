@@ -138,12 +138,14 @@ function revoke(device: Device) {
               <div class="row no-wrap">
                 <EditButton
                   class="devices-dialog__action"
+                  size="sm"
                   :tooltip="t('devices.rename')"
                   :aria-label="t('devices.rename')"
                   @click="rename(device)"
                 />
                 <RevokeButton
                   class="devices-dialog__action"
+                  size="sm"
                   :tooltip="t('devices.revoke')"
                   :aria-label="t('devices.revoke')"
                   @click="revoke(device)"
@@ -184,18 +186,14 @@ function revoke(device: Device) {
   font-size: 11px;
   line-height: 16px !important;
   overflow-wrap: anywhere;
-  color: var(--app-icon-neutral);
 }
 .devices-dialog__actions {
   padding-left: 8px;
 }
+/* Smaller icon, same click area. */
 .devices-dialog__action {
-  width: 34px;
   min-width: 34px;
   min-height: 34px;
-}
-.devices-dialog__action :deep(.q-icon) {
-  font-size: 18px;
 }
 
 .devices-dialog__address {
