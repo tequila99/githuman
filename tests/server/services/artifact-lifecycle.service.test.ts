@@ -1,4 +1,6 @@
 import { test, type TestContext } from 'node:test'
+import { Value } from '@sinclair/typebox/value'
+import { ArtifactValidationManifestArtifactSchema } from '../../../src/shared/artifacts/schemas.ts'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, appendFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -829,7 +831,7 @@ test('0097: legacy blockers stay stored without participating in direct draft ac
   applyMigrations(db)
   const proposal = propose([node])
   const validation = pass(proposal)
-  assert.equal(validation.prepared.manifest.rulesVersion, 3)
+  assert.equal(validation.prepared.manifest.rulesVersion, 4)
   assert.equal('threads' in validation.prepared.manifest, false)
   const page = storage.lifecycle.jobs.manifest(validation.prepared.id)
   assert.ok(page.items.every(item => item.kind !== 'review'))
@@ -1658,4 +1660,266 @@ test('a validation of a historical command never rebases', async t => {
     storage.lifecycle.rebaseInTransaction(repository.validation(prepared.id)),
     undefined
   )
+})
+
+for (const optionalRead of [false, true]) {
+  test(`0111: references content is optional (read=${optionalRead}) and scoped to the manifest`, async t => {
+    const { storage, create, propose, registry, app } = await setup(t)
+    const outside = create('draft')
+    const reference = create('draft', [
+      { kind: 'references', targetId: outside.id }
+    ])
+    const subject = create('draft', [
+      { kind: 'references', targetId: reference.id }
+    ])
+    const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+    assert.deepEqual(prepared.manifest.requiredContentIds, [subject.id])
+    assert.deepEqual(
+      prepared.manifest.artifacts.map(item => item.id).sort(),
+      [subject.id, reference.id].sort()
+    )
+    const sessionId = storage.lifecycle.jobs.start(
+      prepared.id,
+      'test'
+    ).validatorSessionId!
+    const manifest = storage.lifecycle.jobs.manifest(prepared.id)
+    assert.equal(manifest.requiredContentCount, 1)
+    const response = await app.inject(
+      `/api/artifact-validations/${prepared.id}/manifest`
+    )
+    assert.equal(response.statusCode, 200, response.body)
+    assert.deepEqual(response.json(), manifest)
+    for (const item of manifest.items) {
+      if (item.kind !== 'artifact') continue
+      assert.ok('contentRequired' in item)
+      assert.equal(
+        Value.Check(ArtifactValidationManifestArtifactSchema, item),
+        true
+      )
+      assert.equal(item.contentRequired, item.id === subject.id)
+    }
+    const session = registry.get(sessionId) as unknown as {
+      policy: (request: unknown) => { allow: boolean; reason: string }
+    }
+    for (const operation of ['validations_read', 'artifacts_get_content']) {
+      for (const [key, allowed] of [
+        [reference.id, true],
+        [outside.id, false]
+      ] as const) {
+        const decision = session.policy({
+          toolCall: {
+            toolCallId: randomUUID(),
+            name: `mcp__githuman_artifacts__${operation}`,
+            rawInput:
+              operation === 'validations_read'
+                ? { id: prepared.id, key }
+                : { id: key }
+          },
+          options: [{ optionId: 'allow', kind: 'allow_once', name: 'Allow' }]
+        })
+        assert.equal(decision.allow, allowed, decision.reason)
+      }
+    }
+    assert.throws(
+      () => storage.lifecycle.jobs.read(prepared.id, sessionId, outside.id),
+      /outside/
+    )
+    if (optionalRead) {
+      const chunk = storage.lifecycle.jobs.contentForSession(
+        sessionId,
+        reference.id
+      )
+      assert.equal(chunk.id, reference.id)
+      assert.ok(chunk.text.length > 0)
+    }
+    const readIds = new Set<string>()
+    for (;;) {
+      const page = storage.lifecycle.jobs.readNext(prepared.id, sessionId)
+      for (const item of page.items) readIds.add(item.key)
+      if (!page.remaining) break
+    }
+    assert.deepEqual([...readIds], [subject.id])
+    storage.lifecycle.jobs.submit(prepared.id, sessionId, {
+      verdict: 'pass',
+      findings: [],
+      resolutions: []
+    })
+    const result = storage.lifecycle.repository.validation(prepared.id)
+    assert.equal(result.state, 'pass')
+    assert.deepEqual(
+      result.readCoverage?.map(item => item.key),
+      [subject.id]
+    )
+  })
+}
+
+test('0111: missing required content stays incomplete even when optional content was read', async t => {
+  const { storage, create, propose } = await setup(t)
+  const reference = create('draft')
+  const subject = create('draft', [
+    { kind: 'references', targetId: reference.id }
+  ])
+  const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+  const sessionId = storage.lifecycle.jobs.start(
+    prepared.id,
+    'test'
+  ).validatorSessionId!
+  let offset = 0
+  for (;;) {
+    const chunk = storage.lifecycle.jobs.read(
+      prepared.id,
+      sessionId,
+      reference.id,
+      offset
+    )
+    if (chunk.nextOffset === null) break
+    offset = chunk.nextOffset
+  }
+  storage.lifecycle.jobs.submit(prepared.id, sessionId, {
+    verdict: 'pass',
+    findings: [],
+    resolutions: []
+  })
+  assert.equal(storage.lifecycle.jobs.get(prepared.id).state, 'incomplete')
+})
+
+test('0111: optional manifest content can supply exact finding evidence', async t => {
+  const { storage, create, propose, pass } = await setup(t)
+  const reference = create('draft')
+  const subject = create('draft', [
+    { kind: 'references', targetId: reference.id }
+  ])
+  const validation = pass(propose([subject]))
+  storage.lifecycle.jobs.read(
+    validation.prepared.id,
+    validation.sessionId,
+    reference.id
+  )
+  storage.lifecycle.jobs.submit(validation.prepared.id, validation.sessionId, {
+    verdict: 'conflict',
+    findings: [
+      {
+        artifactId: reference.id,
+        quote: 'Обязательный текст',
+        message: 'Conflicting context'
+      }
+    ],
+    resolutions: []
+  })
+  assert.equal(
+    storage.lifecycle.jobs.get(validation.prepared.id).state,
+    'conflict'
+  )
+})
+
+test('0111: optional manifest content that was not read cannot supply finding evidence', async t => {
+  const { storage, create, propose, pass } = await setup(t)
+  const reference = create('draft')
+  const subject = create('draft', [
+    { kind: 'references', targetId: reference.id }
+  ])
+  const validation = pass(propose([subject]))
+  assert.throws(
+    () =>
+      storage.lifecycle.jobs.submit(
+        validation.prepared.id,
+        validation.sessionId,
+        {
+          verdict: 'conflict',
+          findings: [
+            {
+              artifactId: reference.id,
+              quote: 'Обязательный текст',
+              message: 'Conflicting context'
+            }
+          ],
+          resolutions: []
+        }
+      ),
+    /exact manifest text/
+  )
+})
+
+test('0111: optional metadata changes remain version checked without requiring body reads', async t => {
+  const { storage, create, propose } = await setup(t)
+  const reference = create('draft')
+  const subject = create('draft', [
+    { kind: 'references', targetId: reference.id }
+  ])
+  const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+  const sessionId = storage.lifecycle.jobs.start(
+    prepared.id,
+    'test'
+  ).validatorSessionId!
+  storage.updateMetadata(
+    reference.id,
+    {
+      requestId: randomUUID(),
+      expectedVersion: reference.metadataVersion,
+      metadata: { title: 'Updated reference', tags: [] }
+    },
+    USER
+  )
+  assert.throws(
+    () => storage.lifecycle.assertFresh(prepared),
+    /VALIDATION_STALE/
+  )
+  const page = storage.lifecycle.jobs.readNext(prepared.id, sessionId)
+  assert.equal(page.changes?.changed[0].id, reference.id)
+  assert.equal(page.changes?.changed[0].contentRequired, false)
+  assert.ok(page.items.every(item => item.key === subject.id))
+})
+
+test('0111: an optional target promoted by a new structural path is delivered as required', async t => {
+  const { storage, create, propose } = await setup(t)
+  const target = create('draft')
+  const subject = create('draft', [{ kind: 'references', targetId: target.id }])
+  const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+  const sessionId = storage.lifecycle.jobs.start(
+    prepared.id,
+    'test'
+  ).validatorSessionId!
+  while (storage.lifecycle.jobs.readNext(prepared.id, sessionId).remaining) {}
+  const bridge = create('draft', [
+    { kind: 'parent', targetId: subject.id },
+    { kind: 'parent', targetId: target.id }
+  ])
+  const page = storage.lifecycle.jobs.readNext(prepared.id, sessionId)
+  assert.equal(
+    page.changes?.changed.find(item => item.id === target.id)?.contentRequired,
+    true
+  )
+  assert.equal(
+    page.changes?.added.find(item => item.id === bridge.id)?.contentRequired,
+    true
+  )
+  const readIds = new Set(page.items.map(item => item.key))
+  while (true) {
+    const next = storage.lifecycle.jobs.readNext(prepared.id, sessionId)
+    for (const item of next.items) readIds.add(item.key)
+    if (!next.remaining) break
+  }
+  assert.deepEqual([...readIds].sort(), [target.id, bridge.id].sort())
+  storage.lifecycle.jobs.submit(prepared.id, sessionId, {
+    verdict: 'pass',
+    findings: [],
+    resolutions: []
+  })
+  assert.equal(storage.lifecycle.jobs.get(prepared.id).state, 'pass')
+})
+
+test('0111: physical corruption of optional context still invalidates the manifest', async t => {
+  const { storage, create, propose, root } = await setup(t)
+  const reference = create('draft')
+  const subject = create('draft', [
+    { kind: 'references', targetId: reference.id }
+  ])
+  const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+  appendFileSync(
+    join(root, '.githuman', 'artifacts', `ght-${reference.id}.md`),
+    '\ncorrupt'
+  )
+  assert.throws(() => storage.lifecycle.assertFresh(prepared), {
+    code: 'GHT_ARTIFACT_INTEGRITY'
+  })
 })
