@@ -779,6 +779,9 @@ export function previewArtifactChangeSet(
     canonical,
     changeDigest: sha256Hex(canonicalJson(canonical)),
     affectedIds: [...affected].sort(),
+    contentRequiredIds: [...affected]
+      .filter(id => !referenceTargets.has(id))
+      .sort(),
     requiredSupplementDispositions: [...required].sort(),
     expectedVersions: [...affected]
       .filter(id => nodes.has(id))

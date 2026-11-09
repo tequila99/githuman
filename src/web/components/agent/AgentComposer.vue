@@ -201,6 +201,14 @@ defineExpose({ focus: () => editor.value?.focus() })
           @cancel="store.cancel(chatId)"
         />
       </div>
+      <div role="status">
+        <div
+          v-if="status === 'busy' && !isEmpty"
+          class="agent-composer__hint text-caption q-px-sm q-pb-sm"
+        >
+          {{ t('agent.sendBusy') }}
+        </div>
+      </div>
     </div>
 
     <AgentComposerSettings
@@ -226,5 +234,8 @@ defineExpose({ focus: () => editor.value?.focus() })
 }
 .agent-composer__box:focus-within {
   border-color: var(--q-primary);
+}
+.agent-composer__hint {
+  opacity: 0.75;
 }
 </style>
