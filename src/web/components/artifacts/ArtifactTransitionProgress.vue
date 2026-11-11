@@ -7,17 +7,18 @@ import TextButton from '@/components/buttons/TextButton.vue'
 import { errorMessage } from '@/utils/error-message'
 import { hasValidationResult } from '@/utils/artifact-transition'
 import { isTerminalTransitionStage } from '../../../shared/artifact-transitions/transitions.ts'
-import ArtifactTransitionResult from './ArtifactTransitionResult.vue'
 import { useArtifactTransitionStore } from '@/stores/artifact-transition-store'
 import type { ArtifactTransitionOperation } from '@/api/types'
 
 const props = defineProps<{ operation: ArtifactTransitionOperation }>()
-const emit = defineEmits<{ retry: [] }>()
+const emit = defineEmits<{
+  retry: []
+  result: [operation: ArtifactTransitionOperation]
+}>()
 const { t } = useI18n()
 const store = useArtifactTransitionStore()
 const cancelError = ref<string | null>(null)
 const busy = ref(false)
-const resultOpen = ref(false)
 const finished = computed(() =>
   isTerminalTransitionStage(props.operation.stage)
 )
@@ -77,9 +78,8 @@ async function cancel() {
     <TextButton
       v-if="finished && hasValidationResult(operation)"
       :label="t('artifacts.transition.result')"
-      @click="resultOpen = true"
+      @click="emit('result', operation)"
     />
-    <ArtifactTransitionResult v-model="resultOpen" :operation="operation" />
     <TextButton
       v-if="retryable"
       :label="t('artifacts.transition.retry')"

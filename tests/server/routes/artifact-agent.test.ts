@@ -404,6 +404,39 @@ test(
     })
     assert.equal(otherPost.statusCode, 401)
 
+    // This real session key reaches the MCP bridge but never the user transition routes.
+    const artifactId = randomUUID()
+    const transitionRoutes = [
+      ['GET', `/api/artifacts/${artifactId}/transitions`, undefined],
+      [
+        'POST',
+        `/api/artifacts/${artifactId}/transition-previews`,
+        { targetStatus: 'archived' }
+      ],
+      ['GET', `/api/artifacts/${artifactId}/transition-operations`, undefined],
+      [
+        'POST',
+        '/api/artifact-transition-operations',
+        { previewId: artifactId, presetId: 'fake', requestId: 'key-only' }
+      ],
+      ['GET', `/api/artifact-transition-operations/${artifactId}`, undefined],
+      [
+        'POST',
+        `/api/artifact-transition-operations/${artifactId}/cancel`,
+        undefined
+      ]
+    ] as const
+    for (const [method, url, payload] of transitionRoutes) {
+      const denied = await app.inject({
+        method,
+        url,
+        headers: remote,
+        ...remoteOptions,
+        ...(payload ? { payload } : {})
+      })
+      assert.equal(denied.statusCode, 401, `${method} ${url}: ${denied.body}`)
+    }
+
     // The server sets the actor; the request cannot override it.
     for (const [operation, payload] of [
       [

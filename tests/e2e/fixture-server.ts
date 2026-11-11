@@ -1,5 +1,5 @@
-// Starts the built server on a throwaway git repository that holds one archive
-// proposal with a passed validation. The e2e tests never touch this project's own store.
+// Seeds an archive proposal and a completed transition in a throwaway repository.
+// The e2e tests never touch this project's own store.
 import { spawn, execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -38,6 +38,7 @@ function seed() {
   // A validator session without an agent process: the seed submits its report itself.
   const sessions = new Map<string, unknown>()
   storage.lifecycle.attachSessions({
+    listPresets: () => [{ id: 'e2e', available: true }],
     create() {
       const value = {
         id: randomUUID(),
@@ -112,6 +113,42 @@ function seed() {
     findings: [],
     resolutions: []
   })
+  const transitionDocument = storage.create(
+    {
+      requestId: randomUUID(),
+      body: '# Transition result\n\nThis document stays a draft.\n',
+      metadata: { title: 'Transition result', tags: [] }
+    },
+    USER
+  )
+  const transitionPreview = storage.lifecycle.transitions.preview(
+    transitionDocument.id,
+    'archived',
+    USER
+  )
+  const transition = storage.lifecycle.transitions.begin(
+    {
+      previewId: transitionPreview.previewId,
+      presetId: 'e2e',
+      requestId: randomUUID()
+    },
+    USER
+  )
+  const transitionSession = storage.lifecycle.jobs.get(
+    transition.validationId!
+  ).validatorSessionId!
+  while (
+    storage.lifecycle.jobs.readNext(transition.validationId!, transitionSession)
+      .remaining
+  ) {
+    // The seeded validator reads the complete transition scope too.
+  }
+  storage.lifecycle.jobs.submit(transition.validationId!, transitionSession, {
+    verdict: 'conflict',
+    findings: [],
+    resolutions: ['Keep this draft until its open question is resolved.']
+  })
+  storage.lifecycle.transitions.reconcile()
   writeFileSync(
     FIXTURE_PATH,
     JSON.stringify({
@@ -119,6 +156,8 @@ function seed() {
       changeSetId: proposal.id,
       version: proposal.version,
       validationId: prepared.id,
+      storeId: storage.storeId,
+      transitionDocumentId: transitionDocument.id,
       reason: REASON
     })
   )

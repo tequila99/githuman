@@ -72,6 +72,8 @@ export const useArtifactTransitionStore = defineStore(
       }
       {
         const run = singleFlight(async () => {
+          // A queued follow-up belongs to the pane that created this loader.
+          if (loaders.get(artifactId) !== run) return
           readers.get(artifactId)?.abort()
           const controller = new AbortController()
           readers.set(artifactId, controller)
