@@ -536,6 +536,22 @@ export class ArtifactTransitionService {
     }
   }
 
+  private validationProgress(id: string | null) {
+    if (!id) return {}
+    try {
+      return { validationProgress: this.lifecycle.jobs.get(id).progress }
+    } catch (error) {
+      // A busy or missing progress read must not hide the transition or its cancel action.
+      if (
+        isArtifactBusyError(error) ||
+        error instanceof ArtifactNotFoundError
+      ) {
+        return {}
+      }
+      throw error
+    }
+  }
+
   private view(value: StoredTransition): ArtifactTransitionOperation {
     return {
       storeId: this.lifecycle.storage.storeId,
@@ -554,6 +570,7 @@ export class ArtifactTransitionService {
       proposalId: value.proposalId,
       proposalVersion: value.proposalVersion,
       validationId: value.validationId,
+      ...this.validationProgress(value.validationId),
       verdict: value.verdict,
       reportArtifactId: value.reportArtifactId,
       createdAt: value.createdAt,

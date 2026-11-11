@@ -1449,6 +1449,14 @@ test('a new supplement during validation rebases it and the validator reads only
   }
   const added = create('draft', [{ kind: 'supplements', targetId: subject.id }])
   const page = storage.lifecycle.jobs.readNext(prepared.id, sessionId)
+  assert.equal(page.progress.totalRequired, 2)
+  assert.equal(page.progress.totalBytes, subject.bytes + added.bytes)
+  assert.equal(
+    page.progress.readBytes,
+    subject.bytes +
+      page.items.reduce((sum, item) => sum + Buffer.byteLength(item.text), 0)
+  )
+  assert.equal(page.progress.remainingRequired, page.remaining)
   assert.equal(page.changes?.generation, 2)
   assert.deepEqual(
     page.changes?.added.map(artifact => artifact.id),
@@ -1922,4 +1930,180 @@ test('0111: physical corruption of optional context still invalidates the manife
   assert.throws(() => storage.lifecycle.assertFresh(prepared), {
     code: 'GHT_ARTIFACT_INTEGRITY'
   })
+})
+
+test('0113: required progress ignores optional reads and rereads, survives another service, and reaches HTTP', async t => {
+  const { storage, create, propose, app, db } = await setup(t)
+  const optional = create('draft')
+  const subject = create('draft', [
+    { kind: 'references', targetId: optional.id }
+  ])
+  const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+  const jobs = storage.lifecycle.jobs
+  const sessionId = jobs.start(prepared.id, 'test').validatorSessionId!
+  const expected = {
+    readBytes: 0,
+    totalBytes: subject.bytes,
+    readRequired: 0,
+    totalRequired: 1,
+    remainingRequired: 1
+  }
+  assert.deepEqual(jobs.get(prepared.id).progress, expected)
+  const epoch = storage.catalog.validationEpoch()
+  const storeEpoch = storage.catalog.epoch()
+  assert.deepEqual(
+    jobs.read(prepared.id, sessionId, optional.id).progress,
+    expected
+  )
+  const first = jobs.read(prepared.id, sessionId, subject.id)
+  assert.equal(first.progress.readBytes, Buffer.byteLength(first.text))
+  assert.equal(first.progress.remainingRequired, 1)
+  assert.deepEqual(
+    jobs.read(prepared.id, sessionId, subject.id).progress,
+    first.progress
+  )
+  assert.equal(storage.catalog.validationEpoch(), epoch)
+  assert.ok(storage.catalog.epoch() > storeEpoch)
+  assert.deepEqual(
+    new ArtifactLifecycleService(storage, db).jobs.get(prepared.id).progress,
+    first.progress
+  )
+  const response = await app.inject({
+    method: 'GET',
+    url: `/api/artifact-validations/${prepared.id}`
+  })
+  assert.equal(response.statusCode, 200, response.body)
+  assert.deepEqual(response.json().progress, first.progress)
+  const manifest = jobs.manifest(prepared.id)
+  const entry = manifest.items.find(item => item.id === subject.id)
+  assert.ok(entry && 'pages' in entry)
+  assert.equal(entry.chunkBytes, 24 * 1024)
+  assert.equal(entry.pages, Math.ceil(subject.bytes / (24 * 1024)))
+  while (jobs.readNext(prepared.id, sessionId).remaining) {}
+  const complete = {
+    ...expected,
+    readBytes: subject.bytes,
+    readRequired: 1,
+    remainingRequired: 0
+  }
+  assert.deepEqual(jobs.get(prepared.id).progress, complete)
+  const historySize = jobs.history(prepared.id, 0, 100).items.length
+  jobs.readNext(prepared.id, sessionId)
+  jobs.read(prepared.id, sessionId, subject.id)
+  assert.equal(jobs.history(prepared.id, 0, 100).items.length, historySize)
+  jobs.submit(prepared.id, sessionId, {
+    verdict: 'pass',
+    findings: [],
+    resolutions: []
+  })
+  assert.deepEqual(jobs.get(prepared.id).progress, complete)
+})
+
+test('0113: no required documents means zero progress', async t => {
+  const { storage, create, propose } = await setup(t)
+  const subject = create()
+  const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+  const value = storage.lifecycle.repository.validation(prepared.id)
+  storage.lifecycle.repository.appendValidation({
+    ...value,
+    manifest: { ...value.manifest, requiredContentIds: [] }
+  })
+  assert.deepEqual(storage.lifecycle.jobs.get(prepared.id).progress, {
+    readBytes: 0,
+    totalBytes: 0,
+    readRequired: 0,
+    totalRequired: 0,
+    remainingRequired: 0
+  })
+})
+
+for (const mode of ['read', 'read_next'] as const) {
+  test(`0113: ${mode} does not skip undelivered content after a progress write failure`, async t => {
+    const { storage, create, propose } = await setup(t)
+    const subject = create()
+    const jobs = storage.lifecycle.jobs
+    const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+    const sessionId = jobs.start(prepared.id, 'test').validatorSessionId!
+    const epoch = storage.catalog.epoch()
+    const original = storage.catalog.recordChange.bind(storage.catalog)
+    t.mock.method(storage.catalog, 'recordChange', () => {
+      throw new Error('progress write failed')
+    })
+    const read = () =>
+      mode === 'read'
+        ? jobs.read(prepared.id, sessionId, subject.id)
+        : jobs.readNext(prepared.id, sessionId).items[0]
+    assert.throws(read, /progress write failed/)
+    assert.equal(jobs.get(prepared.id).progress.readBytes, 0)
+    assert.equal(
+      storage.lifecycle.repository.validation(prepared.id).progress,
+      undefined
+    )
+    assert.equal(storage.catalog.epoch(), epoch)
+    t.mock.method(storage.catalog, 'recordChange', original)
+    const retry = read()
+    assert.equal(retry.offset, 0)
+    assert.equal(
+      retry.text,
+      storage
+        .readVerifiedFile(subject.id)
+        .content.subarray(0, Buffer.byteLength(retry.text))
+        .toString('utf8')
+    )
+  })
+}
+
+test('0113: cancellation between content read and progress write is never overwritten', async t => {
+  const { storage, create, propose, db } = await setup(t)
+  const subject = create()
+  const jobs = storage.lifecycle.jobs
+  const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+  const sessionId = jobs.start(prepared.id, 'test').validatorSessionId!
+  const other = new ArtifactLifecycleService(storage, db)
+  const original = storage.readVerifiedFile.bind(storage)
+  let cancelled = false
+  t.mock.method(storage, 'readVerifiedFile', (id: string) => {
+    const result = original(id)
+    if (!cancelled) {
+      cancelled = true
+      other.jobs.cancel(prepared.id)
+    }
+    return result
+  })
+  assert.throws(() => jobs.readNext(prepared.id, sessionId), /unavailable/)
+  assert.equal(jobs.get(prepared.id).state, 'cancelled')
+  assert.equal(jobs.get(prepared.id).progress.readBytes, 0)
+})
+
+test('0113: a failed batch after rebase keeps new content and manifest changes pending', async t => {
+  const { storage, create, propose } = await setup(t)
+  const subject = create()
+  const jobs = storage.lifecycle.jobs
+  const prepared = storage.lifecycle.prepare(propose([subject]).id, 1)
+  const sessionId = jobs.start(prepared.id, 'test').validatorSessionId!
+  while (jobs.readNext(prepared.id, sessionId).remaining) {}
+  const added = create('draft', [{ kind: 'supplements', targetId: subject.id }])
+  const update = storage.lifecycle.repository.updateCurrent.bind(
+    storage.lifecycle.repository
+  )
+  t.mock.method(
+    storage.lifecycle.repository,
+    'updateCurrent',
+    (value: Parameters<typeof update>[0]) => {
+      if (value.progress!.readBytes > subject.bytes) {
+        throw new Error('batch progress failed')
+      }
+      update(value)
+    }
+  )
+  assert.throws(
+    () => jobs.readNext(prepared.id, sessionId),
+    /batch progress failed/
+  )
+  assert.equal(jobs.get(prepared.id).progress.readBytes, subject.bytes)
+  t.mock.method(storage.lifecycle.repository, 'updateCurrent', update)
+  const retry = jobs.readNext(prepared.id, sessionId)
+  assert.equal(retry.items[0].key, added.id)
+  assert.equal(retry.items[0].offset, 0)
+  assert.ok(retry.changes?.added.some(item => item.id === added.id))
 })

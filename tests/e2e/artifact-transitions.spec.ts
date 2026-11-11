@@ -80,3 +80,52 @@ for (const variant of [
     expect(pageErrors).toEqual([])
   })
 }
+
+for (const variant of [
+  { theme: 'light', width: 1440, height: 1000 },
+  { theme: 'dark', width: 390, height: 844 }
+] as const) {
+  test(`required reading progress updates in ${variant.theme} at ${variant.width}px`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: variant.width, height: variant.height })
+    await page.emulateMedia({ colorScheme: variant.theme })
+    let readRequired = 1
+    await page.route(
+      `**/api/artifacts/${fixture.transitionDocumentId}/transition-operations`,
+      async route => {
+        const response = await route.fetch()
+        const body = await response.json()
+        body.items = body.items.map((operation: Record<string, unknown>) => ({
+          ...operation,
+          stage: 'validating',
+          canCancel: false,
+          reason: null,
+          validationProgress: {
+            readBytes: readRequired * 100,
+            totalBytes: 300,
+            readRequired,
+            totalRequired: 3,
+            remainingRequired: 3 - readRequired
+          }
+        }))
+        await route.fulfill({ response, json: body })
+      }
+    )
+    await page.goto(
+      `/#/artifacts?storeId=${fixture.storeId}&selectedId=${fixture.transitionDocumentId}&uiPane=content`
+    )
+    await expect(
+      page.getByText('Read 1 of 3 documents', { exact: true })
+    ).toBeVisible()
+    await page.screenshot({
+      path: test.info().outputPath('reading-progress.png'),
+      animations: 'disabled'
+    })
+    readRequired = 2
+    await page.reload()
+    await expect(
+      page.getByText('Read 2 of 3 documents', { exact: true })
+    ).toBeVisible()
+  })
+}

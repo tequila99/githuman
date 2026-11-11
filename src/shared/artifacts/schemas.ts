@@ -384,6 +384,15 @@ export const ArtifactValidationManifestArtifactSchema = Type.Object(
   {
     ...ArtifactSchema.properties,
     kind: Type.Literal('artifact', { description: 'Manifest artifact entry.' }),
+    pages: Type.Integer({
+      minimum: 1,
+      description:
+        'Estimated separate reads at chunkBytes; UTF-8 boundaries may require another read.'
+    }),
+    chunkBytes: Type.Integer({
+      minimum: 1,
+      description: 'Maximum validation content bytes per call.'
+    }),
     contentRequired: Type.Boolean({
       description:
         'Whether validation requires complete reading of this artifact.'
@@ -1051,6 +1060,32 @@ export const ArtifactValidationStateSchema = Type.Union(
   ],
   { description: 'Validation job state.' }
 )
+export const ArtifactValidationProgressSchema = Type.Object(
+  {
+    readBytes: Type.Integer({
+      minimum: 0,
+      description: 'Unique required content bytes read.'
+    }),
+    totalBytes: Type.Integer({
+      minimum: 0,
+      description: 'Bytes in all required documents.'
+    }),
+    readRequired: Type.Integer({
+      minimum: 0,
+      description: 'Required documents completely read.'
+    }),
+    totalRequired: Type.Integer({
+      minimum: 0,
+      description: 'Required document count.'
+    }),
+    remainingRequired: Type.Integer({
+      minimum: 0,
+      description: 'Required documents not completely read.'
+    })
+  },
+  { description: 'Server-calculated required content coverage.' }
+)
+
 export const ArtifactValidationViewSchema = Type.Object(
   {
     id: lifecycleId('Validation identifier.'),
@@ -1060,6 +1095,7 @@ export const ArtifactValidationViewSchema = Type.Object(
       description: 'Validated proposal version.'
     }),
     state: ArtifactValidationStateSchema,
+    progress: ArtifactValidationProgressSchema,
     validatorSessionId: Nullable(lifecycleId('Assigned validator session.')),
     manifestDigest: lifecycleDigest('Server-assigned manifest digest.'),
     changeDigest: lifecycleDigest('Validated change digest.'),

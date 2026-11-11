@@ -27,6 +27,11 @@ const label = computed(() =>
     ? t('artifacts.transition.cancelRequested')
     : t('artifacts.transition.stages.' + props.operation.stage)
 )
+const readingProgress = computed(() =>
+  props.operation.stage === 'validating'
+    ? props.operation.validationProgress
+    : undefined
+)
 const retryable = computed(
   () => finished.value && props.operation.stage !== 'succeeded'
 )
@@ -62,6 +67,12 @@ async function cancel() {
   >
     <q-spinner v-if="!finished" size="1em" />
     <span class="text-caption">{{ label }}</span>
+    <span v-if="readingProgress" class="text-caption">{{
+      t('artifacts.transition.readingProgress', {
+        read: readingProgress.readRequired,
+        total: readingProgress.totalRequired
+      })
+    }}</span>
     <span v-if="operation.reason" class="text-caption text-negative">{{
       operation.reason
     }}</span>
