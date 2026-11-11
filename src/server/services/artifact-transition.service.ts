@@ -541,8 +541,13 @@ export class ArtifactTransitionService {
     try {
       return { validationProgress: this.lifecycle.jobs.get(id).progress }
     } catch (error) {
-      // A busy progress read must not hide the transition or its cancel action.
-      if (isArtifactBusyError(error)) return {}
+      // A busy or missing progress read must not hide the transition or its cancel action.
+      if (
+        isArtifactBusyError(error) ||
+        error instanceof ArtifactNotFoundError
+      ) {
+        return {}
+      }
       throw error
     }
   }

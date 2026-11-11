@@ -605,10 +605,7 @@ export class ArtifactValidationJobsService {
       }
       const progress = this.progress(current, coverage)
       if (canonicalJson(progress) !== canonicalJson(current.progress ?? null)) {
-        this.lifecycle.repository.appendValidation(
-          { ...current, progress },
-          'progress'
-        )
+        this.lifecycle.repository.updateCurrent({ ...current, progress })
         // Progress refreshes readers without invalidating the validation manifest.
         this.lifecycle.storage.catalog.recordChange(
           'validation',
@@ -731,7 +728,6 @@ export class ArtifactValidationJobsService {
         coverage!.delete(key)
       }
     }
-    this.publishProgress(rebased)
     this.trace(id, `rebase generation=${rebased.generation}`)
     return rebased
   }

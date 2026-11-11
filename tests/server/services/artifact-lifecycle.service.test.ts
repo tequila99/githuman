@@ -2083,17 +2083,17 @@ test('0113: a failed batch after rebase keeps new content and manifest changes p
   const sessionId = jobs.start(prepared.id, 'test').validatorSessionId!
   while (jobs.readNext(prepared.id, sessionId).remaining) {}
   const added = create('draft', [{ kind: 'supplements', targetId: subject.id }])
-  const append = storage.lifecycle.repository.appendValidation.bind(
+  const update = storage.lifecycle.repository.updateCurrent.bind(
     storage.lifecycle.repository
   )
   t.mock.method(
     storage.lifecycle.repository,
-    'appendValidation',
-    (value: Parameters<typeof append>[0], kind?: string) => {
-      if (kind === 'progress' && value.progress!.readBytes > subject.bytes) {
+    'updateCurrent',
+    (value: Parameters<typeof update>[0]) => {
+      if (value.progress!.readBytes > subject.bytes) {
         throw new Error('batch progress failed')
       }
-      append(value, kind)
+      update(value)
     }
   )
   assert.throws(
@@ -2101,7 +2101,7 @@ test('0113: a failed batch after rebase keeps new content and manifest changes p
     /batch progress failed/
   )
   assert.equal(jobs.get(prepared.id).progress.readBytes, subject.bytes)
-  t.mock.method(storage.lifecycle.repository, 'appendValidation', append)
+  t.mock.method(storage.lifecycle.repository, 'updateCurrent', update)
   const retry = jobs.readNext(prepared.id, sessionId)
   assert.equal(retry.items[0].key, added.id)
   assert.equal(retry.items[0].offset, 0)
