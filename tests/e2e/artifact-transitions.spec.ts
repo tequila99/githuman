@@ -48,7 +48,8 @@ for (const variant of [
     await result.click()
     await expect(resolution).toBeVisible()
 
-    await page.clock.setFixedTime(Date.now() + 11 * 60_000)
+    const pageNow = await page.evaluate(() => Date.now())
+    await page.clock.setFixedTime(pageNow + 11 * 60_000)
     const current = await request.get(
       `/api/artifacts/${fixture.transitionDocumentId}`
     )

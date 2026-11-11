@@ -803,7 +803,7 @@ for (const action of ['begin', 'cancel'] as const) {
         ...remote,
         headers: {
           ...headers,
-          'x-revoke-test': timing === 'before handler' ? '1' : ''
+          ...(timing === 'before handler' ? { 'x-revoke-test': '1' } : {})
         },
         method: 'POST',
         url:
