@@ -65,6 +65,7 @@ export default {
         interrupted: 'Interrupted'
       },
       progressLabel: 'Status change to {to}',
+      readingProgress: 'Read {read} of {total} documents',
       cancel: 'Cancel',
       cancelRequested: 'Cancelling…',
       retry: 'Retry',

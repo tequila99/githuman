@@ -63,6 +63,7 @@ export interface StoredValidation {
   submissionDigest?: string
   eventKind?: string
   readCoverage?: { key: string; bytes: number }[]
+  progress?: import('../../shared/artifacts/types.ts').ArtifactValidationProgress
   metrics?: ValidationMetrics
   /** Manifest generation; a rebase of a running validation increments it (ADR 0121). */
   generation?: number

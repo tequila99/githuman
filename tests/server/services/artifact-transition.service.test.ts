@@ -188,12 +188,26 @@ test('one confirmation validates and applies the change after a pass', async t =
     preview.changes.map(item => [item.fromStatus, item.toStatus]),
     [['draft', 'accepted']]
   )
+  assert.deepEqual(operation.validationProgress, {
+    readBytes: 0,
+    totalBytes: draft.bytes,
+    readRequired: 0,
+    totalRequired: 1,
+    remainingRequired: 1
+  })
   assert.equal(operation.stage, 'validating')
   assert.equal(operation.canCancel, true)
   assert.equal(storage.get(draft.id).status, 'draft')
   submit(operation.validationId!)
   await settle()
   const done = transitions.operation(operation.id)
+  assert.deepEqual(done.validationProgress, {
+    readBytes: draft.bytes,
+    totalBytes: draft.bytes,
+    readRequired: 1,
+    totalRequired: 1,
+    remainingRequired: 0
+  })
   assert.equal(done.stage, 'succeeded', done.reason ?? '')
   assert.equal(done.canCancel, false)
   assert.equal(storage.get(draft.id).status, 'accepted')
@@ -404,11 +418,25 @@ test('HTTP routes drive the same flow for a local user', async t => {
     }
   })
   assert.equal(started.statusCode, 200, started.body)
+  assert.deepEqual(started.json().validationProgress, {
+    readBytes: 0,
+    totalBytes: draft.bytes,
+    readRequired: 0,
+    totalRequired: 1,
+    remainingRequired: 1
+  })
   assert.equal(started.json().stage, 'validating')
   submit(started.json().validationId)
   await settle()
   const read = await app.inject({
     url: `/api/artifact-transition-operations/${started.json().id}`
+  })
+  assert.deepEqual(read.json().validationProgress, {
+    readBytes: draft.bytes,
+    totalBytes: draft.bytes,
+    readRequired: 1,
+    totalRequired: 1,
+    remainingRequired: 0
   })
   assert.equal(read.json().stage, 'succeeded')
   const list = await app.inject({
