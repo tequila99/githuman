@@ -247,3 +247,86 @@ test('release clears the artifact state of reads', async () => {
   await store.load(ARTIFACT)
   assert.notEqual(store.entry(ARTIFACT).options, null)
 })
+
+for (const action of ['begin', 'cancel'] as const) {
+  for (const timing of ['before', 'during'] as const) {
+    test(`a GET started ${timing} ${action} cannot overwrite its response`, async () => {
+      const post = deferred<Response>()
+      const stale = deferred<void>()
+      const fresh = deferred<void>()
+      const current = action === 'cancel' ? operation('validating') : null
+      const accepted = operation(
+        action === 'cancel' ? 'cancelled' : 'validating'
+      )
+      let reads = 0
+      let initial = true
+      globalThis.fetch = async (input, init) => {
+        if (init?.method === 'POST') return post.promise
+        const menu = urlOf(input).endsWith('/transitions')
+        if (initial) {
+          return menu
+            ? json(options(current?.id ?? null))
+            : json({ storeId: 'store', items: current ? [current] : [] })
+        }
+        const old = ++reads <= 2
+        await (old ? stale.promise : fresh.promise)
+        const value = old ? current : accepted
+        return menu
+          ? json(options(value?.stage === 'validating' ? value.id : null))
+          : json({ storeId: 'store', items: value ? [value] : [] })
+      }
+      const store = useArtifactTransitionStore()
+      await store.load(ARTIFACT)
+      initial = false
+      const mutate = () =>
+        action === 'begin'
+          ? store.begin(ARTIFACT, 'preview', 'p1')
+          : store.cancel(ARTIFACT, accepted.id)
+      let read: Promise<void>
+      let mutation: ReturnType<typeof mutate>
+      if (timing === 'before') {
+        read = store.load(ARTIFACT)
+        mutation = mutate()
+      } else {
+        mutation = mutate()
+        read = store.load(ARTIFACT)
+      }
+      post.resolve(json(accepted))
+      await mutation
+      stale.resolve()
+      await read
+      assert.equal(store.entry(ARTIFACT).operation?.stage, accepted.stage)
+      assert.equal(
+        store.entry(ARTIFACT).options?.activeOperationId,
+        action === 'begin' ? accepted.id : null
+      )
+      fresh.resolve()
+      await new Promise<void>(resolve => setImmediate(resolve))
+    })
+  }
+}
+
+test('release discards queued reads without reviving a loader for a remounted pane', async () => {
+  const stale = deferred<void>()
+  let reads = 0
+  globalThis.fetch = async input => {
+    const old = ++reads <= 2
+    if (old) await stale.promise
+    return urlOf(input).endsWith('/transitions')
+      ? json(options(old ? null : operation('validating').id))
+      : json({ storeId: 'store', items: old ? [] : [operation('validating')] })
+  }
+  const store = useArtifactTransitionStore()
+  const first = store.load(ARTIFACT)
+  const queued = store.load(ARTIFACT)
+  store.release(ARTIFACT)
+  await store.load(ARTIFACT)
+  stale.resolve()
+  await Promise.all([first, queued])
+  assert.equal(reads, 4)
+  assert.equal(store.entry(ARTIFACT).operation?.stage, 'validating')
+  assert.equal(
+    store.entry(ARTIFACT).options?.activeOperationId,
+    operation('validating').id
+  )
+})

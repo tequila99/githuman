@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { mdiMenuDown } from '@mdi/js'
 import { useArtifactTransition } from '@/composables/artifacts/use-artifact-transition'
 import ArtifactStatusBadge from './ArtifactStatusBadge.vue'
 import ArtifactTransitionDialog from './ArtifactTransitionDialog.vue'
 import ArtifactTransitionProgress from './ArtifactTransitionProgress.vue'
-import type { Artifact } from '@/api/types'
+import ArtifactTransitionResult from './ArtifactTransitionResult.vue'
+import type { Artifact, ArtifactTransitionOperation } from '@/api/types'
 
 const props = withDefaults(
   defineProps<{
@@ -20,6 +21,22 @@ const { t } = useI18n()
 const { entry, store } = useArtifactTransition(() => props.artifact.id)
 const dialog = ref(false)
 const target = ref<Artifact['status'] | null>(null)
+// The open report outlives the temporary operation shown in the progress row.
+const resultOperation = shallowRef<ArtifactTransitionOperation | null>(null)
+const resultOpen = shallowRef(false)
+
+watch(
+  () => props.artifact.id,
+  () => {
+    resultOpen.value = false
+    resultOperation.value = null
+  }
+)
+
+function showResult(operation: ArtifactTransitionOperation) {
+  resultOperation.value = operation
+  resultOpen.value = true
+}
 
 const operation = computed(() => entry.value.operation)
 // Boolean() covers both null and the undefined of options that are not loaded yet.
@@ -110,6 +127,12 @@ function choose(status: Artifact['status']) {
       v-if="operation"
       :operation="operation"
       @retry="choose(operation.targetStatus)"
+      @result="showResult"
+    />
+    <ArtifactTransitionResult
+      v-if="resultOperation"
+      v-model="resultOpen"
+      :operation="resultOperation"
     />
     <ArtifactTransitionDialog
       v-model="dialog"

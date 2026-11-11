@@ -5,7 +5,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { buildApp } from '../../../src/server/app.ts'
-import { createTestDatabase } from '../../../src/server/db/index.ts'
+import { DatabaseSync } from 'node:sqlite'
+import type { FastifyInstance } from 'fastify'
+import {
+  createFileDatabase,
+  createTestDatabase
+} from '../../../src/server/db/index.ts'
 import { ArtifactStorageService } from '../../../src/server/services/artifact-storage.service.ts'
 import type { AgentSessionRegistry } from '../../../src/server/services/agent/session-registry.ts'
 import type { Artifact } from '../../../src/shared/artifacts/types.ts'
@@ -17,9 +22,16 @@ const USER = { kind: 'user' as const, id: 'local' }
 // Enough ticks for the settle listener and the apply step to run.
 const SETTLE_MS = 20
 
-async function setup(t: TestContext) {
+async function setup(
+  t: TestContext,
+  options: {
+    file?: boolean
+    beforeReady?: (app: FastifyInstance) => void
+  } = {}
+) {
   const root = mkdtempSync(join(tmpdir(), 'ght-transition-'))
-  const db = createTestDatabase()
+  const path = join(root, '.githuman/ght-reviews.db')
+  const db = options.file ? createFileDatabase(path) : createTestDatabase()
   let now = Date.now()
   const storage = new ArtifactStorageService({
     db,
@@ -60,6 +72,7 @@ async function setup(t: TestContext) {
     artifacts: storage,
     allowedHosts: ['lan.test']
   })
+  options.beforeReady?.(app)
   await app.ready()
   t.after(async () => {
     await app.close()
@@ -132,6 +145,7 @@ async function setup(t: TestContext) {
   }
   const settle = () => new Promise(resolve => setTimeout(resolve, SETTLE_MS))
   return {
+    path,
     db,
     now: () => now,
     storage,
@@ -550,7 +564,7 @@ test('a busy database does not outlive the consent', async t => {
 })
 
 test('a lost race for the validator lease is a conflict, not a result', async t => {
-  const { storage, transitions, create, now } = await setup(t)
+  const { storage, transitions, create, now, app } = await setup(t)
   const draft = create('draft')
   const preview = transitions.preview(draft.id, 'archived', USER)
   storage.lifecycle.repository.claim(
@@ -563,17 +577,31 @@ test('a lost race for the validator lease is a conflict, not a result', async t 
   t.mock.method(storage.lifecycle.repository, 'lease', () => undefined, {
     times: 2
   })
-  assert.throws(
-    () =>
-      transitions.begin(
-        { previewId: preview.previewId, presetId: 'test', requestId: 'race' },
-        USER
-      ),
-    /active/
-  )
+  const payload = {
+    previewId: preview.previewId,
+    presetId: 'test',
+    requestId: 'race'
+  }
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/artifact-transition-operations',
+    payload
+  })
+  assert.equal(response.statusCode, 409, response.body)
+  assert.equal(response.json().code, 'GHT_ARTIFACT_CONFLICT')
+  assert.match(response.json().message, /active/)
   const [stored] = transitions.list(draft.id).items
   assert.equal(stored.stage, 'failed')
   assert.equal(storage.get(draft.id).status, 'draft')
+  const replay = await app.inject({
+    method: 'POST',
+    url: '/api/artifact-transition-operations',
+    payload
+  })
+  assert.equal(replay.statusCode, 200, replay.body)
+  assert.equal(replay.json().id, stored.id)
+  assert.equal(replay.json().stage, 'failed')
+  assert.equal(transitions.list(draft.id).items.length, 1)
 })
 
 test('a new preview replaces only the same document, target and actor', async t => {
@@ -688,4 +716,203 @@ test('agent keys and network callers cannot use any transition route', async t =
       `${method} ${url} ${response.statusCode}`
     )
   }
+})
+
+for (const action of ['begin', 'cancel'] as const) {
+  for (const timing of ['before request', 'before handler'] as const) {
+    test(`a device revoked ${timing} cannot ${action} a transition`, async t => {
+      let revokeId: string | null = null
+      const { app, transitions, create, storage } = await setup(t, {
+        beforeReady(server) {
+          server.addHook('preHandler', async request => {
+            if (request.headers['x-revoke-test'] && revokeId) {
+              const response = await server.inject({
+                method: 'DELETE',
+                url: `/api/devices/${revokeId}`
+              })
+              assert.equal(response.statusCode, 204, response.body)
+            }
+          })
+        }
+      })
+      const remote = {
+        remoteAddress: '192.168.1.20',
+        headers: { host: 'lan.test' }
+      }
+      const pending = await app.inject({
+        ...remote,
+        method: 'POST',
+        url: '/api/devices/requests',
+        payload: {}
+      })
+      assert.equal(pending.statusCode, 200, pending.body)
+      const [device] = (await app.inject('/api/devices')).json<
+        { id: string }[]
+      >()
+      const approved = await app.inject({
+        method: 'POST',
+        url: `/api/devices/${device.id}/approve`,
+        payload: { code: pending.json().pairing.code }
+      })
+      assert.equal(approved.statusCode, 200, approved.body)
+      const cookie = pending.cookies[0]
+      const headers = {
+        host: 'lan.test',
+        cookie: `${cookie.name}=${cookie.value}`
+      }
+      const draft = create('draft')
+      const previewResponse = await app.inject({
+        ...remote,
+        headers,
+        method: 'POST',
+        url: `/api/artifacts/${draft.id}/transition-previews`,
+        payload: { targetStatus: 'archived' }
+      })
+      assert.equal(previewResponse.statusCode, 200, previewResponse.body)
+      const payload = {
+        previewId: previewResponse.json().previewId,
+        presetId: 'test',
+        requestId: randomUUID()
+      }
+      let operationId = ''
+      if (action === 'cancel') {
+        const started = await app.inject({
+          ...remote,
+          headers,
+          method: 'POST',
+          url: '/api/artifact-transition-operations',
+          payload
+        })
+        assert.equal(started.statusCode, 200, started.body)
+        operationId = started.json().id
+      }
+      if (timing === 'before request') {
+        assert.equal(
+          (
+            await app.inject({
+              method: 'DELETE',
+              url: `/api/devices/${device.id}`
+            })
+          ).statusCode,
+          204
+        )
+      } else {
+        revokeId = device.id
+      }
+      const response = await app.inject({
+        ...remote,
+        headers: {
+          ...headers,
+          'x-revoke-test': timing === 'before handler' ? '1' : ''
+        },
+        method: 'POST',
+        url:
+          action === 'begin'
+            ? '/api/artifact-transition-operations'
+            : `/api/artifact-transition-operations/${operationId}/cancel`,
+        ...(action === 'begin' ? { payload } : {})
+      })
+      assert.equal(response.statusCode, 401, response.body)
+      assert.equal(storage.get(draft.id).status, 'draft')
+      if (action === 'begin') {
+        assert.equal(transitions.list(draft.id).items.length, 0)
+      } else {
+        assert.equal(transitions.operation(operationId).cancelRequested, false)
+        transitions.cancel(operationId)
+      }
+    })
+  }
+}
+
+test('a real SQLite writer lock retries applying exactly once after release', async t => {
+  const { db, path, storage, transitions, create, begin, submit, settle } =
+    await setup(t, { file: true })
+  db.exec('PRAGMA busy_timeout=1')
+  const writer = new DatabaseSync(path)
+  t.after(() => writer.close())
+  const draft = create('draft')
+  const { operation, preview } = begin(draft, 'accepted')
+  const commit = storage.lifecycle.commitConfirmed.bind(storage.lifecycle)
+  let attempts = 0
+  t.mock.method(
+    storage.lifecycle,
+    'commitConfirmed',
+    (...args: Parameters<typeof commit>) => {
+      if (attempts++ === 0) writer.exec('BEGIN IMMEDIATE')
+      return commit(...args)
+    }
+  )
+  try {
+    submit(operation.validationId!)
+    await settle()
+    assert.equal(transitions.operation(operation.id).stage, 'applying')
+    assert.equal(storage.get(draft.id).status, 'draft')
+    assert.equal(
+      transitions.repository
+        .history(operation.id)
+        .filter(item => item.stage === 'applying').length,
+      1
+    )
+  } finally {
+    if (writer.isTransaction) writer.exec('ROLLBACK')
+  }
+  transitions.reconcile()
+  transitions.reconcile()
+  assert.equal(attempts, 2)
+  assert.equal(transitions.operation(operation.id).stage, 'succeeded')
+  assert.equal(storage.get(draft.id).status, 'accepted')
+  assert.equal(storage.get(draft.id).metadataVersion, draft.metadataVersion + 1)
+  const history = transitions.repository.history(operation.id)
+  assert.equal(history.filter(item => item.stage === 'applying').length, 1)
+  assert.equal(history.filter(item => item.stage === 'succeeded').length, 1)
+  assert.ok(preview.canConfirm)
+})
+
+test('a stalled preparation recovers and a busy operation does not stop its neighbours', async t => {
+  const { storage, transitions, create, advance } = await setup(t)
+  t.mock.method(storage.lifecycle.jobs, 'start', () => {
+    throw new Error('start failed')
+  })
+  const append = transitions.repository.append.bind(transitions.repository)
+  t.mock.method(
+    transitions.repository,
+    'append',
+    (value: Parameters<typeof append>[0]) => {
+      if (value.stage === 'failed') throw artifactBusyError('write blocked')
+      append(value)
+    }
+  )
+  for (let index = 0; index < 2; index++) {
+    const doc = create()
+    const preview = transitions.preview(doc.id, 'accepted', USER)
+    assert.throws(
+      () =>
+        transitions.begin(
+          {
+            previewId: preview.previewId,
+            presetId: 'test',
+            requestId: randomUUID()
+          },
+          USER
+        ),
+      /blocked/
+    )
+  }
+  t.mock.restoreAll()
+  const [first, second] = transitions.repository.unfinished()
+  advance(10_001)
+  const validation = storage.lifecycle.repository.validation.bind(
+    storage.lifecycle.repository
+  )
+  t.mock.method(storage.lifecycle.repository, 'validation', (id: string) => {
+    if (id === first.validationId) throw artifactBusyError('one read blocked')
+    return validation(id)
+  })
+  transitions.reconcile()
+  assert.equal(transitions.operation(first.id).stage, 'preparing')
+  assert.equal(transitions.operation(second.id).stage, 'failed')
+  assert.match(transitions.operation(second.id).reason ?? '', /did not start/)
+  t.mock.restoreAll()
+  transitions.reconcile()
+  assert.equal(transitions.operation(first.id).stage, 'failed')
 })
