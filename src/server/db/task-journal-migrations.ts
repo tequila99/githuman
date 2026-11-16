@@ -13,7 +13,8 @@ export function applyTaskJournalMigrations(db: DatabaseSync): void {
         seq INTEGER PRIMARY KEY AUTOINCREMENT, store_id TEXT NOT NULL, task_id TEXT,
         id TEXT NOT NULL, snapshot_json TEXT NOT NULL, source_event_id TEXT,
         UNIQUE(store_id,id), UNIQUE(store_id,task_id,source_event_id));
-        INSERT INTO task_journal_entries_nullable SELECT * FROM task_journal_entries;
+        INSERT INTO task_journal_entries_nullable (seq, store_id, task_id, id, snapshot_json, source_event_id)
+        SELECT seq, store_id, task_id, id, snapshot_json, source_event_id FROM task_journal_entries;
         DROP TABLE task_journal_entries;
         ALTER TABLE task_journal_entries_nullable RENAME TO task_journal_entries;`)
     }

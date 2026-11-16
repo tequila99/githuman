@@ -46,6 +46,8 @@ import type { EventBus } from '../event-bus.ts'
 import type { AgentSessionRegistry } from './agent/session-registry.ts'
 import type { TurnTaskContext } from './agent/turn-task-context.ts'
 
+// Agent events arrive in bursts. One notification per window is enough for open pages to refetch.
+const CHANGE_THROTTLE_MS = 250
 // Server facts have their own author; they are not user or agent statements.
 const SERVER_ACTOR: ArtifactActor = { kind: 'system', id: 'server' }
 
@@ -54,6 +56,8 @@ export class TaskJournalService {
   readonly storage: ArtifactStorageService
   readonly repository: TaskJournalRepository
   private readonly events?: EventBus
+  private changedAt = 0
+  private changeTimer?: ReturnType<typeof setTimeout>
   constructor(
     storage: ArtifactStorageService,
     repository: TaskJournalRepository,
@@ -305,7 +309,7 @@ export class TaskJournalService {
         }
       }
     })
-    this.changed()
+    this.changedThrottled()
   }
   recordTurn(
     turn: TurnTaskContext,
@@ -332,7 +336,22 @@ export class TaskJournalService {
     })
     this.changed()
   }
+  /** Publishes at most once per window; the last call of a burst publishes at the window end. */
+  changedThrottled(): void {
+    if (this.changeTimer) return
+    const wait = CHANGE_THROTTLE_MS - (Date.now() - this.changedAt)
+    if (wait <= 0) {
+      this.changed()
+      return
+    }
+    this.changeTimer = setTimeout(() => {
+      this.changeTimer = undefined
+      this.changed()
+    }, wait)
+    this.changeTimer.unref()
+  }
   changed(): void {
+    this.changedAt = Date.now()
     this.events?.publish({
       type: 'task-journal:changed',
       storeId: this.storage.storeId

@@ -53,6 +53,9 @@ export function useTaskHandoff(options: {
     try {
       const taskId = options.taskId?.()
       const sourceId = options.sourceSessionId()
+      if (!taskId && !sourceId) {
+        throw new Error('A task or a source session is required.')
+      }
       const task = taskId ? await tasksApi.get(taskId) : await tasksApi.list({})
       const source = sourceId ? await sessionTasksApi.get(sourceId) : null
       const storeId = task.storeId

@@ -828,6 +828,47 @@ test('session handoff works without a task, starts once in English and preserves
   assert.equal(source.blockedBySessionId, undefined)
 })
 
+test('a chained session handoff keeps a non-empty original request for the middle session', async t => {
+  const { storage, registry, handoffs } = await setup(t, {
+    captureEvents: true
+  })
+  const source = registry.create('fake', null)
+  await until(() => source.status === 'ready')
+  source.prompt([{ type: 'text', text: 'echo:Chain goal' }], {
+    text: 'echo:Chain goal'
+  })
+  await until(() => source.status === 'ready')
+  const first = await handoffs.previewSession(
+    {
+      requestId: randomUUID(),
+      storeId: storage.storeId,
+      sourceSessionId: source.id,
+      sourceAssignmentVersion: 0,
+      presetId: 'fake'
+    },
+    USER
+  )
+  handoffs.confirm(first.id, first.digest, USER)
+  await until(() => handoffs.get(first.id, USER).state !== 'preparing')
+  const middle = registry.get(handoffs.get(first.id, USER).targetSessionId!)!
+  await until(() => middle.status === 'ready')
+  const second = await handoffs.previewSession(
+    {
+      requestId: randomUUID(),
+      storeId: storage.storeId,
+      sourceSessionId: middle.id,
+      sourceAssignmentVersion: storage.definitions.assignment(middle.id)
+        .version,
+      presetId: 'fake'
+    },
+    USER
+  )
+  const original = second.snapshot
+    .split('## Original user request')[1]
+    .split('## Latest user request')[0]
+  assert.notEqual(original.trim(), '')
+  assert.match(original, /Briefly summarize/)
+})
 test('session handoff inherits several tasks and rejects changed history or busy sources', async t => {
   const { storage, registry, handoffs, task, chat } = await setup(t)
   const source = await chat()

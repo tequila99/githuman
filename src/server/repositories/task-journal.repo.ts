@@ -205,7 +205,7 @@ export class TaskJournalRepository {
       this.db
         .prepare(`SELECT seq,snapshot_json FROM task_journal_entries
       WHERE store_id=? AND json_extract(snapshot_json,'$.sessionId')=? AND seq<=? AND (
-        json_type(snapshot_json,'$.context.prompt')='text' OR
+        COALESCE(json_extract(snapshot_json,'$.context.prompt'),'')<>'' OR
         CASE WHEN json_valid(json_extract(snapshot_json,'$.body')) THEN json_extract(json_extract(snapshot_json,'$.body'),'$.type')='request' ELSE 0 END
       ) ORDER BY seq ${order} LIMIT 1`)
         .get(this.storeId, sessionId, through) as
@@ -307,7 +307,28 @@ export class TaskJournalRepository {
       isSuperseded: Boolean(row.superseded)
     }))
   }
+  // The journal is append-only. A new newest seq is the only reason for new filter values.
+  private readonly filterOptionsCache = new Map<
+    string,
+    { seq: number; value: { agentNames: string[]; models: string[] } }
+  >()
   filterOptions(taskId?: string): { agentNames: string[]; models: string[] } {
+    const seq = this.newestInStore()
+    const cached = this.filterOptionsCache.get(taskId ?? '')
+    if (cached?.seq === seq) {
+      return {
+        agentNames: [...cached.value.agentNames],
+        models: [...cached.value.models]
+      }
+    }
+    const value = this.readFilterOptions(taskId)
+    this.filterOptionsCache.set(taskId ?? '', { seq, value })
+    return { agentNames: [...value.agentNames], models: [...value.models] }
+  }
+  private readFilterOptions(taskId?: string): {
+    agentNames: string[]
+    models: string[]
+  } {
     const values = (field: 'agentName' | 'model') => {
       const rows = this.db
         .prepare(`${JOURNAL_READ_CTE} SELECT DISTINCT json_extract(provenance_json,'$.${field}') value
