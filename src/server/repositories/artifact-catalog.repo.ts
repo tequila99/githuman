@@ -150,6 +150,30 @@ export class ArtifactCatalogRepository {
     )
   }
 
+  countArtifactsOfTask(taskId: string): number {
+    return (
+      this.db
+        .prepare(
+          'SELECT COUNT(*) n FROM artifact_task_links WHERE store_id=? AND task_id=?'
+        )
+        .get(this.storeId, taskId) as { n: number }
+    ).n
+  }
+
+  /** A bounded window of task artifacts; the latest metadata change comes first. */
+  recentArtifactsOfTask(taskId: string, limit: number): Artifact[] {
+    const rows = this.db
+      .prepare(`SELECT c.snapshot_json FROM artifact_task_links l
+      JOIN artifact_current c ON c.store_id=l.store_id AND c.artifact_id=l.artifact_id
+      WHERE l.store_id=? AND l.task_id=?
+      ORDER BY json_extract(c.snapshot_json,'$.metadataUpdatedAt') DESC, l.artifact_id
+      LIMIT ?`)
+      .all(this.storeId, taskId, limit) as { snapshot_json: string }[]
+    return rows.map(row =>
+      normalizeArtifact(JSON.parse(row.snapshot_json) as Artifact)
+    )
+  }
+
   list(limit: number, after?: { createdAt: string; id: string }): Artifact[] {
     const rows = this.db
       .prepare(`SELECT c.snapshot_json FROM artifact_current c

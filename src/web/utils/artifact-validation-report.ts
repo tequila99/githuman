@@ -1,6 +1,7 @@
 import { artifactActionsApi } from '@/api/artifact-actions'
 import type { ArtifactReportChunk, ArtifactValidationView } from '@/api/types'
 import { isRecord } from '@/utils/guards'
+import { utf8Length } from '../../shared/utils/utf8-length.ts'
 
 // Bound JSON allocation without silently dropping any findings.
 const MAX_REPORT_BYTES = 16 * 1024 * 1024
@@ -14,7 +15,7 @@ async function readChunks(id: string, load: ChunkLoader): Promise<string> {
   const chunks: string[] = []
   do {
     const chunk = await load(offset)
-    const bytes = new TextEncoder().encode(chunk.text).length
+    const bytes = utf8Length(chunk.text)
     total ??= chunk.totalBytes
     if (
       chunk.id !== id ||
@@ -67,7 +68,7 @@ export async function readArtifactValidationReportText(
   const text = await readChunks(validation.id, offset =>
     artifactActionsApi.reportText(validation.id, offset, signal)
   )
-  if (new TextEncoder().encode(text).length !== validation.report.text.bytes) {
+  if (utf8Length(text) !== validation.report.text.bytes) {
     throw new Error('The report text does not match its validation.')
   }
   return text

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import {
   mdiChevronRight,
   mdiCircle,
@@ -9,12 +10,17 @@ import {
 import type { FileTreeNode } from '@/api/types'
 import { treeIndentPx } from '@/utils/file-tree'
 
-defineProps<{
+const props = defineProps<{
   node: FileTreeNode
   selectedPath: string | null
   expandedFolders: Set<string>
   level: number
 }>()
+
+const expanded = computed(() => props.expandedFolders.has(props.node.path))
+const folderIcon = computed(() =>
+  expanded.value ? mdiFolderOpenOutline : mdiFolderOutline
+)
 
 const emit = defineEmits<{
   (e: 'toggle-folder', path: string): void
@@ -39,20 +45,10 @@ const emit = defineEmits<{
             size="xs"
             class="app-icon-neutral file-tree-node__chevron"
             :class="{
-              'file-tree-node__chevron--expanded': expandedFolders.has(
-                node.path
-              )
+              'file-tree-node__chevron--expanded': expanded
             }"
           />
-          <q-icon
-            :name="
-              expandedFolders.has(node.path)
-                ? mdiFolderOpenOutline
-                : mdiFolderOutline
-            "
-            size="xs"
-            class="app-icon-neutral"
-          />
+          <q-icon :name="folderIcon" size="xs" class="app-icon-neutral" />
         </div>
       </q-item-section>
       <q-item-section class="text-mono">

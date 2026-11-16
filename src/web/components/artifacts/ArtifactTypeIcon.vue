@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import {
   mdiFileDocumentOutline,
   mdiFlaskOutline,
@@ -19,12 +20,15 @@ const TYPE_ICONS = new Map([
   ['report', mdiTextBoxOutline]
 ])
 
-defineProps<{ typeId: string; size?: string }>()
+const props = defineProps<{ typeId: string; size?: string }>()
+const icon = computed(
+  () => TYPE_ICONS.get(props.typeId) ?? mdiFileDocumentOutline
+)
 </script>
 
 <template>
   <q-icon
-    :name="TYPE_ICONS.get(typeId) ?? mdiFileDocumentOutline"
+    :name="icon"
     :size="size"
     aria-hidden="true"
     class="app-icon-neutral"

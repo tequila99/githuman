@@ -129,6 +129,19 @@ export type {
 } from '../../shared/tasks/types.ts'
 
 export type {
+  JournalAppend,
+  JournalEntry,
+  JournalEventType,
+  JournalPage,
+  JournalSearchInput,
+  JournalSearchEntry,
+  JournalSearchPage,
+  Handoff,
+  HandoffPreview,
+  SessionHandoffPreview
+} from '../../shared/task-journal/types.ts'
+
+export type {
   ArtifactTransitionStage,
   ArtifactTransitionOptions,
   ArtifactTransitionPreview,

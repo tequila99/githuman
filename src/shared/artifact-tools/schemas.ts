@@ -1,3 +1,8 @@
+import {
+  SessionJournalQuery,
+  JournalAgentAppendSchema,
+  JournalAgentListSchema
+} from '../task-journal/schemas.ts'
 import { Type } from '@sinclair/typebox'
 import {
   ArtifactSearchBody,
@@ -185,6 +190,9 @@ export const ArtifactToolSchemas = {
     { ...ArtifactParams.properties, ...DefinitionQuery.properties },
     { additionalProperties: false, description: 'Read immutable ancestry.' }
   ),
+  'sessions.journal_list': SessionJournalQuery,
+  'tasks.journal_list': JournalAgentListSchema,
+  'tasks.journal_append': JournalAgentAppendSchema,
   'tasks.list': TaskListQuery,
   'tasks.get': DefinitionParams,
   'tasks.create': TaskCreateBody,

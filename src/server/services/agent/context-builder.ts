@@ -22,6 +22,7 @@ import { exportAsMarkdown } from '../export.service.ts'
 import { resolveWithinRepo } from '../git.service.ts'
 import { safeFileName } from '../../utils/file-name.ts'
 import { decodeText, truncateText } from '../../utils/text.ts'
+import { embedBlock } from './embed-block.ts'
 
 /** Per attached item. Bigger contexts are cut with a visible marker, never silently. */
 export const MAX_EMBEDDED_CHARS = 200_000
@@ -51,14 +52,6 @@ function diffFilePath(file: DiffFile): string {
   return file.newPath || file.oldPath
 }
 
-function fenceFor(text: string): string {
-  const longest = Math.max(
-    0,
-    ...(text.match(/`+/g) ?? []).map(run => run.length)
-  )
-  return '`'.repeat(Math.max(3, longest + 1))
-}
-
 /**
  * Text the agent cannot fetch on its own (a diff of staged content, a review)
  * goes in as an embedded resource when the agent supports it, otherwise as a
@@ -79,11 +72,7 @@ function embed(
       MAX_EMBEDDED_CHARS,
       omitted => `\n… [truncated by githuman: ${omitted} more characters]`
     )
-  if (deps.embeddedContext) {
-    return { type: 'resource', resource: { uri, mimeType, text: body } }
-  }
-  const fence = fenceFor(body)
-  return { type: 'text', text: `${title}\n${fence}\n${body}\n${fence}` }
+  return embedBlock(deps.embeddedContext, uri, title, mimeType, body)
 }
 
 function asContextError(error: unknown): AgentContextError {

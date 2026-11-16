@@ -17,7 +17,13 @@ export function useSessionTasks(props: { chatId: string; active: boolean }) {
   const storeId = shallowRef<string | null>(null)
   const localError = shallowRef<string | null>(null)
   const info = computed(() => agent.chats[props.chatId]?.info)
-  const canEdit = computed(() => info.value && info.value.status !== 'closed')
+  const canEdit = computed(
+    () =>
+      info.value &&
+      info.value.status !== 'closed' &&
+      !info.value.blockedBySessionId &&
+      !info.value.reserved
+  )
   const labels = computed(() =>
     storeId.value ? definitionsStore.forStore(storeId.value).taskLabels : null
   )

@@ -33,21 +33,23 @@ const tabs = computed(() =>
     label:
       name === 'agent'
         ? t('nav.agent')
-        : route.path.startsWith('/artifacts')
-          ? t(name === 'list' ? 'artifacts.title' : 'artifacts.document')
-          : route.path.startsWith('/reviews')
-            ? t('nav.reviews')
-            : name === 'list'
-              ? t(
-                  route.path.startsWith('/notes')
-                    ? 'notes.title'
-                    : 'workspace.list'
-                )
-              : route.path.startsWith('/notes')
-                ? t('workspace.note')
-                : explorer.browseMode
-                  ? t('workspace.file')
-                  : t('nav.changes')
+        : route.name === 'journal'
+          ? t('journal.project.title')
+          : route.path.startsWith('/artifacts')
+            ? t(name === 'list' ? 'artifacts.title' : 'artifacts.document')
+            : route.path.startsWith('/reviews')
+              ? t('nav.reviews')
+              : name === 'list'
+                ? t(
+                    route.path.startsWith('/notes')
+                      ? 'notes.title'
+                      : 'workspace.list'
+                  )
+                : route.path.startsWith('/notes')
+                  ? t('workspace.note')
+                  : explorer.browseMode
+                    ? t('workspace.file')
+                    : t('nav.changes')
   }))
 )
 </script>

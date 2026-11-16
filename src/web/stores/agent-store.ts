@@ -401,7 +401,15 @@ export const useAgentStore = defineStore('agent', () => {
   ): Promise<boolean> {
     const entry = id === null ? undefined : chats.value[id]
     const trimmed = text.trim()
-    if (!entry || trimmed === '' || entry.chat.status !== 'ready') return false
+    if (
+      !entry ||
+      trimmed === '' ||
+      entry.chat.status !== 'ready' ||
+      entry.info.blockedBySessionId ||
+      entry.info.reserved
+    ) {
+      return false
+    }
     entry.error = null
     const context = mergeContext(entry.pendingContext, extraContext)
     const body: AgentPromptRequest = { text: trimmed, context }

@@ -354,9 +354,13 @@ test('full turn: prompt streams a reply and ends with stop, status goes busy →
   assert.deepEqual(statuses, ['ready', 'busy', 'ready'])
   const user = stream.events.find(e => e.event.type === 'user')?.event
   assert.deepEqual(user, { type: 'user', text: 'hello', context: [] })
-  assert.deepEqual(
-    stream.events.map(e => e.id),
-    stream.events.map((_, i) => i + 1)
+  // Journal-only observations consume IDs too; SSE IDs are increasing cursors.
+  const ids = stream.events.map(e => e.id)
+  assert.ok(
+    ids.every(
+      (eventId, index) =>
+        Number.isSafeInteger(eventId) && eventId > (ids[index - 1] ?? 0)
+    )
   )
 })
 
@@ -564,9 +568,27 @@ test('late subscribers and Last-Event-ID reconnects get the missed events withou
   await late.waitFor(events => events.length >= first.events.length)
   assert.deepEqual(late.events, first.events)
 
-  const afterThree = openEvents(t, address, id, 3)
-  await afterThree.waitFor(events => events.length >= first.events.length - 3)
-  assert.deepEqual(afterThree.events, first.events.slice(3))
+  const cursor = first.events[2].id
+  const expected = first.events.filter(event => event.id > cursor)
+  const resumed = openEvents(t, address, id, cursor)
+  await resumed.waitFor(events => events.length >= expected.length)
+  assert.deepEqual(resumed.events, expected)
+
+  // A journal-only cursor must not skip the next visible event.
+  const beforeGap = first.events.find(
+    (event, index) =>
+      first.events[index + 1] && first.events[index + 1].id > event.id + 1
+  )
+  assert.ok(beforeGap)
+  const journalCursor = beforeGap.id + 1
+  const afterJournal = openEvents(t, address, id, journalCursor)
+  const afterJournalExpected = first.events.filter(
+    event => event.id > journalCursor
+  )
+  await afterJournal.waitFor(
+    events => events.length >= afterJournalExpected.length
+  )
+  assert.deepEqual(afterJournal.events, afterJournalExpected)
 })
 
 test('after the server closes, the agent process is gone', async t => {
@@ -932,7 +954,9 @@ test('GET /api/agent/sessions lists the active session so a reloaded page can re
       reviewId: null,
       autoApprove: false,
       error: null,
-      taskIds: []
+      taskIds: [],
+      reserved: false,
+      hasInitialContext: false
     }
   ])
 })

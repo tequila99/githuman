@@ -317,6 +317,7 @@ export class TaskService extends ArtifactDefinitionService<Task> {
       () => {
         const session = this.registry?.get(sessionId)
         if (!session) throw new ArtifactNotFoundError()
+        session.assertWritable()
         const previous = this.options.repository.assignment(sessionId)
         if (previous.version !== input.expectedVersion) {
           throw new ArtifactConflictError('Session task assignment changed.')

@@ -90,11 +90,14 @@ export class ArtifactLifecycleService {
       this.repository,
       now,
       action => this.checkAction(action),
-      id =>
-        id.startsWith('user:') ||
-        Boolean(
-          this.registry?.get(id) && this.registry.get(id)!.status !== 'closed'
-        ),
+      id => {
+        if (id.startsWith('user:')) return true
+        const session = this.registry?.get(id)
+        // A short handoff reservation keeps authorizations; only a successor block ends them.
+        return Boolean(
+          session && session.status !== 'closed' && !session.blockedBySessionId
+        )
+      },
       () => this.registry?.notifyArtifactActionsChanged?.()
     )
     this.jobs = new ArtifactValidationJobsService(this, now)

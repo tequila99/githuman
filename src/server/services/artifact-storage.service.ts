@@ -1,3 +1,5 @@
+import { TaskJournalService } from './task-journal.service.ts'
+import { TaskJournalRepository } from '../repositories/task-journal.repo.ts'
 import type { TurnTaskContext } from './agent/turn-task-context.ts'
 import { ArtifactSearchService } from './artifact-search.service.ts'
 import { ArtifactLifecycleService } from './artifact-lifecycle.service.ts'
@@ -128,6 +130,7 @@ function graphPayload(metadata: ArtifactMetadataInput) {
 }
 
 export class ArtifactStorageService {
+  readonly journal: TaskJournalService
   readonly search: ArtifactSearchService
   readonly lifecycle: ArtifactLifecycleService
   readonly files: ArtifactFilesRepository
@@ -165,6 +168,11 @@ export class ArtifactStorageService {
     }
     this.types = new ArtifactTypeService(definitions)
     this.tasks = new TaskService(definitions)
+    this.journal = new TaskJournalService(
+      this,
+      new TaskJournalRepository(options.db, this.storeId),
+      options.eventBus
+    )
     this.tasks.attachArtifacts(taskId => this.artifactsOfTask(taskId))
     this.graphRepository = new ArtifactGraphRepository(options.db, this.catalog)
     this.graph = new ArtifactGraphService(this)

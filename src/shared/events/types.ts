@@ -12,6 +12,7 @@ export const SERVER_EVENT_TYPES = [
   'comment:deleted',
   'notes:changed',
   'artifacts:changed',
+  'task-journal:changed',
   'files:changed',
   'devices:changed'
 ] as const
