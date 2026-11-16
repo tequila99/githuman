@@ -47,8 +47,9 @@ explicit `taskId` from that response. Changing a task in the UI affects the next
 response; it does not redirect an entry of the response already in progress.
 Validators cannot use these tools. A finished response is a system fact, not a
 claim that the task is complete. System facts have the `system` author and an
-`eventType`: `turn_finished`, `turn_cancelled`, `turn_failed` or
-`handoff_completed`. An ordinary agent response without a task writes one project
+`eventType`: `turn_finished`, `turn_cancelled`, `turn_failed`,
+`handoff_completed` or `handoff_failed`. The journal is append-only, so a handoff that
+fails after its completion fact gets a separate `handoff_failed` fact. An ordinary agent response without a task writes one project
 entry marked **No task**. It retains the same request, visible response and agent
 provenance. Specialized artifact validators never write response events. Events
 are saved when a response finishes, is cancelled or fails; previously unrecorded

@@ -16,5 +16,6 @@ export const JOURNAL_EVENT_TYPES = [
   'turn_finished',
   'turn_cancelled',
   'turn_failed',
-  'handoff_completed'
+  'handoff_completed',
+  'handoff_failed'
 ] as const

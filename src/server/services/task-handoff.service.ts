@@ -459,6 +459,16 @@ export class TaskHandoffService {
           this.repository.handoffOwner(value.id) ===
             this.storage.lifecycle.jobs.ownerId
         ) {
+          if (current.state === 'ready') {
+            // The completion fact is immutable. A new fact corrects the history.
+            this.storage.journal.fact(
+              value.taskId,
+              `handoff-failed:${value.id}`,
+              'handoff_failed',
+              errorMessage(error),
+              { sessionId: target.id }
+            )
+          }
           value.state = 'failed'
           value.error = errorMessage(error)
           this.repository.updateHandoff(value)

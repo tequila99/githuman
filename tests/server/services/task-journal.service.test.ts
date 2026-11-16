@@ -993,4 +993,19 @@ test('a rejected automatic first prompt fails the handoff, releases source and i
   handoffs.confirm(preview.id, preview.digest, USER)
   assert.equal(dispatches, 1)
   assert.equal(registry.get(result.targetSessionId!), undefined)
+  const facts = storage.journal
+    .session({
+      storeId: storage.storeId,
+      sessionId: result.targetSessionId!,
+      limit: 50
+    })
+    .items.filter(row => row.eventType?.startsWith('handoff_'))
+  assert.deepEqual(
+    facts.map(row => row.eventType).sort((a, b) => a!.localeCompare(b!)),
+    ['handoff_completed', 'handoff_failed']
+  )
+  assert.match(
+    facts.find(row => row.eventType === 'handoff_failed')!.body,
+    /First prompt was refused/
+  )
 })

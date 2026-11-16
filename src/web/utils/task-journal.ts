@@ -141,6 +141,8 @@ export function journalIcon(entry: JournalEntry): string {
       return mdiStopCircleOutline
     case 'handoff_completed':
       return mdiSwapHorizontal
+    case 'handoff_failed':
+      return mdiAlertCircleOutline
   }
   return {
     done: mdiCheckCircleOutline,
