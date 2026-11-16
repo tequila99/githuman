@@ -1,3 +1,5 @@
+import { taskJournalRoutes, taskHandoffRoutes } from './routes/task-journal.ts'
+import { TaskHandoffService } from './services/task-handoff.service.ts'
 import { artifactActionRoutes } from './routes/artifact-actions.ts'
 import { artifactTransitionRoutes } from './routes/artifact-transitions.ts'
 import { addressUrl } from '../shared/network/address-url.ts'
@@ -259,6 +261,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     artifacts.lifecycle.jobs.close()
   })
   app.register(artifactDefinitionRoutes, { storage: artifacts })
+  app.register(taskJournalRoutes, { storage: artifacts })
   const artifactMaintenance = new ArtifactMaintenanceService({
     storage: artifacts,
     onError: (error, phase) => {
@@ -318,12 +321,32 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
         return `${addressUrl(WILDCARD_LOOPBACK[address.address] ?? address.address, address.port)}/`
       },
       repositoryPath,
+      onJournalEvent: (turn, eventId, event, redact, provenance) =>
+        artifacts.journal.recordEvent(turn, eventId, event, redact, provenance),
+      onTurnComplete: (turn, outcome, context) =>
+        artifacts.journal.recordTurn(turn, outcome, context),
+      onJournalError: error =>
+        app.log.error({ err: error }, 'Could not save task journal'),
       taskIds: sessionId => artifacts.definitions.assignment(sessionId).taskIds,
       taskAssignment: sessionId => artifacts.definitions.assignment(sessionId)
+    })
+    const handoffs = new TaskHandoffService(
+      artifacts,
+      registry,
+      repositoryPath,
+      actor => actor.id === 'local' || devices.isTrusted(actor.id)
+    )
+    handoffs.setErrorHandler(error =>
+      app.log.error({ err: error }, 'Could not finish task handoff')
+    )
+    app.register(taskHandoffRoutes, { handoffs })
+    app.addHook('onClose', async () => {
+      await handoffs.close()
     })
     agentRegistry = registry
     app.register(artifactAgentRoutes, { storage: artifacts, registry })
     artifacts.tasks.attachSessions(registry)
+    artifacts.journal.attachSessions(registry)
     artifacts.lifecycle.attachSessions(registry)
     app.register(agentRoutes, {
       artifacts,

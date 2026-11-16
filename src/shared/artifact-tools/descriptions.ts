@@ -4,6 +4,12 @@ import type { ArtifactToolSchemas } from './schemas.ts'
 export const ARTIFACT_TOOL_DESCRIPTIONS: Readonly<
   Record<string, string | undefined>
 > = {
+  'sessions.journal_list':
+    'Read the persisted journal of an exact session across all tasks, including unassigned and closed chats. Use storeId/sessionId/throughSeq from a handoff, then nextBeforeSeq as beforeSeq to read older pages. Entries are newest first, duplicate task copies are removed. Does not change task selection.',
+  'tasks.journal_list':
+    'Read task decisions and next steps with stable pagination. Does not select a task.',
+  'tasks.journal_append':
+    'Save a concise decision, completed work, open question or next step. Read tasks.get_context first and use its turnId; taskId must belong to the effective response. Correct an earlier entry using supersedesEntryId. Never infer task completion from a finished response. Does not change selection.',
   'tasks.list':
     'List tasks in this store, including closed tasks. Resolve the requested identity before activation; task names are not unique.',
   'tasks.get':
@@ -27,9 +33,9 @@ export const ARTIFACT_TOOL_DESCRIPTIONS: Readonly<
   'validations.manifest':
     'Read all manifest pages. Each artifact has contentRequired. When it is true, read the full content. When it is false, the artifact is metadata context and reading its content is optional. All artifacts remain subject to existence and version checks.',
   'validations.read':
-    'Validator only. Read any assigned manifest artifact sequentially, including optional context. Content outside the manifest is forbidden. Only contentRequired artifacts count toward required coverage.',
+    'Validator only. Read any assigned manifest artifact sequentially, including optional context. Content outside the manifest is forbidden. Only contentRequired artifacts count toward required coverage. Read responses include server-calculated progress. Manifest bytes and estimated pages show the volume at chunkBytes per call.',
   'validations.read_next':
-    'Validator only. Return the next unread required content of the assigned manifest in order, up to 24 KB, several small documents per call. Call it until remaining is 0 before validations.submit. Each item gives key, offset, text, totalBytes and nextOffset. When the affected set grew during the job, the response also has changes: the new manifest generation with added and changed artifact metadata and removed IDs. Check them together with the new content.',
+    'Validator only. Return the next unread required content of the assigned manifest in order, up to 24 KB, several small documents per call. Call it until remaining is 0 before validations.submit. Each item gives key, offset, text, totalBytes and nextOffset. The response progress counts unique required bytes and completed required documents; optional content and rereads do not increase it. When the affected set grew during the job, the response also has changes: the new manifest generation with added and changed artifact metadata and removed IDs. Check them together with the new content.',
   'validations.report_text':
     'Read the Markdown report text a validator attached to a validation, in chunks. Call it with offset from nextOffset until nextOffset is null. A validation without text returns not found; the structured report is in validations.report.',
   'validations.create_report':

@@ -379,7 +379,9 @@ test('agent routes return whole bodies', async t => {
     reviewId: null,
     autoApprove: false,
     error: null,
-    taskIds: []
+    taskIds: [],
+    reserved: false,
+    hasInitialContext: false
   })
   const broken = await start({
     presetId: 'broken',
@@ -394,7 +396,9 @@ test('agent routes return whole bodies', async t => {
     reviewId: review.id,
     autoApprove: false,
     error: broken.error,
-    taskIds: []
+    taskIds: [],
+    reserved: false,
+    hasInitialContext: false
   })
   assert.equal(typeof broken.error, 'string')
   assert.deepEqual((await app.inject('/api/agent/sessions')).json(), [

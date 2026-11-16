@@ -3,6 +3,7 @@ import type { ArtifactActor } from '../../shared/artifacts/types.ts'
 import type { Task, ArtifactType } from '../../shared/tasks/types.ts'
 import { ArtifactConflictError } from '../errors/artifacts.ts'
 import { normalizeStoredTask } from '../../shared/tasks/normalize.ts'
+import { assertRequestIdFree } from './request-ids.ts'
 
 export type Definition = Task | ArtifactType
 export interface DefinitionEvent<T> {
@@ -111,6 +112,7 @@ export class TaskRepository {
   }
   // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- The command owner knows the stored result type.
   replay<T>(requestId: string, hash: string): { result: T } | undefined {
+    this.assertJournalRequest(requestId)
     if (
       this.db
         .prepare(
@@ -154,7 +156,17 @@ export class TaskRepository {
       .prepare('INSERT INTO artifact_definition_operations VALUES(?,?,?,?)')
       .run(this.storeId, requestId, hash, JSON.stringify(result))
   }
+  private assertJournalRequest(requestId: string): void {
+    assertRequestIdFree(
+      this.db,
+      this.storeId,
+      requestId,
+      ['task_journal_operations', 'task_handoff_operations'],
+      'Request identifier belongs to a task journal operation.'
+    )
+  }
   assertArtifactRequest(requestId: string): void {
+    this.assertJournalRequest(requestId)
     if (
       this.db
         .prepare(

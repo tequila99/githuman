@@ -11,6 +11,13 @@ const validation: ArtifactValidationView = {
   changeSetId: 'proposal',
   version: 1,
   state: 'pass',
+  progress: {
+    readBytes: 100,
+    totalBytes: 100,
+    readRequired: 1,
+    totalRequired: 1,
+    remainingRequired: 0
+  },
   validatorSessionId: 'validator',
   manifestDigest: 'manifest',
   changeDigest: 'change',

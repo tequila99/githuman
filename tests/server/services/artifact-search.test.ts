@@ -238,6 +238,17 @@ test('any-tag mode and creation range combine with text search by AND', t => {
     1
   )
   assert.throws(() => search.search({ filters: { createdFrom: 'nope' } }))
+  for (const createdFrom of [
+    '2026-02-30T00:00:00Z',
+    '2026-11-12T24:00:00Z',
+    '2026-11-12'
+  ]) {
+    assert.throws(() => search.search({ filters: { createdFrom } }), /time/i)
+  }
+  assert.deepEqual(
+    ids({ createdFrom: '2000-01-01T03:00:00+03:00' }),
+    ids({ createdFrom: past })
+  )
 })
 test('an explicit All status filter includes every status in catalog and text search without changing the default', t => {
   const { create, search } = setup(t)

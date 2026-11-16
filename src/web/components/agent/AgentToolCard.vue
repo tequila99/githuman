@@ -14,6 +14,8 @@ import {
 import { useI18n } from 'vue-i18n'
 import type { ChatItem } from '@/utils/agent-chat'
 import AgentDiffView from './AgentDiffView.vue'
+import ToolContentView from './ToolContentView.vue'
+import { shallowRef } from 'vue'
 
 // Identify tool kinds without repeating icons in the template.
 const KIND_ICON: Record<string, string> = {
@@ -36,7 +38,8 @@ const STATUS_COLOR = {
   failed: 'negative'
 } as const
 
-defineProps<{ item: Extract<ChatItem, { kind: 'tool' }> }>()
+const props = defineProps<{ item: Extract<ChatItem, { kind: 'tool' }> }>()
+const expanded = shallowRef(props.item.diffs.length > 0)
 
 const { t } = useI18n()
 </script>
@@ -47,7 +50,7 @@ const { t } = useI18n()
     dense-toggle
     switch-toggle-side
     class="app-icon-expansion agent-tool"
-    :default-opened="item.diffs.length > 0"
+    v-model="expanded"
   >
     <template #header>
       <q-item-section avatar class="agent-tool__icon">
@@ -96,11 +99,11 @@ const { t } = useI18n()
         {{ path }}
       </div>
       <AgentDiffView v-for="d in item.diffs" :key="d.path" :diff="d" />
-      <template v-if="item.output">
+      <template v-if="expanded && item.output !== undefined">
         <div class="agent-tool__caption text-grey-6">{{
           t('agent.tool.output')
         }}</div>
-        <pre class="agent-tool__output text-mono">{{ item.output }}</pre>
+        <ToolContentView :source="item.output" kind="chat" />
       </template>
     </div>
   </q-expansion-item>
@@ -133,12 +136,5 @@ const { t } = useI18n()
 .agent-tool__caption,
 .agent-tool__body {
   font-size: 11px;
-}
-.agent-tool__output {
-  margin: 0;
-  max-height: 200px;
-  overflow: auto;
-  font-size: 11px;
-  white-space: pre-wrap;
 }
 </style>

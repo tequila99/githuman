@@ -1,3 +1,4 @@
+import { parseIsoTimestamp, toIsoString } from '../../shared/utils/date.ts'
 import {
   MAX_SEARCH_QUERY_CODEPOINTS,
   MAX_SEARCH_TOKENS,
@@ -134,13 +135,18 @@ export class ArtifactSearchService {
         `Search accepts at most ${MAX_SEARCH_QUERY_CODEPOINTS} characters and ${MAX_SEARCH_TOKENS} tokens.`
       )
     }
-    for (const bound of [
-      input.filters?.createdFrom,
-      input.filters?.createdTo
-    ]) {
-      if (bound !== undefined && Number.isNaN(Date.parse(bound))) {
-        throw new ArtifactInputError('Invalid creation time filter.')
+    if (input.filters) {
+      const filters = { ...input.filters }
+      for (const key of ['createdFrom', 'createdTo'] as const) {
+        const bound = filters[key]
+        if (bound === undefined) continue
+        const parsed = parseIsoTimestamp(bound)
+        if (parsed === null) {
+          throw new ArtifactInputError('Invalid creation time filter.')
+        }
+        filters[key] = toIsoString(parsed)
       }
+      input = { ...input, filters }
     }
     if (query.includes('\u0000')) {
       throw new ArtifactInputError('Search query must not contain NUL.')

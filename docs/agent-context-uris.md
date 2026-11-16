@@ -124,3 +124,17 @@ UTF-8 до `Document body`. Расчёт: 65 536 байт JSON входных me
 не открывает её. После отмены `turnId` равен `null`, активация недоступна.
 Снимок не является новой частью публичного ArtifactSchema и не предоставляет
 внешним native CLI/IDE доступ к истории или автоматическое определение задачи.
+
+## Task handoff snapshots
+
+A manually confirmed handoff adds a server-owned snapshot to the successor's
+first accepted user prompt, after the user text. It uses the same block as other
+context items: an embedded resource
+`githuman://task-handoff/<storeId>/<handoffId>` (`text/markdown`) when the agent
+supports embedded context, otherwise a fenced text block. The URI names the
+snapshot; it cannot be read again and is not a new public `ContextItem` kind.
+Task, journal and artifact metadata are snapshots; the Git capture can be
+incomplete and is not atomic. The snapshot marks its content as data, not
+instructions. The complete block is bounded at 64 KiB UTF-8; each section shows
+how many entries or artifacts it omits. Read the full current task, journal and
+artifacts through their MCP tools. See [Task journal and handoff](task-journal.md).

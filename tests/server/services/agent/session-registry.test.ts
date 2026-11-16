@@ -6,6 +6,7 @@ import {
   createSessionRegistry,
   type AgentStreamMessage
 } from '../../../../src/server/services/agent/session-registry.ts'
+import type { JournalProvenance } from '../../../../src/shared/task-journal/types.ts'
 import type { AgentPreset } from '../../../../src/shared/agents/types.ts'
 
 const preset: AgentPreset = {
@@ -163,4 +164,92 @@ test('retire revokes the session: its open artifact requests close and the list 
   assert.equal(closed, 1)
   assert.ok(registry.get(session.id))
   assert.equal(registry.list()[0]?.retired, true)
+})
+
+test('journal callback captures events independently of replay', async t => {
+  const captured: {
+    turnId: string
+    event: unknown
+    provenance?: JournalProvenance
+  }[] = []
+  const registry = createSessionRegistry({
+    presets: [preset],
+    repositoryPath: process.cwd(),
+    bufferLimit: 1,
+    onJournalEvent: (turn, _eventId, event, _redact, provenance) =>
+      captured.push({ turnId: turn.turnId, event, provenance })
+  })
+  t.after(() => registry.closeAll())
+  const session = registry.create('fake', null)
+  await untilReady(registry, session.id)
+  session.prompt([{ type: 'text', text: 'hello' }], { text: 'hello' })
+  const deadline = Date.now() + 10000
+  while (session.status === 'busy') {
+    assert.ok(Date.now() < deadline)
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+  assert.ok(
+    captured.every(
+      row =>
+        row.provenance?.agentName === 'Fake' && row.provenance.model === 'm1'
+    )
+  )
+  assert.ok(
+    captured.every(
+      row => !('prompt' in row.provenance!) && !('response' in row.provenance!)
+    )
+  )
+  assert.ok(captured.length > session.replay(0).envelopes.length)
+  assert.equal(new Set(captured.map(row => row.turnId)).size, 1)
+  assert.ok(
+    captured.some(row => (row.event as { type: string }).type === 'request')
+  )
+  assert.ok(
+    captured.some(row => (row.event as { type: string }).type === 'message')
+  )
+})
+
+test('trajectory records automatic permission request before its answer and tool outcome', async t => {
+  const captured: string[] = []
+  const registry = createSessionRegistry({
+    presets: [preset],
+    repositoryPath: process.cwd(),
+    onJournalEvent: (_turn, _eventId, event) =>
+      captured.push(JSON.stringify(event))
+  })
+  t.after(() => registry.closeAll())
+  const session = registry.create('fake', null)
+  await untilReady(registry, session.id)
+  session.setAutoApprove(true)
+  session.prompt([{ type: 'text', text: 'edit' }], { text: 'edit' })
+  const deadline = Date.now() + 10000
+  while (session.status === 'busy') {
+    assert.ok(Date.now() < deadline)
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+  const request = captured.findIndex(row => row.includes('"type":"permission"'))
+  const approved = captured.findIndex(row =>
+    row.includes('"type":"auto-approved"')
+  )
+  const answer = captured.findIndex(row =>
+    row.includes('"type":"permission_answer"')
+  )
+  assert.ok(request >= 0 && approved > request && answer > approved)
+  assert.ok(captured.some(row => row.includes('"status":"completed"')))
+  const count = captured.length
+  const validator = registry.create(
+    'fake',
+    null,
+    undefined,
+    undefined,
+    undefined,
+    'validation'
+  )
+  await untilReady(registry, validator.id)
+  validator.prompt([{ type: 'text', text: 'hello' }], { text: 'hello' })
+  while (validator.status === 'busy') {
+    assert.ok(Date.now() < deadline)
+    await new Promise(resolve => setTimeout(resolve, 20))
+  }
+  assert.equal(captured.length, count)
 })

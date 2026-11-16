@@ -8,6 +8,7 @@ import {
   mdiEyeOutline,
   mdiFileDocumentOutline,
   mdiMonitorCellphone,
+  mdiNotebookOutline,
   mdiSwapHorizontal,
   mdiWeatherNight,
   mdiWhiteBalanceSunny
@@ -73,6 +74,12 @@ const { version } = storeToRefs(useAppInfoStore())
             ><q-icon class="app-icon-neutral" :name="mdiClipboardTextOutline"
           /></q-item-section>
           <q-item-section>{{ t('tasks.title') }}</q-item-section>
+        </q-item>
+        <q-item v-ripple clickable :to="{ path: '/journal' }">
+          <q-item-section avatar
+            ><q-icon class="app-icon-neutral" :name="mdiNotebookOutline"
+          /></q-item-section>
+          <q-item-section>{{ t('journal.project.title') }}</q-item-section>
         </q-item>
         <q-item v-ripple clickable :to="{ path: '/artifacts' }">
           <q-item-section avatar

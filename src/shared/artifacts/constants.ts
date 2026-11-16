@@ -21,6 +21,8 @@ export const MAX_ARTIFACT_BODY_BYTES = Math.floor(1.9 * 1024 * 1024)
 export const MAX_ARTIFACT_METADATA_BYTES = 64 * 1024
 // Keep content responses small enough for later MCP transport.
 export const MAX_ARTIFACT_CHUNK_BYTES = 64 * 1024
+// Keep validator tool output below model output warnings (ADR 0120).
+export const VALIDATION_CHUNK_BYTES = 24 * 1024
 // Use the same normal query size for document and definition pages.
 export const DEFAULT_ARTIFACT_PAGE_SIZE = 50
 // Bound catalog and history pages.

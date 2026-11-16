@@ -1,4 +1,5 @@
 import { artifactBody } from '../../shared/utils/artifact-body.ts'
+import { utf8Length } from '../../shared/utils/utf8-length.ts'
 import { artifactsApi } from '@/api/artifacts'
 import type { Artifact } from '@/api/types'
 
@@ -34,14 +35,14 @@ export async function loadArtifactBody(
     }
     text += chunk.text
     const next = chunk.nextOffset
-    const bytes = new TextEncoder().encode(chunk.text).length
+    const bytes = utf8Length(chunk.text)
     if (next === null) break
     if (next !== offset + bytes || next <= offset || next >= metadata.bytes) {
       throw new ArtifactContentError('Invalid artifact content continuation.')
     }
     offset = next
   } while (offset < metadata.bytes)
-  if (new TextEncoder().encode(text).length !== metadata.bytes) {
+  if (utf8Length(text) !== metadata.bytes) {
     throw new ArtifactContentError('Incomplete artifact content.')
   }
   return artifactBody(text, metadata.bodyStartLine)

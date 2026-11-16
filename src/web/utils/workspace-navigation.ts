@@ -23,9 +23,10 @@ export function workspacePanes(
   route: WorkspaceRoute,
   agent: boolean
 ): WorkspacePane[] {
-  const panes: WorkspacePane[] = route.path.startsWith('/reviews')
-    ? ['list']
-    : ['list', 'content']
+  const panes: WorkspacePane[] =
+    route.path.startsWith('/reviews') || route.name === 'journal'
+      ? ['list']
+      : ['list', 'content']
   if (agent) panes.push('agent')
   return panes
 }

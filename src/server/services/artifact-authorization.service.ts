@@ -236,6 +236,17 @@ export class ArtifactAuthorizationService {
       expiresAt: value.pending.expiresAt
     }
   }
+  revokeSession(sessionId: string): void {
+    const ids = new Set(
+      [...this.pending.values()]
+        .filter(value => value.sessionId === sessionId)
+        .map(value => value.id)
+    )
+    for (const grant of this.grants.values()) {
+      if (grant.sessionId === sessionId) ids.add(grant.pendingActionId)
+    }
+    for (const id of ids) this.revoke(id)
+  }
   consume(id: string): void {
     this.repository.authorizationEvent(id, 'consumed', { at: this.now() })
   }

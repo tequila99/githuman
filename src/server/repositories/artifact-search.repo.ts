@@ -280,11 +280,11 @@ export class ArtifactSearchRepository {
     // Stored timestamps are UTC ISO strings, so text comparison keeps time order.
     if (filters.createdFrom) {
       where.push("json_extract(c.snapshot_json,'$.createdAt') >= ?")
-      params.push(new Date(filters.createdFrom).toISOString())
+      params.push(filters.createdFrom)
     }
     if (filters.createdTo) {
       where.push("json_extract(c.snapshot_json,'$.createdAt') <= ?")
-      params.push(new Date(filters.createdTo).toISOString())
+      params.push(filters.createdTo)
     }
     const sort =
       input.sort === 'createdAt'

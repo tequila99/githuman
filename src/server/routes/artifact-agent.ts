@@ -209,6 +209,27 @@ export async function artifactAgentRoutes(
       )
     ],
     [
+      'sessions.journal_list',
+      checked(ArtifactToolSchemas['sessions.journal_list'], p =>
+        storage.journal.session(p)
+      )
+    ],
+    [
+      'tasks.journal_list',
+      checked(
+        ArtifactToolSchemas['tasks.journal_list'],
+        ({ taskId, ...query }) => storage.journal.list(taskId, query)
+      )
+    ],
+    [
+      'tasks.journal_append',
+      checked(
+        ArtifactToolSchemas['tasks.journal_append'],
+        ({ taskId, turnId, ...input }, actor) =>
+          storage.journal.append(taskId, input, actor, turnId)
+      )
+    ],
+    [
       'tasks.list',
       checked(ArtifactToolSchemas['tasks.list'], p =>
         storage.tasks.listByState(

@@ -1,3 +1,7 @@
+import { isCalendarDate } from '../../shared/utils/date.ts'
+
+export { isCalendarDate } from '../../shared/utils/date.ts'
+
 // Use one display format across the interface, in the browser locale and time zone.
 const DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   day: '2-digit',
@@ -13,9 +17,6 @@ const TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit'
 })
 
-// Calendar inputs use a fixed format independent of the display locale.
-const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
-
 export function formatDateTime(value: string | number): string {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? '—' : DATE_FORMATTER.format(date)
@@ -24,15 +25,6 @@ export function formatDateTime(value: string | number): string {
 export function formatTime(value: string | number): string {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? '—' : TIME_FORMATTER.format(date)
-}
-
-export function isCalendarDate(value: string): boolean {
-  if (!CALENDAR_DATE_PATTERN.test(value)) return false
-  const date = new Date(value + 'T00:00:00Z')
-  // Reject invalid dates and days that Date silently rolls into the following month.
-  return (
-    !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
-  )
 }
 
 function localDay(value: string, end: boolean): string {

@@ -404,6 +404,39 @@ test(
     })
     assert.equal(otherPost.statusCode, 401)
 
+    // This real session key reaches the MCP bridge but never the user transition routes.
+    const artifactId = randomUUID()
+    const transitionRoutes = [
+      ['GET', `/api/artifacts/${artifactId}/transitions`, undefined],
+      [
+        'POST',
+        `/api/artifacts/${artifactId}/transition-previews`,
+        { targetStatus: 'archived' }
+      ],
+      ['GET', `/api/artifacts/${artifactId}/transition-operations`, undefined],
+      [
+        'POST',
+        '/api/artifact-transition-operations',
+        { previewId: artifactId, presetId: 'fake', requestId: 'key-only' }
+      ],
+      ['GET', `/api/artifact-transition-operations/${artifactId}`, undefined],
+      [
+        'POST',
+        `/api/artifact-transition-operations/${artifactId}/cancel`,
+        undefined
+      ]
+    ] as const
+    for (const [method, url, payload] of transitionRoutes) {
+      const denied = await app.inject({
+        method,
+        url,
+        headers: remote,
+        ...remoteOptions,
+        ...(payload ? { payload } : {})
+      })
+      assert.equal(denied.statusCode, 401, `${method} ${url}: ${denied.body}`)
+    }
+
     // The server sets the actor; the request cannot override it.
     for (const [operation, payload] of [
       [
@@ -966,3 +999,30 @@ test(
     )
   }
 )
+
+test('MCP reads an exact persisted session journal without a selected task', async t => {
+  const { app, storage } = setup(t)
+  const { authorization } = await startSession(app)
+  storage.journal.fact(null, 'source-1', 'agent_event', 'Saved source event', {
+    sessionId: 'closed-source'
+  })
+  storage.journal.fact(null, 'foreign-1', 'agent_event', 'Foreign event', {
+    sessionId: 'closed-source-other'
+  })
+  const read = await app.inject({
+    method: 'POST',
+    url: '/api/agent/artifacts/sessions.journal_list',
+    headers: { authorization },
+    payload: { storeId: storage.storeId, sessionId: 'closed-source' }
+  })
+  assert.equal(read.statusCode, 200, read.body)
+  assert.equal(read.json().items.length, 1)
+  assert.equal(read.json().items[0].body, 'Saved source event')
+  const wrongStore = await app.inject({
+    method: 'POST',
+    url: '/api/agent/artifacts/sessions.journal_list',
+    headers: { authorization },
+    payload: { storeId: 'wrong', sessionId: 'closed-source' }
+  })
+  assert.equal(wrongStore.statusCode, 400)
+})

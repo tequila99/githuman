@@ -107,3 +107,7 @@ export type ArtifactMetadataExport = Static<
 export type ArtifactExportFormat = Static<
   typeof import('./schemas.ts').ArtifactExportQuery
 >['format']
+
+export type ArtifactValidationProgress = Static<
+  typeof import('./schemas.ts').ArtifactValidationProgressSchema
+>

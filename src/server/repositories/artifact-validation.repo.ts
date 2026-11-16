@@ -3,7 +3,8 @@ import type {
   Artifact,
   ArtifactHistoricalChangeSet,
   ArtifactValidationReport,
-  ArtifactStoredChangeSet
+  ArtifactStoredChangeSet,
+  ArtifactValidationProgress
 } from '../../shared/artifacts/types.ts'
 import {
   artifactLeaseBusyError,
@@ -63,6 +64,7 @@ export interface StoredValidation {
   submissionDigest?: string
   eventKind?: string
   readCoverage?: { key: string; bytes: number }[]
+  progress?: ArtifactValidationProgress
   metrics?: ValidationMetrics
   /** Manifest generation; a rebase of a running validation increments it (ADR 0121). */
   generation?: number
@@ -141,6 +143,14 @@ export class ArtifactValidationRepository {
         'INSERT INTO artifact_validation_current VALUES(?,?,?) ON CONFLICT(store_id,id) DO UPDATE SET payload_json=excluded.payload_json'
       )
       .run(this.storeId, value.id, payload)
+  }
+  /** Updates the current row only: progress writes must not grow the event log. */
+  updateCurrent(value: StoredValidation): void {
+    this.db
+      .prepare(
+        'UPDATE artifact_validation_current SET payload_json=? WHERE store_id=? AND id=?'
+      )
+      .run(JSON.stringify(value), this.storeId, value.id)
   }
   reportText(id: string): string | undefined {
     const row = this.db

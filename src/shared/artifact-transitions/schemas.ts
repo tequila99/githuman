@@ -1,7 +1,10 @@
 import { Type, type TLiteral } from '@sinclair/typebox'
 import { UUID_PATTERN_SOURCE } from '../utils/is-uuid.ts'
 import { Nullable } from '../utils/schemas.ts'
-import { ArtifactStatusSchema } from '../artifacts/schemas.ts'
+import {
+  ArtifactStatusSchema,
+  ArtifactValidationProgressSchema
+} from '../artifacts/schemas.ts'
 import { TRANSITION_STAGES } from './constants.ts'
 
 const UuidSchema = Type.String({
@@ -151,6 +154,7 @@ export const ArtifactTransitionOperationSchema = Type.Object(
       Type.Integer({ description: 'Immutable proposal version.' })
     ),
     validationId: Nullable(UuidSchema),
+    validationProgress: Type.Optional(ArtifactValidationProgressSchema),
     verdict: Nullable(
       Type.String({ description: 'Validator verdict when known.' })
     ),

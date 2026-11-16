@@ -2,6 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   renderMarkdown,
+  markdownText,
   sameMarkdownContent,
   startsLikeListMarker,
   hasUnsupportedMarkdownImages,
@@ -287,4 +288,32 @@ test('artifact rendering blocks even managed note images', () => {
   const html = renderMarkdown(source, { disableImages: true })
   assert.equal(html.includes('<img'), false)
   assert.ok(html.includes('secret'))
+})
+
+test('Markdown previews keep visible words and code without formatting or link destinations', () => {
+  const source = [
+    '# **Heading**',
+    '',
+    '> *Quoted* and ~~old~~ with `file_name.ts`.',
+    '',
+    '- [Read **this**][ref]',
+    '- ![A diagram](https://example.com/image.png)',
+    '',
+    '```ts',
+    'const pattern = "**literal**"',
+    '```',
+    '',
+    '[ref]: https://example.com "Link title"'
+  ].join('\n')
+  assert.equal(
+    markdownText(source),
+    'Heading Quoted and old with file_name.ts. Read this A diagram const pattern = "**literal**"'
+  )
+  assert.equal(
+    markdownText('a**bold**b &amp; \\*literal\\*'),
+    'aboldb & *literal*'
+  )
+  assert.equal(markdownText('one\ntwo  \nthree'), 'one two three')
+  assert.equal(markdownText('| A | B |\n|---|---|\n| C | D |'), 'A B C D')
+  assert.equal(markdownText('---'), '')
 })
