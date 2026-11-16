@@ -165,6 +165,15 @@ function seed() {
 }
 
 seed()
+writeFileSync(
+  join(root, '.githuman/ght-agents.json'),
+  JSON.stringify({
+    'e2e-journal': {
+      command: process.execPath,
+      args: [join(import.meta.dirname, '../server/fixtures/fake-acp-agent.ts')]
+    }
+  })
+)
 const server = spawn(
   process.execPath,
   [

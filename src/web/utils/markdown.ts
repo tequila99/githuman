@@ -179,6 +179,34 @@ export function renderMarkdown(source: string, env: RenderEnv = {}): string {
   }
 }
 
+/** Extract visible text without building HTML or starting Markdown UI effects. */
+export function markdownText(source: string): string {
+  const parts: string[] = []
+  function visit(tokens: Token[]) {
+    for (const token of tokens) {
+      if (token.children) {
+        visit(token.children)
+      } else if (
+        token.type === 'text' ||
+        token.type === 'code_inline' ||
+        token.type === 'code_block' ||
+        token.type === 'fence'
+      ) {
+        parts.push(token.content)
+      }
+      if (
+        token.type === 'softbreak' ||
+        token.type === 'hardbreak' ||
+        (token.block && token.nesting !== 1)
+      ) {
+        parts.push(' ')
+      }
+    }
+  }
+  visit(md.parse(source, {}))
+  return parts.join('').replace(/\s+/g, ' ').trim()
+}
+
 /** Read fences from the parser so preview identities include blocks that failed to render. */
 export function extractDiagramSources(source: string): string[] {
   return md

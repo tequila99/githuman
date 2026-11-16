@@ -46,6 +46,18 @@ function configOptions(): acp.SessionConfigOption[] {
       type: 'boolean',
       currentValue: settings.fast
     },
+    ...(process.env.FAKE_THOUGHT_LEVEL
+      ? [
+          {
+            id: 'reasoning_effort',
+            name: 'Reasoning effort',
+            category: 'thought_level',
+            type: 'select' as const,
+            currentValue: process.env.FAKE_THOUGHT_LEVEL,
+            options: [{ value: process.env.FAKE_THOUGHT_LEVEL, name: 'High' }]
+          }
+        ]
+      : []),
     ...(withTurbo
       ? [
           {
@@ -127,6 +139,28 @@ const app = acp
         }
       })
 
+    if (text.startsWith('json-preview:')) {
+      const output = JSON.stringify({
+        marker: text,
+        html: '<img src=x onerror="alert(1)">',
+        items: [1, 2, 3]
+      })
+      await ctx.client.notify(acp.methods.client.session.update, {
+        sessionId,
+        update: {
+          sessionUpdate: 'tool_call',
+          toolCallId: 'json-preview',
+          title: 'JSON preview tool',
+          kind: 'execute',
+          status: 'completed',
+          content: [
+            { type: 'content', content: { type: 'text', text: output } }
+          ],
+          rawOutput: { result: { content: [{ type: 'text', text: output }] } }
+        }
+      })
+      return { stopReason: 'end_turn' }
+    }
     if (text.startsWith('crash')) {
       await say('about to crash')
       process.exit(3)

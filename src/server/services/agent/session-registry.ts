@@ -48,6 +48,8 @@ export interface AgentSessionRegistry {
   notifyTasksChanged: () => void
   notifyArtifactActionsChanged?: () => void
   listPresets: () => AgentPresetInfo[]
+  /** Whether create() can start one more chat, evicting a retired validator if needed. */
+  hasFreeSlot: () => boolean
   /**
    * Registers a session and starts its agent in the background: the session is
    * `starting` until the handshake is done, and `closed` (with `error`) if it fails.
@@ -86,6 +88,9 @@ export function createSessionRegistry(options: {
   taskAssignment?: (sessionId: string) => { version: number; taskIds: string[] }
   artifactUrl?: () => string | undefined
   connections?: DeviceConnections
+  onJournalEvent?: import('./agent-session.ts').AgentSessionOptions['onJournalEvent']
+  onTurnComplete?: import('./agent-session.ts').AgentSessionOptions['onTurnComplete']
+  onJournalError?: (error: unknown) => void
 }): AgentSessionRegistry {
   const sessions = new Map<string, AgentSession>()
   const unsubscribeSession = new Map<string, () => void>()
@@ -155,12 +160,21 @@ export function createSessionRegistry(options: {
     retired.delete(id)
   }
 
+  function releaseSource(targetId: string): void {
+    for (const session of sessions.values()) {
+      if (session.blockedBySessionId === targetId) {
+        session.setBlockedBy(undefined)
+      }
+    }
+  }
+
   function closeSession(id: string): boolean {
     const session = sessions.get(id)
     if (!session) {
       return false
     }
     session.close()
+    releaseSource(id)
     drop(id)
     broadcast({ type: 'sessions' })
     return true
@@ -185,7 +199,7 @@ export function createSessionRegistry(options: {
         return undefined
       }
       const id = keys.get(sha256Hex(authorization.slice(7)))
-      if (!id || sessions.get(id)?.status === 'closed') return undefined
+      if (!id || !sessions.get(id)?.canUseTools) return undefined
       return id
     },
     trackArtifactRequest(id, close) {
@@ -209,6 +223,7 @@ export function createSessionRegistry(options: {
     notifyTasksChanged: () => broadcast({ type: 'sessions' }),
     notifyArtifactActionsChanged: () => broadcast({ type: 'artifact-actions' }),
     listPresets: () => options.presets.map(describePreset),
+    hasFreeSlot: () => sessions.size < MAX_AGENT_SESSIONS || retired.size > 0,
     create(presetId, reviewId, name, deviceId, permissionPolicy, kind) {
       const preset = options.presets.find(p => p.id === presetId)
       if (!preset) {
@@ -228,6 +243,10 @@ export function createSessionRegistry(options: {
       }
       const session = new AgentSession({
         preset,
+        onJournalEvent: options.onJournalEvent,
+        onTurnComplete: options.onTurnComplete,
+        onJournalError: options.onJournalError,
+        onAccessChanged: () => broadcast({ type: 'sessions' }),
         permissionPolicy,
         mcpServers,
         // Open chats are told apart by name: a taken one gets "(1)", "(2)", …
@@ -256,6 +275,8 @@ export function createSessionRegistry(options: {
             envelope.event.status === 'closed'
           ) {
             revoke(session.id)
+            releaseSource(session.id)
+            broadcast({ type: 'sessions' })
           }
           broadcast({
             type: 'event',

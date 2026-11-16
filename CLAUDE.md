@@ -130,6 +130,8 @@ pnpm run build        # tsc (server) + quasar build (web) → dist/
   через GITHUMAN_PI_SPIKE_COMMAND; обычный pnpm test не требует pi.
   Матрица закреплённых runtime: pnpm run test:pi-matrix --install.
   Ручной прогон с реальной моделью пользователь выполняет самостоятельно.
+- **Журнал и передача задачи** (этап 0125, #142): `TaskJournalService` хранит append-only записи отдельно от каталога; журнал не меняет validationEpoch. `TaskHandoffService` готовит bounded snapshot и обычный чат с назначением до первого prompt. Источник read-only до закрытия/падения непосредственного преемника; запрет обеспечивает AgentSession, не UI. Первый prompt отправляет пользователь, snapshot привязан к задаче и назначению. Повторы confirm не запускают второго агента. См. [docs/task-journal.md](docs/task-journal.md).
+- **Передача по сессии** (ADR 0134): единственная кнопка handoff — рядом с composer. Задача не обязательна; наследуется полный набор назначений. Снимок содержит первый/последний запрос и последние уникальные события сессии, дочитывание — `sessions.journal_list` с точными storeId/sessionId/throughSeq. Server-owned английский первый prompt автоматически суммаризирует и продолжает работу; повтор confirm его не пересылает. История источника сверяется перед commit. Legacy task-based API сохраняет ручной первый prompt.
 - **MCP-активация задачи** (ADR 0106): `tasks.create` только создаёт задачу;
   `tasks.activate`/`tasks.create_and_activate` атомарно заменяют назначение
   чата на `[id]` и frozen-контекст текущего ответа после commit без `await`.

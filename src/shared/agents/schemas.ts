@@ -255,6 +255,22 @@ export const AgentSessionInfoSchema = Type.Object(
           'Persistent task identifiers assigned by the server registry.'
       })
     ),
+    blockedBySessionId: Type.Optional(
+      Type.String({
+        description:
+          'Successor chat that temporarily makes this chat read-only.'
+      })
+    ),
+    reserved: Type.Optional(
+      Type.Boolean({
+        description: 'Handoff preparation temporarily blocks new commands.'
+      })
+    ),
+    hasInitialContext: Type.Optional(
+      Type.Boolean({
+        description: 'A handoff context awaits the first user prompt.'
+      })
+    ),
     presetId: Type.String({ description: 'Preset of the agent.' }),
     name: Type.String({ description: 'Chat name in the UI.' }),
     kind: Type.Optional(AgentSessionKindSchema),

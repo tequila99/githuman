@@ -25,6 +25,15 @@ const notifyError = useNotifyError()
 const store = useAgentStore()
 
 const entry = computed(() => store.chats[props.chatId])
+const locked = computed(
+  () =>
+    Boolean(entry.value?.info.blockedBySessionId) ||
+    Boolean(entry.value?.info.reserved)
+)
+const successor = computed(() => {
+  const id = entry.value?.info.blockedBySessionId
+  return id ? (store.chats[id]?.info.name ?? id) : ''
+})
 const chat = computed(() => entry.value?.chat)
 const preset = computed(() =>
   store.presets.find(p => p.id === entry.value?.info.presetId)
@@ -33,7 +42,10 @@ const busy = computed(() => chat.value?.status === 'busy')
 const lastItem = computed(() => chat.value?.items.at(-1))
 // After a failed turn the user usually just wants the agent to go on.
 const canContinue = computed(
-  () => lastItem.value?.kind === 'error' && chat.value?.status === 'ready'
+  () =>
+    !locked.value &&
+    lastItem.value?.kind === 'error' &&
+    chat.value?.status === 'ready'
 )
 
 const itemCount = computed(() => chat.value?.items.length ?? 0)
@@ -123,6 +135,22 @@ async function resume() {
       @disable-auto-approve="store.setAutoApprove(false, chatId)"
     />
 
+    <q-banner v-if="locked" dense class="text-info"
+      >{{
+        entry.info.blockedBySessionId
+          ? t('handoff.readOnly', { chat: successor })
+          : t('handoff.preparing')
+      }}<q-btn
+        v-if="entry.info.blockedBySessionId"
+        flat
+        dense
+        no-caps
+        :label="t('handoff.openTarget')"
+        @click="store.openChat(entry.info.blockedBySessionId!)"
+    /></q-banner>
+    <q-banner v-if="entry.info.hasInitialContext" dense>{{
+      t('handoff.initialContext')
+    }}</q-banner>
     <AgentSessionTasks :chat-id="chatId" :active="active" />
 
     <!-- Messages never grow wider than the panel: prose wraps, and wide
@@ -160,7 +188,12 @@ async function resume() {
       </div>
     </q-scroll-area>
 
-    <AgentComposer ref="composer" :chat-id="chatId" :active="active" />
+    <AgentComposer
+      v-show="!locked"
+      ref="composer"
+      :chat-id="chatId"
+      :active="active && !locked"
+    />
   </div>
 </template>
 

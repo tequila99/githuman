@@ -155,7 +155,12 @@ export class ArtifactValidationJobsService {
       this.requesters.delete(id)
       return this.observed.delete(id)
     }
-    if (this.stopping || !session || session.status === 'closed') {
+    if (
+      this.stopping ||
+      !session ||
+      session.status === 'closed' ||
+      this.registry?.get(sessionId)?.canUseTools === false
+    ) {
       forget()
       return
     }

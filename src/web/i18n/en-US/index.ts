@@ -2,6 +2,101 @@
 // so you can safely delete all default props below
 
 export default {
+  journal: {
+    context: {
+      prompt: 'Request',
+      response: 'Agent response',
+      model: 'Model',
+      reasoning: 'Reasoning',
+      session: 'Session',
+      turn: 'Response ID',
+      unknown: 'Not reported',
+      noSession: 'No agent session',
+      chatUnavailable: 'Chat is no longer available',
+      noResponse: 'No response text was captured.',
+      missing: 'Context was not saved for this entry.',
+      truncated: 'Only the first 64 KiB of this text was saved.'
+    },
+    project: {
+      title: 'Journal',
+      entry: 'Journal entry',
+      noTask: 'No task',
+      search: 'Search journal entries',
+      empty: 'No journal entries match your search and filters.',
+      agentName: 'Agent name',
+      author: 'Author',
+      authors: { user: 'User', agent: 'Agent', system: 'GitHuman' },
+      updates: 'Journal changed. Refresh entries',
+      invalidRange: 'Choose a valid date range with the start before the end.'
+    },
+    showData: 'Show event data',
+    hideData: 'Hide event data',
+    title: 'Journal',
+    kind: 'Entry kind',
+    entry: 'Decision, result or next step',
+    append: 'Add entry',
+    empty: 'No journal entries yet.',
+    error: 'Journal request failed.',
+    older: 'Earlier entries',
+    refresh: 'Refresh',
+    cancel: 'Cancel',
+    correct: 'Correct',
+    correcting: 'Correcting an earlier entry',
+    correctsAt: 'Corrects the entry of {time}',
+    correctsId: 'Corrects entry {id}',
+    superseded: 'Corrected',
+    bytes: '{bytes} of {max} bytes',
+    tooLong: 'The entry is longer than 8 KiB in UTF-8.',
+    actors: {
+      server: 'GitHuman',
+      agent: 'Agent',
+      agentNamed: 'Agent {name}',
+      local: 'You',
+      device: 'Paired device'
+    },
+    events: {
+      agent_event: 'Agent activity (details)',
+      turn_finished: 'Agent response finished.',
+      turn_cancelled: 'Agent response cancelled.',
+      turn_failed: 'Agent response failed.',
+      handoff_completed: 'Task continued in a new chat:'
+    },
+    kinds: {
+      done: 'Done',
+      decision: 'Decision',
+      open: 'Open question',
+      next: 'Next step',
+      note: 'Note',
+      system: 'System fact'
+    }
+  },
+  handoff: {
+    continue: 'Continue in a new chat',
+    agent: 'Harness',
+    name: 'New chat name',
+    preview: 'Preview context',
+    withoutPreview: 'Continue without preview',
+    create: 'Transfer and continue',
+    sourceHint:
+      'The new agent receives the original request and recent session history, summarizes the current state, and continues automatically. Older entries remain available in the session journal. Your draft stays here; this chat becomes read-only until its successor is closed.',
+    taskHint:
+      'Start a new chat with this task, its journal, artifact references and a bounded repository snapshot. Review the context before creating the chat. No message is sent automatically.',
+    readOnly:
+      'This chat is read-only while {chat} is open. Closing that chat restores this one.',
+    preparing: 'Preparing a handoff. New commands are temporarily disabled.',
+    openTarget: 'Open successor',
+    slotsFull:
+      'Close one of the open chats, then select Create chat again. The preview is kept.',
+    states: {
+      preview: 'Preview',
+      preparing: 'Starting the agent',
+      ready: 'Ready',
+      failed: 'Failed',
+      interrupted: 'Interrupted'
+    },
+    initialContext:
+      'The task handoff context will be attached to your first message.'
+  },
   workspace: {
     selectLines: 'Select comment lines',
     extendSelection: 'Tap another line number to extend the selection',
@@ -700,6 +795,26 @@ export default {
       resolved: 'Resolved',
       error: 'Failed to save comment'
     }
+  },
+  toolContent: {
+    result: 'Result',
+    arguments: 'Arguments',
+    formatted: 'Formatted',
+    structured: 'Structured result',
+    block: 'Content {index}',
+    event: 'Event',
+    source: 'Original output',
+    text: 'Text',
+    wrap: 'Wrap lines',
+    copy: 'Copy full content',
+    body: 'Tool content',
+    more: 'Show more',
+    previewLimited:
+      'Showing a preview. Copy includes the full selected content.',
+    formatLimited:
+      'This content exceeds the formatting limit. Showing plain text.',
+    truncated:
+      'This output was truncated before display. Missing data cannot be expanded.'
   },
   agent: {
     tasks: {

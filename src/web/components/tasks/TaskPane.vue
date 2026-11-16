@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, shallowRef } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import MarkdownEditor from '@/components/markdown/MarkdownEditor.vue'
 import { useTaskEditor } from '@/composables/tasks/use-task-editor'
@@ -7,6 +8,7 @@ import { useTaskLinkSource } from '@/composables/tasks/use-task-link-source'
 import { useTasksStore } from '@/stores/tasks-store'
 import TaskPaneHeader from './TaskPaneHeader.vue'
 import TaskArtifactsPanel from './TaskArtifactsPanel.vue'
+import TaskJournalPanel from './TaskJournalPanel.vue'
 import TaskCloseDialog from './TaskCloseDialog.vue'
 
 const props = defineProps<{ taskId: string }>()
@@ -15,7 +17,16 @@ const tasks = useTasksStore()
 const linkSource = useTaskLinkSource()
 const editor = useTaskEditor(() => props.taskId)
 const { task, draft, status } = editor
-const tab = shallowRef<'description' | 'artifacts'>('description')
+const tab = shallowRef<'description' | 'artifacts' | 'journal'>('description')
+const route = useRoute()
+watch(
+  () => route.query.tab,
+  value => {
+    tab.value =
+      value === 'journal' || value === 'artifacts' ? value : 'description'
+  },
+  { immediate: true }
+)
 const closeOpen = shallowRef(false)
 const closing = shallowRef(false)
 const closeError = shallowRef<string | null>(null)
@@ -81,9 +92,16 @@ async function reload() {
             />
           </div>
         </q-tab>
+        <q-tab name="journal" :label="t('journal.title')" />
       </q-tabs>
       <q-separator />
       <q-tab-panels v-model="tab" keep-alive class="task-pane__panels col">
+        <q-tab-panel name="journal" class="q-pa-none fit"
+          ><TaskJournalPanel
+            :task-id="task.id"
+            :store-id="task.storeId"
+            :active="tab === 'journal'"
+        /></q-tab-panel>
         <q-tab-panel name="description" class="q-pa-md">
           <MarkdownEditor
             :key="editor.revision.value"

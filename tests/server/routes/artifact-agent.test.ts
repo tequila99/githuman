@@ -999,3 +999,30 @@ test(
     )
   }
 )
+
+test('MCP reads an exact persisted session journal without a selected task', async t => {
+  const { app, storage } = setup(t)
+  const { authorization } = await startSession(app)
+  storage.journal.fact(null, 'source-1', 'agent_event', 'Saved source event', {
+    sessionId: 'closed-source'
+  })
+  storage.journal.fact(null, 'foreign-1', 'agent_event', 'Foreign event', {
+    sessionId: 'closed-source-other'
+  })
+  const read = await app.inject({
+    method: 'POST',
+    url: '/api/agent/artifacts/sessions.journal_list',
+    headers: { authorization },
+    payload: { storeId: storage.storeId, sessionId: 'closed-source' }
+  })
+  assert.equal(read.statusCode, 200, read.body)
+  assert.equal(read.json().items.length, 1)
+  assert.equal(read.json().items[0].body, 'Saved source event')
+  const wrongStore = await app.inject({
+    method: 'POST',
+    url: '/api/agent/artifacts/sessions.journal_list',
+    headers: { authorization },
+    payload: { storeId: 'wrong', sessionId: 'closed-source' }
+  })
+  assert.equal(wrongStore.statusCode, 400)
+})

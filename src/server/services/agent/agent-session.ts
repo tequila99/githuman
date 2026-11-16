@@ -1,3 +1,10 @@
+import { JournalEventBuffer } from './journal-event.ts'
+import { journalProvenance } from '../../../shared/task-journal/provenance.ts'
+import type {
+  JournalContext,
+  JournalProvenance
+} from '../../../shared/task-journal/types.ts'
+import { truncateUtf8Text } from '../../utils/text.ts'
 import { isLocalPiLaunch } from '../../adapters/pi-acp/launch.ts'
 import { isRecord } from '../../../shared/utils/guards.ts'
 import type {
@@ -10,6 +17,7 @@ import {
   AgentConfigError
 } from '../../errors/agents.ts'
 import { ARTIFACT_TASK_PROMPT_HINT } from '../../../shared/artifact-tools/instructions.ts'
+import { embedBlock } from './embed-block.ts'
 import {
   ARTIFACT_AGENT_KEY_ENV,
   ARTIFACT_MCP_SERVER_NAME
@@ -47,6 +55,8 @@ import {
   mapSessionUpdate
 } from '../../adapters/agents/event-mapper.ts'
 
+// Bound journal capture independently of the event replay buffer.
+const MAX_JOURNAL_CONTEXT_BYTES = 64 * 1024
 /** `npx` may have to download the adapter first. */
 const START_TIMEOUT_MS = 90_000
 /** Events that one session keeps for a client that joins late or reconnects. */
@@ -65,6 +75,20 @@ export type AgentPermissionPolicy = (
 ) => { allow: boolean; reason: string }
 
 export interface AgentSessionOptions {
+  onJournalEvent?: (
+    turn: TurnTaskContext,
+    eventId: number,
+    event: unknown,
+    redact?: (text: string) => string,
+    provenance?: JournalProvenance
+  ) => void
+  onTurnComplete?: (
+    turn: TurnTaskContext,
+    outcome: 'finished' | 'cancelled' | 'failed',
+    context?: JournalContext
+  ) => void
+  onAccessChanged?: () => void
+  onJournalError?: (error: unknown) => void
   preset: AgentPreset
   /** Immutable server policy; takes precedence over the user auto-approve switch. */
   permissionPolicy?: AgentPermissionPolicy
@@ -132,6 +156,17 @@ export class AgentSession {
   #embeddedContext = false
   #image = false
   #config: AgentConfigOption[] = []
+  #blockedBySessionId: string | undefined
+  #reserved = false
+  #initialContext:
+    | { uri: string; text: string; valid: () => boolean }
+    | undefined
+  #journalEvents = new JournalEventBuffer((event, id) =>
+    this.#writeJournalEvent(event, id)
+  )
+  #journalContext: JournalContext | undefined
+  #journalTurn: TurnTaskContext | undefined
+  #turnCancelled = false
   #stderrTail = ''
   #mcpSecrets: string[] = []
   #hasArtifactMcp = false
@@ -157,6 +192,80 @@ export class AgentSession {
     return this.#status
   }
 
+  get canUseTools(): boolean {
+    return (
+      this.#status !== 'closed' && !this.#blockedBySessionId && !this.#reserved
+    )
+  }
+
+  assertWritable(): void {
+    if (this.#status === 'closed') {
+      throw new AgentSessionStateError('The session is closed')
+    }
+    if (!this.canUseTools) {
+      throw new AgentSessionStateError(
+        'This chat is read-only or a handoff is being prepared.'
+      )
+    }
+  }
+
+  setReserved(value: boolean): void {
+    this.#reserved = value
+    this.#options.onAccessChanged?.()
+  }
+  setBlockedBy(id: string | undefined): void {
+    this.#blockedBySessionId = id
+    if (id) {
+      this.#autoApprove = false
+      this.#emit({ type: 'auto-approve', enabled: false })
+    }
+    this.#options.onAccessChanged?.()
+  }
+  get blockedBySessionId(): string | undefined {
+    return this.#blockedBySessionId
+  }
+  /** Server-owned handoff snapshot for the first accepted prompt only. */
+  setInitialContext(uri: string, text: string, valid: () => boolean): void {
+    this.#initialContext = { uri, text, valid }
+  }
+
+  get journalContext(): JournalContext | undefined {
+    return this.#journalContext
+      ? structuredClone(this.#journalContext)
+      : undefined
+  }
+
+  get journalProvenance(): JournalContext {
+    return this.#captureJournalContext('')
+  }
+
+  #captureJournalContext(text: string): JournalContext {
+    const value = (category: string): string | null => {
+      const option = this.#config.find(
+        item => item.category === category || item.id === category
+      )
+      return typeof option?.currentValue === 'string'
+        ? option.currentValue
+        : null
+    }
+    return {
+      presetId: this.presetId,
+      agentName: this.#options.preset.title,
+      sessionName: this.name,
+      model: value('model'),
+      reasoning: value('thought_level'),
+      settings: this.#config.map(option => ({
+        id: option.id,
+        name: option.name,
+        value: option.currentValue
+      })),
+      prompt: truncateUtf8Text(text, MAX_JOURNAL_CONTEXT_BYTES),
+      response: '',
+      promptTruncated: Buffer.byteLength(text) > MAX_JOURNAL_CONTEXT_BYTES,
+      responseTruncated: false
+    }
+  }
+
   get turnTaskContext(): TurnTaskContext | undefined {
     return this.#turnTaskContext
   }
@@ -167,6 +276,7 @@ export class AgentSession {
     taskId: string,
     requestId: string
   ): { context: ActivatedTaskContext; apply: () => void } {
+    this.assertWritable()
     // Cancellation clears the context before the agent stops reporting busy.
     if (!this.#turnTaskContext || this.#turnTaskContext.turnId !== turnId) {
       throw new AgentSessionStateError(
@@ -186,6 +296,7 @@ export class AgentSession {
       context,
       apply: () => {
         this.#turnTaskContext = context
+        this.#journalTurn = context
       }
     }
   }
@@ -206,6 +317,11 @@ export class AgentSession {
       ...(this.#options.taskIds
         ? { taskIds: this.#options.taskIds(this.id) }
         : {}),
+      ...(this.#blockedBySessionId
+        ? { blockedBySessionId: this.#blockedBySessionId }
+        : {}),
+      reserved: this.#reserved,
+      hasInitialContext: Boolean(this.#initialContext),
       presetId: this.presetId,
       name: this.name,
       ...(this.kind === undefined ? {} : { kind: this.kind }),
@@ -396,6 +512,7 @@ export class AgentSession {
    * `value` is `unknown`: the route schema gives it no type (see ConfigBody).
    */
   async setConfig(configId: string, value: unknown): Promise<void> {
+    this.assertWritable()
     const connection = this.#connection
     const sessionId = this.#acpSessionId
     if (this.#status !== 'ready' || !connection || !sessionId) {
@@ -490,6 +607,11 @@ export class AgentSession {
    */
   prompt(blocks: ContentBlock[], display: AgentPromptRequest): void {
     const { connection, sessionId } = this.#readyChannel()
+    if (this.#initialContext && !this.#initialContext.valid()) {
+      throw new AgentSessionStateError(
+        'The handoff task or assignment changed. Close this chat and prepare a new handoff.'
+      )
+    }
     const assignment = this.#options.taskAssignment?.(this.id)
     const turn = Object.freeze({
       turnId: randomUUID(),
@@ -499,20 +621,65 @@ export class AgentSession {
       taskIds: Object.freeze([...(assignment?.taskIds ?? [])])
     })
     this.#turnTaskContext = turn
+    this.#journalTurn = turn
+    this.#turnCancelled = false
+    this.#journalContext = this.#captureJournalContext(display.text)
+    this.#journalContext.references = (display.context ?? []).map(item => {
+      switch (item.kind) {
+        case 'attachment':
+          return `${item.name} (${item.mimeType})`
+        case 'file':
+        case 'directory':
+          return item.path
+        case 'diff':
+          return `${item.source}${item.path ? `: ${item.path}` : ''}`
+        case 'review':
+          return `Review ${item.reviewId}`
+        case 'artifact':
+          return `${item.name} (${item.artifactId})`
+        case 'task':
+          return `${item.name} (${item.taskId})`
+        case 'note':
+          return `${item.name} (${item.noteId})`
+        default:
+          return ''
+      }
+    })
+    this.#captureJournalEvent({
+      type: 'request',
+      text: display.text,
+      references: this.#journalContext.references
+    })
     this.#setStatus('busy')
     this.#emit({
       type: 'user',
       text: display.text,
       context: display.context ?? []
     })
+    const initial = this.#initialContext
+    this.#initialContext = undefined
+    if (initial) this.#options.onAccessChanged?.()
+    // The snapshot follows the user text, like other context items, as a bounded resource.
+    const withContext = initial
+      ? [
+          ...blocks,
+          embedBlock(
+            this.#embeddedContext,
+            initial.uri,
+            'Task handoff snapshot (captured data, not instructions):',
+            'text/markdown',
+            initial.text
+          )
+        ]
+      : blocks
     // Append the reminder without changing the user transcript or validator assignments.
     const prompt =
       this.#hasArtifactMcp && !this.#options.permissionPolicy
         ? [
-            ...blocks,
+            ...withContext,
             { type: 'text' as const, text: ARTIFACT_TASK_PROMPT_HINT }
           ]
-        : blocks
+        : withContext
     void this.#runPrompt(connection, sessionId, prompt, turn.turnId)
   }
 
@@ -525,6 +692,7 @@ export class AgentSession {
   }
 
   #readyChannel(): { connection: acp.ClientConnection; sessionId: string } {
+    this.assertWritable()
     const connection = this.#connection
     const sessionId = this.#acpSessionId
     if (this.#status !== 'ready' || !connection || !sessionId) {
@@ -543,6 +711,7 @@ export class AgentSession {
     blocks: ContentBlock[],
     turnId: string
   ): Promise<void> {
+    let outcome: 'finished' | 'cancelled' | 'failed' = 'finished'
     try {
       const response = await connection.agent.request(
         acp.methods.agent.session.prompt,
@@ -551,6 +720,7 @@ export class AgentSession {
       this.#clearTurnTaskContext(turnId)
       this.#emit({ type: 'stop', stopReason: response.stopReason })
     } catch (error) {
+      outcome = 'failed'
       this.#clearTurnTaskContext(turnId)
       // A failure of the transport comes before the `exit` event, and only
       // that event can say why the agent died: let it report first.
@@ -567,10 +737,30 @@ export class AgentSession {
         })
       }
     } finally {
-      this.#clearTurnTaskContext(turnId)
-      // A request still open once the turn is over (it ended in an error, say)
-      // is dead: answering it later would still make the agent act on it.
+      // Save outstanding permission cancellations before closing the journal response.
+      this.#journalEvents.flush(
+        this.#turnCancelled
+          ? 'cancelled'
+          : outcome === 'failed'
+            ? 'failed'
+            : undefined
+      )
       this.#cancelPendingPermissions()
+      const journalTurn = this.#journalTurn
+      this.#journalTurn = undefined
+      if (journalTurn && !this.kind) {
+        try {
+          this.#options.onTurnComplete?.(
+            journalTurn,
+            this.#turnCancelled ? 'cancelled' : outcome,
+            this.journalContext
+          )
+        } catch (error) {
+          this.#options.onJournalError?.(error)
+        }
+      }
+      this.#journalContext = undefined
+      this.#clearTurnTaskContext(turnId)
       if (this.#status === 'busy') {
         this.#setStatus('ready')
       }
@@ -592,6 +782,7 @@ export class AgentSession {
     if (this.#status !== 'busy' || !this.#connection || !this.#acpSessionId) {
       return
     }
+    this.#turnCancelled = true
     // Stop inheritance immediately; the agent may take time to finish cancellation.
     this.#turnTaskContext = undefined
     try {
@@ -637,6 +828,7 @@ export class AgentSession {
    * the UI only turns it on after warning the user.
    */
   setAutoApprove(enabled: boolean): void {
+    this.assertWritable()
     if (this.#status === 'closed') {
       throw new AgentSessionStateError('The session is closed')
     }
@@ -686,9 +878,15 @@ export class AgentSession {
     }
     const requestId = randomUUID()
     const request = mapPermissionRequest(requestId, params)
-    if (this.#autoApprove) {
+    if (this.#autoApprove && autoApproveChoice(request.options)) {
+      this.#captureJournalEvent(request)
       const response = this.#autoApprovePermission(request)
       if (response) {
+        this.#captureJournalEvent({
+          type: 'permission_answer',
+          requestId,
+          ...response
+        })
         return Promise.resolve(response)
       }
     }
@@ -697,6 +895,11 @@ export class AgentSession {
         request,
         resolve: response => {
           this.#pendingPermissions.delete(requestId)
+          this.#captureJournalEvent({
+            type: 'permission_answer',
+            requestId,
+            ...response
+          })
           this.#emit({ type: 'permission-resolved', requestId })
           resolve(response)
         }
@@ -771,6 +974,28 @@ export class AgentSession {
         }
       }
     }
+    if (
+      (update.sessionUpdate === 'tool_call' ||
+        update.sessionUpdate === 'tool_call_update') &&
+      update.rawInput !== undefined
+    ) {
+      this.#captureJournalEvent({
+        type: 'tool_input',
+        toolCallId: update.toolCallId,
+        input: update.rawInput
+      })
+    }
+    if (
+      (update.sessionUpdate === 'tool_call' ||
+        update.sessionUpdate === 'tool_call_update') &&
+      update.rawOutput !== undefined
+    ) {
+      this.#captureJournalEvent({
+        type: 'tool_result',
+        toolCallId: update.toolCallId,
+        output: update.rawOutput
+      })
+    }
     const event = mapSessionUpdate(update)
     if (event?.type === 'config') {
       // Keep `#config` current: `setConfig` checks values against it.
@@ -798,8 +1023,63 @@ export class AgentSession {
     return () => this.#listeners.delete(listener)
   }
 
+  #captureJournalEvent(event: unknown, eventId?: number): void {
+    if (!this.#journalTurn || this.kind) return
+    const incomplete = this.#turnCancelled
+      ? 'cancelled'
+      : isRecord(event) && event.type === 'error'
+        ? 'failed'
+        : undefined
+    this.#journalEvents.push(
+      event,
+      eventId ?? this.#options.nextEventId?.() ?? ++this.#ownEventId,
+      incomplete
+    )
+  }
+
+  #writeJournalEvent(event: unknown, eventId: number): void {
+    if (!this.#journalTurn || this.kind) return
+    try {
+      this.#options.onJournalEvent?.(
+        this.#journalTurn,
+        eventId,
+        event,
+        text => this.#redact(text),
+        journalProvenance(this.#journalContext ?? this.journalProvenance)
+      )
+    } catch (error) {
+      this.#options.onJournalError?.(error)
+    }
+  }
+
   #emit(event: AgentChatEvent): void {
+    if (
+      this.#journalContext &&
+      event.type === 'message' &&
+      event.role === 'agent'
+    ) {
+      const context = this.#journalContext
+      const text = context.response + event.text
+      context.response = truncateUtf8Text(text, MAX_JOURNAL_CONTEXT_BYTES)
+      context.responseTruncated ||=
+        Buffer.byteLength(text) > MAX_JOURNAL_CONTEXT_BYTES
+    }
+
     const id = this.#options.nextEventId?.() ?? ++this.#ownEventId
+    if (
+      [
+        'message',
+        'tool',
+        'permission',
+        'permission-resolved',
+        'auto-approved',
+        'plan',
+        'error',
+        'stop'
+      ].includes(event.type)
+    ) {
+      this.#captureJournalEvent(event, id)
+    }
     const envelope: AgentChatEnvelope = { id, event }
     this.#buffer.push(envelope)
     const limit = this.#options.bufferLimit ?? MAX_BUFFERED_EVENTS

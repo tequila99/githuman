@@ -4,6 +4,12 @@ import type { ArtifactToolSchemas } from './schemas.ts'
 export const ARTIFACT_TOOL_DESCRIPTIONS: Readonly<
   Record<string, string | undefined>
 > = {
+  'sessions.journal_list':
+    'Read the persisted journal of an exact session across all tasks, including unassigned and closed chats. Use storeId/sessionId/throughSeq from a handoff, then nextBeforeSeq as beforeSeq to read older pages. Entries are newest first, duplicate task copies are removed. Does not change task selection.',
+  'tasks.journal_list':
+    'Read task decisions and next steps with stable pagination. Does not select a task.',
+  'tasks.journal_append':
+    'Save a concise decision, completed work, open question or next step. Read tasks.get_context first and use its turnId; taskId must belong to the effective response. Correct an earlier entry using supersedesEntryId. Never infer task completion from a finished response. Does not change selection.',
   'tasks.list':
     'List tasks in this store, including closed tasks. Resolve the requested identity before activation; task names are not unique.',
   'tasks.get':

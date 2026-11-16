@@ -16,6 +16,7 @@ import AgentComposerAddMenu from './AgentComposerAddMenu.vue'
 import AgentComposerSubmitButton from './AgentComposerSubmitButton.vue'
 import AgentComposerSettings from './AgentComposerSettings.vue'
 import AgentVoiceButton from './AgentVoiceButton.vue'
+import AgentHandoffButton from './AgentHandoffButton.vue'
 import { useNotifyError } from '@/composables/use-notify-error'
 import { useAgentComposerConfig } from '@/composables/use-agent-composer-config'
 import { useAgentAttachments } from '@/composables/use-agent-attachments'
@@ -36,6 +37,12 @@ const { narrow } = useWorkspaceNavigation()
 
 const entry = computed(() => store.chats[props.chatId])
 const status = computed(() => entry.value?.chat.status ?? 'closed')
+const canHandoff = computed(
+  () =>
+    (status.value === 'ready' || status.value === 'closed') &&
+    !entry.value?.info.reserved &&
+    !entry.value?.info.blockedBySessionId
+)
 const pending = computed(() => entry.value?.pendingContext ?? [])
 // The selected chat takes the voice shortcut. On desktop the shortcut opens a closed panel.
 // A hidden narrow pane ignores it: a keyboard shortcut does not change the history (ADR 0082).
@@ -194,6 +201,11 @@ defineExpose({ focus: () => editor.value?.focus() })
           @commit="text => editor?.insertText(text, active)"
         />
 
+        <AgentHandoffButton
+          v-if="!entry.info.kind"
+          :source-session-id="chatId"
+          :disabled="!canHandoff"
+        />
         <AgentComposerSubmitButton
           :status="status"
           :is-empty="isEmpty"
