@@ -98,7 +98,8 @@ export const JournalEntrySchema = Type.Object(
           Type.Literal('turn_finished'),
           Type.Literal('turn_cancelled'),
           Type.Literal('turn_failed'),
-          Type.Literal('handoff_completed')
+          Type.Literal('handoff_completed'),
+          Type.Literal('handoff_failed')
         ],
         { description: 'Server fact type; null for user and agent entries.' }
       )

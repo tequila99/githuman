@@ -451,6 +451,7 @@ export class TaskHandoffService {
       }
     } catch (error) {
       this.registry.close(target.id)
+      let corrected = false
       this.storage.catalog.transaction(() => {
         const current = this.repository.handoff(value.id)
         if (
@@ -459,11 +460,28 @@ export class TaskHandoffService {
           this.repository.handoffOwner(value.id) ===
             this.storage.lifecycle.jobs.ownerId
         ) {
+          if (current.state === 'ready') {
+            // The completion fact is immutable. A new fact corrects the history.
+            // A failed correction must not keep the operation in the ready state.
+            try {
+              this.storage.journal.fact(
+                value.taskId,
+                `handoff-failed:${value.id}`,
+                'handoff_failed',
+                errorMessage(error),
+                { sessionId: target.id }
+              )
+              corrected = true
+            } catch (factError) {
+              this.onError(factError)
+            }
+          }
           value.state = 'failed'
           value.error = errorMessage(error)
           this.repository.updateHandoff(value)
         }
       })
+      if (corrected) this.storage.journal.changed()
     } finally {
       source?.setReserved(false)
       this.targets.delete(value.id)

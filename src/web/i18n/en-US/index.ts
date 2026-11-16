@@ -59,7 +59,8 @@ export default {
       turn_finished: 'Agent response finished.',
       turn_cancelled: 'Agent response cancelled.',
       turn_failed: 'Agent response failed.',
-      handoff_completed: 'Task continued in a new chat:'
+      handoff_completed: 'Task continued in a new chat:',
+      handoff_failed: 'Handoff failed after it was recorded:'
     },
     kinds: {
       done: 'Done',
