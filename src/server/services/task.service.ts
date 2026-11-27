@@ -62,8 +62,13 @@ export class TaskService extends ArtifactDefinitionService<Task> {
   protected override listPage(
     limit?: number,
     cursor?: string,
-    search?: string
+    search?: string,
+    filter?: { key: string; test: (item: Task) => boolean }
   ) {
+    // Tasks filter by state in pageByState. A generic filter would be ignored silently.
+    if (filter) {
+      throw new TypeError('Task list does not support a generic filter')
+    }
     return this.pageByState(limit, cursor, search, undefined)
   }
   listByState(

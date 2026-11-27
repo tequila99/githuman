@@ -56,6 +56,8 @@ export function applyArtifactGraphMigrations(db: DatabaseSync): void {
   const taskColumns = db.prepare('PRAGMA table_info(task_current)').all() as {
     name: string
   }[]
+  // This column breaks positional INSERT statements of versions 0.15.0 and older.
+  // A migrated database does not support rollback to those versions.
   if (!taskColumns.some(column => column.name === 'created_at')) {
     db.exec('ALTER TABLE task_current ADD COLUMN created_at TEXT')
   }
