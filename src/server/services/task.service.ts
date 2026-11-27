@@ -1,6 +1,6 @@
 import { ForbiddenError } from '../errors/http.ts'
 import type { AgentSession } from './agent/agent-session.ts'
-import { artifactPage } from '../utils/artifact-page.ts'
+import { artifactPage, keysetPage } from '../utils/artifact-page.ts'
 import { randomUUID } from 'node:crypto'
 import type { ArtifactActor } from '../../shared/artifacts/types.ts'
 import type {
@@ -58,6 +58,19 @@ export class TaskService extends ArtifactDefinitionService<Task> {
       )
     }
   }
+  // The base list() calls this hook inside its snapshot: tasks use key pages, not offsets.
+  protected override listPage(
+    limit?: number,
+    cursor?: string,
+    search?: string,
+    filter?: { key: string; test: (item: Task) => boolean }
+  ) {
+    // Tasks filter by state in pageByState. A generic filter would be ignored silently.
+    if (filter) {
+      throw new TypeError('Task list does not support a generic filter')
+    }
+    return this.pageByState(limit, cursor, search, undefined)
+  }
   listByState(
     limit: number | undefined,
     cursor: string | undefined,
@@ -66,41 +79,57 @@ export class TaskService extends ArtifactDefinitionService<Task> {
     tags: string[] = [],
     tagMode: 'all' | 'any' = 'all'
   ) {
-    const key = [
-      state && `state:${state}`,
-      tags.length && `tags:${tagMode}:${JSON.stringify(tags)}`
-    ]
-      .filter(Boolean)
-      .join(':')
-    const hasTags = (task: Task) =>
-      tagMode === 'any'
-        ? tags.some(tag => task.tags.includes(tag))
-        : tags.every(tag => task.tags.includes(tag))
-    return this.options.catalog.readSnapshot(() => {
-      const page = this.listPage(
+    return this.options.catalog.readSnapshot(() =>
+      this.pageByState(limit, cursor, search, state, tags, tagMode)
+    )
+  }
+  // The caller holds the catalog snapshot.
+  private pageByState(
+    limit: number | undefined,
+    cursor: string | undefined,
+    search: string | undefined,
+    state: Task['state'] | undefined,
+    tags: string[] = [],
+    tagMode: 'all' | 'any' = 'all'
+  ) {
+    const needle = (search ?? '').trim().toLocaleLowerCase()
+    // Sorted tags: the same filter in another order keeps the cursor valid.
+    const tagSet = [...new Set(tags)].sort()
+    // Bind the cursor to the search text and filter. JSON keeps the fields apart.
+    const query = JSON.stringify([
+      'task',
+      needle,
+      state ?? null,
+      tagSet.length ? [tagMode, tagSet] : null
+    ])
+    const page = keysetPage(
+      (after, count) =>
+        this.options.repository.taskPage({
+          after,
+          limit: count,
+          state,
+          tags: tagSet,
+          tagMode,
+          needle
+        }),
+      {
+        storeId: this.options.catalog.storeId,
+        epoch: this.options.catalog.epoch(),
+        query,
         limit,
-        cursor,
-        search,
-        key
-          ? {
-              key,
-              test: task =>
-                (!state || task.state === state) &&
-                (!tags.length || hasTags(task))
-            }
-          : undefined
-      )
-      const counts = this.options.repository.artifactCounts(
-        page.items.map(task => task.id)
-      )
-      return {
-        ...page,
-        items: page.items.map(task => ({
-          ...task,
-          artifactCount: counts.get(task.id) ?? 0
-        }))
+        cursor
       }
-    })
+    )
+    const counts = this.options.repository.artifactCounts(
+      page.items.map(task => task.id)
+    )
+    return {
+      ...page,
+      items: page.items.map(task => ({
+        ...task,
+        artifactCount: counts.get(task.id) ?? 0
+      }))
+    }
   }
   create(requestId: string, input: TaskInput, actor: ArtifactActor): Task {
     this.validate(input)

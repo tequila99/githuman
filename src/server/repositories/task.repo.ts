@@ -4,6 +4,8 @@ import type { Task, ArtifactType } from '../../shared/tasks/types.ts'
 import { ArtifactConflictError } from '../errors/artifacts.ts'
 import { normalizeStoredTask } from '../../shared/tasks/normalize.ts'
 import { assertRequestIdFree } from './request-ids.ts'
+import { taskCreatedAtSql } from '../db/artifact-graph-migrations.ts'
+import type { KeyedRow, PageKey } from '../utils/artifact-page.ts'
 
 export type Definition = Task | ArtifactType
 export interface DefinitionEvent<T> {
@@ -13,14 +15,30 @@ export interface DefinitionEvent<T> {
   createdAt: string
 }
 
+export interface TaskPageQuery {
+  /** The key of the last task on the previous page. */
+  after?: PageKey
+  limit: number
+  state?: Task['state']
+  tags: string[]
+  tagMode: 'all' | 'any'
+  /** Lower-case search text; an empty string disables search. */
+  needle: string
+}
+
 interface VersionedRow {
   snapshot_json: string
   first_at: string
 }
 
+interface TaskRow extends VersionedRow {
+  id: string
+  created_at: string | null
+}
+
 // The first version time is the creation time of a snapshot that stores none.
-function currentSql(kind: 'task' | 'artifact_type'): string {
-  return `SELECT c.snapshot_json, (SELECT v.created_at FROM ${kind}_versions v
+function currentSql(kind: 'task' | 'artifact_type', columns = ''): string {
+  return `SELECT c.snapshot_json${columns}, (SELECT v.created_at FROM ${kind}_versions v
     WHERE v.store_id=c.store_id AND v.id=c.id AND v.version=1) AS first_at
     FROM ${kind}_current c WHERE c.store_id=?`
 }
@@ -43,6 +61,10 @@ export class TaskRepository {
   constructor(db: DatabaseSync, storeId: string) {
     this.db = db
     this.storeId = storeId
+    // SQLite lower() changes only ASCII letters; search must match the JS lower case.
+    db.function('task_lower', { deterministic: true }, value =>
+      String(value ?? '').toLocaleLowerCase()
+    )
   }
 
   // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- The caller supplies the domain type for stored JSON.
@@ -63,6 +85,70 @@ export class TaskRepository {
         .prepare(`${currentSql(kind)} ORDER BY c.id`)
         .all(this.storeId) as unknown as VersionedRow[]
     ).map(row => parseDefinition<T>(kind, row.snapshot_json, row.first_at))
+  }
+  /**
+   * One filtered page after the key, in the task_current_created index order.
+   * Tasks without a creation time come last, so they are read in a second query.
+   * Each query is an index range; a single OR condition scans from the start.
+   */
+  taskPage(query: TaskPageQuery): KeyedRow<Task>[] {
+    const filters: string[] = []
+    const params: string[] = []
+    if (query.state) {
+      filters.push("json_extract(c.snapshot_json,'$.state')=?")
+      params.push(query.state)
+    }
+    if (query.tags.length) {
+      filters.push(
+        query.tagMode === 'any'
+          ? "EXISTS (SELECT 1 FROM json_each(c.snapshot_json,'$.tags') t WHERE t.value IN (SELECT value FROM json_each(?)))"
+          : "NOT EXISTS (SELECT 1 FROM json_each(?) w WHERE w.value NOT IN (SELECT value FROM json_each(c.snapshot_json,'$.tags')))"
+      )
+      params.push(JSON.stringify(query.tags))
+    }
+    if (query.needle) {
+      filters.push(
+        "instr(task_lower(json_extract(c.snapshot_json,'$.title') || ' ' || c.id),?)>0"
+      )
+      params.push(query.needle)
+    }
+    const read = (range: string, rangeParams: string[], limit: number) =>
+      (
+        this.db
+          .prepare(
+            `${currentSql('task', ',c.id,c.created_at')} AND ${range}${filters.map(filter => ` AND ${filter}`).join('')} ORDER BY c.created_at DESC NULLS LAST, c.id LIMIT ?`
+          )
+          .all(
+            this.storeId,
+            ...rangeParams,
+            ...params,
+            limit
+          ) as unknown as TaskRow[]
+      ).map(row => ({
+        item: parseDefinition<Task>('task', row.snapshot_json, row.first_at),
+        key: { createdAt: row.created_at, id: row.id }
+      }))
+    const { after, limit } = query
+    const at = after?.createdAt
+    // Ranges follow the sort order: the rest of the same time, older times, no time.
+    const stages: [string, string[]][] = []
+    if (after && at === null) {
+      stages.push(['c.created_at IS NULL AND c.id>?', [after.id]])
+    } else {
+      if (after && typeof at === 'string') {
+        stages.push(['c.created_at=? AND c.id>?', [at, after.id]])
+        stages.push(['c.created_at<?', [at]])
+      } else {
+        stages.push(['c.created_at IS NOT NULL', []])
+      }
+      stages.push(['c.created_at IS NULL', []])
+    }
+    const rows: KeyedRow<Task>[] = []
+    for (const [range, rangeParams] of stages) {
+      rows.push(...read(range, rangeParams, limit - rows.length))
+      if (rows.length >= limit) break
+    }
+    return rows
   }
   history<T extends Definition>(
     kind: 'task' | 'artifact_type',
@@ -104,11 +190,27 @@ export class TaskRepository {
         JSON.stringify(actor),
         now
       )
-    this.db
-      .prepare(
-        `INSERT INTO ${kind}_current VALUES(?,?,?) ON CONFLICT(store_id,id) DO UPDATE SET snapshot_json=excluded.snapshot_json`
-      )
-      .run(this.storeId, snapshot.id, JSON.stringify(snapshot))
+    // An edit keeps the creation time of the first insert.
+    const upsert =
+      'ON CONFLICT(store_id,id) DO UPDATE SET snapshot_json=excluded.snapshot_json'
+    if (kind === 'task') {
+      this.db
+        .prepare(
+          `INSERT INTO task_current(store_id,id,snapshot_json,created_at) VALUES(?,?,?,?) ${upsert}`
+        )
+        .run(
+          this.storeId,
+          snapshot.id,
+          JSON.stringify(snapshot),
+          (snapshot as Task).createdAt ?? now
+        )
+    } else {
+      this.db
+        .prepare(
+          `INSERT INTO artifact_type_current(store_id,id,snapshot_json) VALUES(?,?,?) ${upsert}`
+        )
+        .run(this.storeId, snapshot.id, JSON.stringify(snapshot))
+    }
   }
   // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- The command owner knows the stored result type.
   replay<T>(requestId: string, hash: string): { result: T } | undefined {
@@ -261,9 +363,10 @@ export class TaskRepository {
       this.db
         .prepare(`DELETE FROM ${kind}_current WHERE store_id=?`)
         .run(this.storeId)
+      const createdAt = kind === 'task' ? taskCreatedAtSql('v') : undefined
       this.db
         .prepare(
-          `INSERT INTO ${kind}_current SELECT v.store_id,v.id,v.snapshot_json FROM ${kind}_versions v WHERE v.store_id=? AND v.version=(SELECT MAX(n.version) FROM ${kind}_versions n WHERE n.store_id=v.store_id AND n.id=v.id)`
+          `INSERT INTO ${kind}_current(store_id,id,snapshot_json${createdAt ? ',created_at' : ''}) SELECT v.store_id,v.id,v.snapshot_json${createdAt ? `,${createdAt}` : ''} FROM ${kind}_versions v WHERE v.store_id=? AND v.version=(SELECT MAX(n.version) FROM ${kind}_versions n WHERE n.store_id=v.store_id AND n.id=v.id)`
         )
         .run(this.storeId)
     }

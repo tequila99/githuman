@@ -242,3 +242,46 @@ test('validation relevance upgrades old journal rows conservatively and preserve
     /immutable/
   )
 })
+
+test('task creation times are copied into task_current and indexed once', t => {
+  const db = new DatabaseSync(':memory:')
+  t.after(() => db.close())
+  applyArtifactMigrations(db)
+  db.exec(`CREATE TABLE task_versions (
+    store_id TEXT NOT NULL, id TEXT NOT NULL, version INTEGER NOT NULL,
+    request_id TEXT NOT NULL, snapshot_json TEXT NOT NULL, actor_json TEXT NOT NULL,
+    created_at TEXT NOT NULL, PRIMARY KEY(store_id,id,version), UNIQUE(store_id,request_id));
+    CREATE TABLE task_current (
+    store_id TEXT NOT NULL, id TEXT NOT NULL, snapshot_json TEXT NOT NULL,
+    PRIMARY KEY(store_id,id));
+    INSERT INTO task_versions VALUES
+      ('s','legacy',1,'r1','{}','{}','2026-01-01T00:00:00.000Z'),
+      ('s','legacy',2,'r2','{}','{}','2026-03-01T00:00:00.000Z'),
+      ('s','current',1,'r3','{}','{}','2026-01-05T00:00:00.000Z');
+    INSERT INTO task_current VALUES
+      ('s','legacy','{"id":"legacy"}'),
+      ('s','current','{"id":"current","createdAt":"2026-02-01T00:00:00.000Z"}'),
+      ('s','orphan','{"id":"orphan"}');`)
+  const read = () =>
+    db
+      .prepare('SELECT id,created_at FROM task_current ORDER BY id')
+      .all()
+      .map(row => [row.id, row.created_at])
+  applyArtifactGraphMigrations(db)
+  // The snapshot time has priority; a row without versions stays empty.
+  const expected = [
+    ['current', '2026-02-01T00:00:00.000Z'],
+    ['legacy', '2026-01-01T00:00:00.000Z'],
+    ['orphan', null]
+  ]
+  assert.deepEqual(read(), expected)
+  applyArtifactGraphMigrations(db)
+  assert.deepEqual(read(), expected)
+  assert.ok(
+    db
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type='index' AND name='task_current_created'"
+      )
+      .get()
+  )
+})

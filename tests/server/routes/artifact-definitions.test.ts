@@ -7,13 +7,18 @@ import { buildApp } from '../../../src/server/app.ts'
 import { createTestDatabase } from '../../../src/server/db/index.ts'
 import { ArtifactStorageService } from '../../../src/server/services/artifact-storage.service.ts'
 
-async function setup(t: TestContext) {
+function itemIds(response: { json: () => { items: { id: string }[] } }) {
+  return response.json().items.map(item => item.id)
+}
+
+async function setup(t: TestContext, now?: () => number) {
   const root = mkdtempSync(join(tmpdir(), 'ght-graph-routes-'))
   const db = createTestDatabase()
   const storage = new ArtifactStorageService({
     db,
     repositoryPath: root,
-    prefix: 'ght-'
+    prefix: 'ght-',
+    ...(now ? { now } : {})
   })
   const app = buildApp({
     db,
@@ -309,6 +314,43 @@ test('new read and write routes require the existing device access and same-orig
   assert.equal(csrf.statusCode, 403, csrf.body)
 })
 
+test('a task cursor does not move between filters whose text would join the same', async t => {
+  const { app, storage } = await setup(t)
+  for (const title of ['x:state:open one', 'x:state:open two']) {
+    storage.tasks.create(
+      `create-${title}`,
+      { title, externalUrl: null, state: 'open' },
+      { kind: 'user', id: 'local' }
+    )
+  }
+  const first = await app.inject('/api/tasks?search=x:state:open&limit=1')
+  assert.equal(first.statusCode, 200, first.body)
+  const cursor = encodeURIComponent(first.json().nextCursor ?? '')
+  const other = await app.inject(
+    `/api/tasks?search=x&state=open&limit=1&cursor=${cursor}`
+  )
+  assert.equal(other.statusCode, 400, other.body)
+})
+
+test('a task cursor stays valid when the tags come in another order', async t => {
+  const { app, storage } = await setup(t)
+  for (const title of ['One', 'Two']) {
+    storage.tasks.create(
+      `create-${title}`,
+      { title, externalUrl: null, state: 'open', tags: ['a', 'b'] },
+      { kind: 'user', id: 'local' }
+    )
+  }
+  const first = await app.inject('/api/tasks?tags=a&tags=b&limit=1')
+  assert.equal(first.statusCode, 200, first.body)
+  const cursor = encodeURIComponent(first.json().nextCursor ?? '')
+  const next = await app.inject(
+    `/api/tasks?tags=b&tags=a&tags=a&limit=1&cursor=${cursor}`
+  )
+  assert.equal(next.statusCode, 200, next.body)
+  assert.equal(next.json().items.length, 1)
+})
+
 test('definition lists search by name and identifier, and cursors stay bound to the search', async t => {
   const { app, storage } = await setup(t)
   for (const title of ['Alpha one', 'Alpha two', 'Beta']) {
@@ -480,10 +522,97 @@ test('a closed task cannot be reopened or edited, and the task list filters by s
   assert.deepEqual(await only('open'), ['Beta'])
 })
 
+test('task list orders by creation time across pages and keeps the state filter', async t => {
+  let clock = Date.parse('2026-01-01T00:00:00.000Z')
+  const { app, storage } = await setup(t, () => clock)
+  const actor = { kind: 'user' as const, id: 'local' }
+  const create = (
+    requestId: string,
+    title: string,
+    state: 'open' | 'closed',
+    at: string
+  ) => {
+    clock = Date.parse(at)
+    return storage.tasks.create(requestId, { title, state }, actor)
+  }
+  const oldest = create('oldest', 'Oldest', 'open', '2026-01-01T00:00:00.000Z')
+  const closed = create(
+    'closed',
+    'Closed',
+    'closed',
+    '2026-01-02T00:00:00.000Z'
+  )
+  const middle = create('middle', 'Middle', 'open', '2026-01-03T00:00:00.000Z')
+  const newest = create('newest', 'Newest', 'open', '2026-01-04T00:00:00.000Z')
+  const open = await app.inject('/api/tasks?state=open')
+  assert.equal(open.statusCode, 200, open.body)
+  assert.deepEqual(itemIds(open), [newest.id, middle.id, oldest.id])
+
+  const first = await app.inject('/api/tasks?state=open&limit=2')
+  assert.equal(first.statusCode, 200, first.body)
+  assert.deepEqual(itemIds(first), [newest.id, middle.id])
+  const cursor = first.json().nextCursor
+  assert.ok(cursor)
+  const second = await app.inject(
+    `/api/tasks?state=open&limit=2&cursor=${encodeURIComponent(cursor)}`
+  )
+  assert.equal(second.statusCode, 200, second.body)
+  assert.deepEqual(itemIds(second), [oldest.id])
+  assert.equal(second.json().nextCursor, null)
+
+  // A request without state keeps every state.
+  const all = await app.inject('/api/tasks')
+  assert.equal(all.statusCode, 200, all.body)
+  assert.deepEqual(itemIds(all), [newest.id, middle.id, closed.id, oldest.id])
+})
+
+test('a task list cursor continues after store changes and rejects offset cursors', async t => {
+  let clock = Date.parse('2026-01-01T00:00:00.000Z')
+  const { app, storage } = await setup(t, () => (clock += 1000))
+  const actor = { kind: 'user' as const, id: 'local' }
+  const [one, two, three] = ['One', 'Two', 'Three'].map(title =>
+    storage.tasks.create(title, { title, state: 'open' }, actor)
+  )
+  const first = await app.inject('/api/tasks?limit=2')
+  assert.deepEqual(itemIds(first), [three.id, two.id])
+  const cursor = first.json().nextCursor
+  assert.ok(cursor)
+  // A new task and an edit between pages do not move the cursor.
+  storage.tasks.create('four', { title: 'Four', state: 'open' }, actor)
+  storage.tasks.update(
+    two.id,
+    'edit-two',
+    1,
+    { title: 'Two edited', state: 'open' },
+    actor
+  )
+  const second = await app.inject(
+    `/api/tasks?limit=2&cursor=${encodeURIComponent(cursor)}`
+  )
+  assert.equal(second.statusCode, 200, second.body)
+  assert.deepEqual(itemIds(second), [one.id])
+  assert.equal(second.json().nextCursor, null)
+
+  const offsetCursor = Buffer.from(
+    JSON.stringify({
+      storeId: storage.storeId,
+      epoch: storage.catalog.epoch(),
+      query: 'task',
+      offset: 1
+    })
+  ).toString('base64url')
+  const legacy = await app.inject(
+    `/api/tasks?cursor=${encodeURIComponent(offsetCursor)}`
+  )
+  assert.equal(legacy.statusCode, 400, legacy.body)
+})
+
 test('a snapshot saved before descriptions existed reads with links and an empty description', async t => {
   const { app, storage, db } = await setup(t)
   const id = '11111111-1111-4111-8111-111111111111'
-  db.prepare('INSERT INTO task_current VALUES(?,?,?)').run(
+  db.prepare(
+    'INSERT INTO task_current(store_id,id,snapshot_json) VALUES(?,?,?)'
+  ).run(
     storage.storeId,
     id,
     JSON.stringify({
