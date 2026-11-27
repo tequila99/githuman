@@ -24,14 +24,18 @@ export function useSessionTasks(props: { chatId: string; active: boolean }) {
       !info.value.reserved
   )
   // The agent answers with the task chosen at the start of the answer, so the choice waits.
+  // Background loading does not count: `save` refuses to run while it loads.
   const editable = computed(
     () =>
       Boolean(canEdit.value) &&
       status.value === 'ready' &&
       !model.state.busy &&
-      !model.state.loading &&
       !model.state.dirty &&
       Boolean(model.state.base)
+  )
+  // Until the editor loads, the chat snapshot shows the assigned tasks.
+  const taskIds = computed(() =>
+    model.state.base ? model.state.taskIds : (info.value?.taskIds ?? [])
   )
   const labels = computed(() =>
     storeId.value ? definitionsStore.forStore(storeId.value).taskLabels : null
@@ -110,7 +114,7 @@ export function useSessionTasks(props: { chatId: string; active: boolean }) {
     model,
     storeId,
     localError,
-    status,
+    taskIds,
     editable,
     labels,
     select,

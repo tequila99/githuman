@@ -75,6 +75,7 @@ export function createSessionTaskEditor(sessionId: string) {
     state.attempt = null
   }
   // A chat holds one task: choosing needs an empty selection, so replacing means clearing first.
+  // Replacing takes two saves: an answer that starts between them gets an empty assignment.
   function select(id: string) {
     if (state.taskIds.length > 0) return
     setTasks([id])

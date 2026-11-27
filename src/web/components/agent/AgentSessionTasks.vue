@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useSessionTasks } from '@/composables/use-session-tasks'
 import { useWorkspaceNavigation } from '@/composables/use-workspace-navigation'
-import { describeSessionTask } from '@/utils/session-task-chip'
+import { describeSessionTask } from '@/utils/session-task-view'
 import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
 import AgentSessionTaskMenu from './AgentSessionTaskMenu.vue'
 
@@ -17,7 +17,7 @@ const {
   model,
   storeId,
   localError,
-  status,
+  taskIds,
   editable,
   labels,
   select,
@@ -26,7 +26,11 @@ const {
   reload
 } = useSessionTasks(props)
 const view = computed(() =>
-  describeSessionTask(model.state.taskIds, id => labels.value?.get(id))
+  describeSessionTask(taskIds.value, id => labels.value?.get(id))
+)
+// A clear removes every assigned task, so the tooltip lists the hidden ones too.
+const allTitles = computed(() =>
+  taskIds.value.map(id => labels.value?.get(id)?.title ?? id).join(', ')
 )
 const href = computed(() =>
   view.value.id
@@ -85,12 +89,13 @@ const canRetry = computed(
           t('agent.tasks.clear')
         }}</q-tooltip>
       </q-btn>
-      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
-        status === 'ready' ? t('agent.tasks.hint') : t('agent.tasks.locked')
-      }}</q-tooltip>
+      <q-tooltip :delay="TOOLTIP_DELAY_MS">
+        <div v-if="view.extra > 0">{{ allTitles }}</div>
+        {{ editable ? t('agent.tasks.hint') : t('agent.tasks.locked') }}
+      </q-tooltip>
     </div>
     <AgentSessionTaskMenu
-      v-else
+      v-else-if="model.state.base"
       :store-id="storeId"
       :disabled="!editable"
       @select="select"

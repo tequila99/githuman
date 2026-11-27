@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { describeSessionTask } from '@/utils/session-task-chip'
+import { describeSessionTask } from '@/utils/session-task-view'
 
 const tasks = new Map([
   ['open', { title: 'Open task', state: 'open' as const }],
@@ -17,7 +17,7 @@ test('an empty assignment has no task', () => {
   })
 })
 
-test('the first task names the chip and the rest are counted', () => {
+test('the first task is shown and the rest are counted', () => {
   assert.deepEqual(describeSessionTask(['open', 'done', 'other'], find), {
     id: 'open',
     title: 'Open task',
