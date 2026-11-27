@@ -1,6 +1,13 @@
 import type { DatabaseSync } from 'node:sqlite'
 import { protectArtifactTables } from './artifact-migrations.ts'
 
+// The snapshot creation time, or the first version time for older snapshots.
+export function taskCreatedAtSql(row: string): string {
+  return `COALESCE(json_extract(${row}.snapshot_json,'$.createdAt'),
+ (SELECT f.created_at FROM task_versions f
+ WHERE f.store_id=${row}.store_id AND f.id=${row}.id AND f.version=1))`
+}
+
 export function applyArtifactGraphMigrations(db: DatabaseSync): void {
   db.exec(`
  CREATE TABLE IF NOT EXISTS artifact_store_changes (
@@ -46,6 +53,15 @@ export function applyArtifactGraphMigrations(db: DatabaseSync): void {
   db.exec(
     'CREATE INDEX IF NOT EXISTS artifact_validation_changes ON artifact_store_changes(store_id,validation_relevant,seq)'
   )
+  const taskColumns = db.prepare('PRAGMA table_info(task_current)').all() as {
+    name: string
+  }[]
+  if (!taskColumns.some(column => column.name === 'created_at')) {
+    db.exec('ALTER TABLE task_current ADD COLUMN created_at TEXT')
+  }
+  db.exec(`UPDATE task_current SET created_at=${taskCreatedAtSql('task_current')}
+ WHERE created_at IS NULL;
+ CREATE INDEX IF NOT EXISTS task_current_created ON task_current(store_id,created_at DESC,id);`)
   // Copy an 0088 history once: the journal is empty only before the first copy.
   // Events that older code adds after this point are not copied.
   db.exec(`INSERT INTO artifact_store_changes(seq,store_id,entity_kind,entity_id,request_id)

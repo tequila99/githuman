@@ -152,6 +152,13 @@ export const DefinitionParams = Type.Object(
 export const TaskListQuery = Type.Object(
   {
     ...DefinitionQuery.properties,
+    cursor: Type.Optional(
+      Type.String({
+        maxLength: 2048,
+        description:
+          'Cursor after the last task of the previous page; store changes do not invalidate it.'
+      })
+    ),
     state: Type.Optional(TaskStateSchema),
     tags: Type.Optional(
       Type.Array(
