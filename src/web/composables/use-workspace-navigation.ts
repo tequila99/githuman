@@ -71,6 +71,12 @@ export function createWorkspaceNavigation(options: {
       hash: router.currentRoute.value.hash
     }))
   }
+  function openTask(id: string) {
+    return enqueueWorkspaceNavigation(router, () => ({
+      path: '/tasks/' + encodeURIComponent(id),
+      query: narrow.value ? { uiPane: 'content', uiWindow: undefined } : {}
+    }))
+  }
   function back() {
     if (typeof router.options.history.state.back === 'string') {
       router.back()
@@ -88,7 +94,16 @@ export function createWorkspaceNavigation(options: {
       )
     }
   }
-  return { narrow, pane, window, projection, selectPane, openWindow, back }
+  return {
+    narrow,
+    pane,
+    window,
+    projection,
+    selectPane,
+    openWindow,
+    openTask,
+    back
+  }
 }
 
 export type WorkspaceNavigation = ReturnType<typeof createWorkspaceNavigation>

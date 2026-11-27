@@ -819,18 +819,14 @@ export default {
   },
   agent: {
     tasks: {
-      title: 'Tasks ({count})',
-      add: 'Add task',
+      none: 'No task selected',
+      hint: 'New responses inherit this task. Clear it to choose another one.',
+      locked: 'The task cannot change while the agent answers.',
+      search: 'Search open tasks',
+      empty: 'No open tasks.',
+      clear: 'Clear task',
       retry: 'Retry',
-      inheritance:
-        'Selected task: {task}. New responses inherit it; MCP activation can also select a task for the current response. Explicit artifact tasks take precedence.',
-      noInheritance:
-        'No task selected for new responses. Without a response activation or explicit tasks, new artifacts will stay unassigned.',
-      ambiguousInheritance:
-        'Select exactly one task to inherit it automatically. Otherwise, artifacts without explicit tasks will stay unassigned.',
-      nextTurn:
-        'Manual assignment changes apply to the next message. Only explicit MCP activation changes the task of the current reply.',
-      reload: 'Reload assignment and discard draft',
+      reload: 'Reload',
       changed:
         'The assignment changed elsewhere. Load the latest selection before changing tasks.'
     },

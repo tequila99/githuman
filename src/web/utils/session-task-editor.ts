@@ -74,6 +74,16 @@ export function createSessionTaskEditor(sessionId: string) {
     state.dirty = true
     state.attempt = null
   }
+  // A chat holds one task: choosing needs an empty selection, so replacing means clearing first.
+  // Replacing takes two saves: an answer that starts between them gets an empty assignment.
+  function select(id: string) {
+    if (state.taskIds.length > 0) return
+    setTasks([id])
+  }
+  function clear() {
+    if (state.taskIds.length === 0) return
+    setTasks([])
+  }
   async function reload() {
     if (state.busy) return
     await refresh()
@@ -144,5 +154,15 @@ export function createSessionTaskEditor(sessionId: string) {
     disposed = true
     pause()
   }
-  return { state, setTasks, refresh, reload, save, pause, dispose }
+  return {
+    state,
+    setTasks,
+    select,
+    clear,
+    refresh,
+    reload,
+    save,
+    pause,
+    dispose
+  }
 }

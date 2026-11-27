@@ -99,13 +99,16 @@ export function createArtifactDefinitions(
 
   // One page per picker: each picker owns its search text, so pickers cannot
   // overwrite each other. The store invalidates these pages with the catalogs.
-  function openSearch(kind: 'task' | 'type') {
+  function openSearch(
+    kind: 'task' | 'type',
+    options: { state?: Task['state'] } = {}
+  ) {
     let text = ''
     const page = createArtifactDetailPage<TaskList | ArtifactTypeList, string>({
       storeId,
       fetch: (cursor, signal) =>
         kind === 'task'
-          ? api.tasks(cursor ?? undefined, signal, text)
+          ? api.tasks(cursor ?? undefined, signal, text, options.state)
           : api.types(cursor ?? undefined, signal, text),
       cursor: next => next.nextCursor,
       validate: next => assertItems(next.items),

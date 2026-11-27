@@ -198,3 +198,26 @@ test('pausing a task panel cancels a read without discarding its edit draft', as
   assert.equal(editor.state.loading, false)
   editor.dispose()
 })
+test('select needs an empty selection and clear removes every task', async () => {
+  let value = assignment(1, ['first', 'second'])
+  globalThis.fetch = async (_input, init) => {
+    if (init?.method === 'PATCH') {
+      assert.equal(typeof init.body, 'string')
+      const body = JSON.parse(init.body as string)
+      value = assignment(value.version + 1, body.taskIds)
+    }
+    return json(value)
+  }
+  const editor = createSessionTaskEditor('session')
+  await editor.refresh()
+  editor.select('third')
+  assert.equal(editor.state.dirty, false)
+  assert.deepEqual(editor.state.taskIds, ['first', 'second'])
+  editor.clear()
+  assert.deepEqual(editor.state.taskIds, [])
+  assert.equal(editor.state.dirty, true)
+  await editor.save()
+  editor.select('third')
+  await editor.save()
+  assert.deepEqual(editor.state.taskIds, ['third'])
+})
