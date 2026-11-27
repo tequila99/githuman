@@ -38,6 +38,7 @@ async function setup(path = '/', narrowAtStart = true) {
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: {} },
+      { path: '/tasks/:id', component: {} },
       {
         path: '/notes/:storageId/:id',
         name: 'note-document',
@@ -139,4 +140,17 @@ test('a missing chat, a missing context target and a failed chat do not switch p
   await settle()
   assert.equal(s.query().uiPane, 'list')
   assert.equal(s.stores.agent.panelOpen, false)
+})
+
+test('opening a task from another pane shows the task content in narrow mode only', async () => {
+  const narrow = await setup('/', true)
+  await narrow.workspace.openTask('a b')
+  await settle()
+  assert.equal(narrow.router.currentRoute.value.path, '/tasks/a%20b')
+  assert.equal(narrow.query().uiPane, 'content')
+  const wide = await setup('/', false)
+  await wide.workspace.openTask('task')
+  await settle()
+  assert.equal(wide.router.currentRoute.value.path, '/tasks/task')
+  assert.equal(wide.query().uiPane, undefined)
 })

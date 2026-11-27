@@ -312,3 +312,20 @@ test('store invalidation refreshes open picker searches without a manual refresh
   )
   search.close()
 })
+
+test('a task search can request only open tasks', async () => {
+  const urls: string[] = []
+  globalThis.fetch = async input => {
+    urls.push(typeof input === 'string' ? input : '')
+    return json(data(task))
+  }
+  const definitions = createArtifactDefinitions('store')
+  const search = definitions.openSearch('task', { state: 'open' })
+  await search.refresh()
+  search.close()
+  const other = definitions.openSearch('task')
+  await other.refresh()
+  other.close()
+  assert.ok(urls.some(url => url.includes('&state=open')))
+  assert.ok(urls.some(url => !url.includes('state=')))
+})

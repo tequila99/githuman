@@ -1,5 +1,4 @@
 import { computed, shallowRef, watch, onUnmounted } from 'vue'
-import { useI18n } from 'vue-i18n'
 import { useAgentStore } from '@/stores/agent-store'
 import { useArtifactDefinitionsStore } from '@/stores/artifact-definitions-store'
 import { useArtifactDefinitions } from '@/composables/artifacts/use-artifact-definitions'
@@ -9,14 +8,14 @@ import { singleFlight } from '@/utils/single-flight'
 import { errorMessage } from '@/utils/error-message'
 
 export function useSessionTasks(props: { chatId: string; active: boolean }) {
-  const { t } = useI18n()
   const agent = useAgentStore()
   const definitionsStore = useArtifactDefinitionsStore()
   const model = createSessionTaskEditor(props.chatId)
-  const open = shallowRef(false)
   const storeId = shallowRef<string | null>(null)
   const localError = shallowRef<string | null>(null)
   const info = computed(() => agent.chats[props.chatId]?.info)
+  // The live status follows events. The status in `info` is a snapshot of the last list.
+  const status = computed(() => agent.chats[props.chatId]?.chat.status)
   const canEdit = computed(
     () =>
       info.value &&
@@ -24,19 +23,20 @@ export function useSessionTasks(props: { chatId: string; active: boolean }) {
       !info.value.blockedBySessionId &&
       !info.value.reserved
   )
+  // The agent answers with the task chosen at the start of the answer, so the choice waits.
+  const editable = computed(
+    () =>
+      Boolean(canEdit.value) &&
+      status.value === 'ready' &&
+      !model.state.busy &&
+      !model.state.loading &&
+      !model.state.dirty &&
+      Boolean(model.state.base)
+  )
   const labels = computed(() =>
     storeId.value ? definitionsStore.forStore(storeId.value).taskLabels : null
   )
-  const inheritanceHint = computed(() => {
-    const ids = model.state.snapshot?.taskIds ?? info.value?.taskIds ?? []
-    const id = ids[0]
-    if (!id) return t('agent.tasks.noInheritance')
-    if (ids.length > 1) return t('agent.tasks.ambiguousInheritance')
-    return t('agent.tasks.inheritance', {
-      task: labels.value?.get(id)?.title ?? id
-    })
-  })
-  const visible = computed(() => props.active && open.value)
+  const visible = computed(() => props.active)
   useArtifactDefinitions(() => storeId.value, visible)
 
   let disposed = false
@@ -61,34 +61,37 @@ export function useSessionTasks(props: { chatId: string; active: boolean }) {
       if (!disposed) localError.value = errorMessage(error)
     }
   })
-  watch(visible, value => {
-    if (value) {
-      void load()
-    } else {
-      model.pause()
-    }
-  })
+  watch(
+    visible,
+    value => {
+      if (value) {
+        void load()
+      } else {
+        model.pause()
+      }
+    },
+    { immediate: true }
+  )
   watch(
     () => info.value?.taskIds,
     () => {
-      if (open.value && props.active) void load()
+      if (props.active) void load()
     }
   )
   const events = useServerEvents(['artifacts:changed'], () => {
-    if (!props.active || !open.value) return
+    if (!props.active) return
     void load()
   })
   async function reload() {
     await model.reload()
     await load()
   }
-  async function add(id: string) {
-    if (model.state.taskIds.includes(id)) return
-    model.setTasks([...model.state.taskIds, id])
+  async function select(id: string) {
+    model.select(id)
     await save()
   }
-  async function remove(id: string) {
-    model.setTasks(model.state.taskIds.filter(item => item !== id))
+  async function clear() {
+    model.clear()
     await save()
   }
   async function save() {
@@ -105,15 +108,13 @@ export function useSessionTasks(props: { chatId: string; active: boolean }) {
   })
   return {
     model,
-    open,
     storeId,
     localError,
-    info,
-    canEdit,
+    status,
+    editable,
     labels,
-    inheritanceHint,
-    add,
-    remove,
+    select,
+    clear,
     save,
     reload
   }

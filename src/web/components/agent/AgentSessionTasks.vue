@@ -1,167 +1,164 @@
 <script setup lang="ts">
-import { mdiClipboardTextOutline } from '@mdi/js'
-import { shallowRef } from 'vue'
+import { mdiClipboardTextOutline, mdiClose } from '@mdi/js'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useSessionTasks } from '@/composables/use-session-tasks'
-import AgentSessionTaskPicker from './AgentSessionTaskPicker.vue'
-import AgentSessionTaskChip from './AgentSessionTaskChip.vue'
+import { useWorkspaceNavigation } from '@/composables/use-workspace-navigation'
+import { describeSessionTask } from '@/utils/session-task-chip'
+import { TOOLTIP_DELAY_MS } from '@/utils/tooltip'
+import AgentSessionTaskMenu from './AgentSessionTaskMenu.vue'
 
 const props = defineProps<{ chatId: string; active: boolean }>()
 const { t } = useI18n()
-const selected = shallowRef<string | null>(null)
+const router = useRouter()
+const workspace = useWorkspaceNavigation()
 const {
   model,
-  open,
   storeId,
   localError,
-  info,
-  canEdit,
+  status,
+  editable,
   labels,
-  inheritanceHint,
-  add,
-  remove,
+  select,
+  clear,
   save,
   reload
 } = useSessionTasks(props)
+const view = computed(() =>
+  describeSessionTask(model.state.taskIds, id => labels.value?.get(id))
+)
+const href = computed(() =>
+  view.value.id
+    ? router.resolve('/tasks/' + encodeURIComponent(view.value.id)).href
+    : undefined
+)
+const error = computed(() => localError.value || model.state.error)
+const showError = computed(
+  () =>
+    error.value ||
+    model.state.conflict ||
+    (model.state.changed && model.state.dirty)
+)
+const canRetry = computed(
+  () =>
+    model.state.dirty &&
+    !model.state.conflict &&
+    (!model.state.changed || model.state.attempt !== null)
+)
 </script>
+
 <template>
-  <q-expansion-item
-    v-model="open"
-    dense
-    dense-toggle
-    class="agent-session-tasks app-icon-expansion"
-    header-class="agent-session-tasks__header"
-  >
-    <template #header>
-      <q-item-section side class="agent-session-tasks__icon">
-        <q-icon
-          :name="mdiClipboardTextOutline"
-          size="16px"
-          class="app-icon-neutral"
-        />
-      </q-item-section>
-      <q-item-section>
-        {{ t('agent.tasks.title', { count: info?.taskIds?.length ?? 0 }) }}
-      </q-item-section>
-    </template>
-    <div v-if="open" class="agent-session-tasks__body">
-      <q-linear-progress
-        v-if="model.state.loading || model.state.busy"
-        indeterminate
-      />
-      <div
-        v-if="localError || model.state.error"
-        role="alert"
-        class="text-negative"
-        >{{ localError || model.state.error }}</div
+  <div class="agent-session-tasks row no-wrap items-center">
+    <q-icon
+      :name="mdiClipboardTextOutline"
+      size="16px"
+      class="app-icon-neutral agent-session-tasks__icon"
+    />
+    <div
+      v-if="view.id"
+      class="agent-session-tasks__selected row no-wrap items-center"
+      :class="view.closed ? 'text-warning' : 'text-primary'"
+    >
+      <a
+        :href="href"
+        class="agent-session-tasks__link ellipsis"
+        :title="view.title"
+        @click.prevent="workspace.openTask(view.id)"
+        >{{ view.title }}</a
       >
-      <q-banner
-        v-if="model.state.changed || model.state.conflict"
+      <span v-if="view.extra > 0" class="agent-session-tasks__extra q-ml-xs">
+        +{{ view.extra }}
+      </span>
+      <q-btn
+        v-if="editable"
+        flat
         dense
-        class="agent-session-tasks__notice"
-        >{{ t('agent.tasks.changed') }}</q-banner
+        round
+        size="xs"
+        class="app-icon-control agent-session-tasks__clear"
+        :icon="mdiClose"
+        :aria-label="t('agent.tasks.clear')"
+        @click="clear"
       >
-      <div class="agent-session-tasks__hint" role="status">
-        {{ inheritanceHint }}
-        <div v-if="info?.status === 'busy'">{{
-          t('agent.tasks.nextTurn')
-        }}</div>
-      </div>
-      <AgentSessionTaskPicker
-        v-model="selected"
-        v-if="storeId && canEdit"
-        :store-id="storeId"
-        :disable="
-          model.state.busy ||
-          model.state.loading ||
-          model.state.dirty ||
-          !model.state.base
-        "
-        @add="add"
-      />
-      <div class="row q-gutter-xs">
-        <AgentSessionTaskChip
-          v-for="id in model.state.taskIds"
-          :key="id"
-          :id="id"
-          :task="labels?.get(id)"
-          :removable="
-            Boolean(
-              canEdit &&
-              !model.state.busy &&
-              !model.state.loading &&
-              !model.state.dirty
-            )
-          "
-          @remove="remove(id)"
-        />
-      </div>
-      <div
-        v-if="
-          localError ||
-          model.state.error ||
-          model.state.conflict ||
-          (model.state.changed && model.state.dirty)
-        "
-        class="row q-gutter-sm"
-      >
-        <q-btn
-          v-if="
-            model.state.dirty &&
-            !model.state.conflict &&
-            (!model.state.changed || model.state.attempt !== null)
-          "
-          flat
-          dense
-          size="sm"
-          :label="t('agent.tasks.retry')"
-          :loading="model.state.busy"
-          @click="save"
-        />
-        <q-btn
-          flat
-          dense
-          size="sm"
-          :label="t('agent.tasks.reload')"
-          :disable="model.state.busy"
-          @click="reload"
-        />
-      </div>
+        <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
+          t('agent.tasks.clear')
+        }}</q-tooltip>
+      </q-btn>
+      <q-tooltip :delay="TOOLTIP_DELAY_MS">{{
+        status === 'ready' ? t('agent.tasks.hint') : t('agent.tasks.locked')
+      }}</q-tooltip>
     </div>
-  </q-expansion-item>
+    <AgentSessionTaskMenu
+      v-else
+      :store-id="storeId"
+      :disabled="!editable"
+      @select="select"
+    />
+    <q-spinner v-if="model.state.busy" size="14px" class="q-ml-xs" />
+  </div>
+  <div
+    v-if="showError"
+    role="alert"
+    class="agent-session-tasks__error row items-center q-gutter-xs"
+  >
+    <span class="text-negative col ellipsis">{{
+      error || t('agent.tasks.changed')
+    }}</span>
+    <q-btn
+      v-if="canRetry"
+      flat
+      dense
+      size="sm"
+      :label="t('agent.tasks.retry')"
+      :loading="model.state.busy"
+      @click="save"
+    />
+    <q-btn
+      flat
+      dense
+      size="sm"
+      :label="t('agent.tasks.reload')"
+      :disable="model.state.busy"
+      @click="reload"
+    />
+  </div>
 </template>
+
 <style scoped>
 .agent-session-tasks {
   flex-shrink: 0;
   min-width: 0;
+  min-height: 32px;
+  padding: 0 8px;
   font-family: var(--font-agent);
   font-size: 12px;
   line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-.agent-session-tasks :deep(.agent-session-tasks__header) {
-  min-height: 32px;
-  padding: 4px 8px;
-  font-size: inherit;
 }
 .agent-session-tasks__icon {
-  padding-right: 6px;
+  flex-shrink: 0;
+  margin-right: 6px;
 }
-.agent-session-tasks__body {
-  max-height: 35vh;
-  overflow-y: auto;
-  padding: 0 8px 8px;
+.agent-session-tasks__selected {
+  flex: 0 1 auto;
+  min-width: 0;
 }
-.agent-session-tasks__hint {
-  margin: 4px 0 8px;
-  color: var(--app-icon-neutral);
+.agent-session-tasks__extra,
+.agent-session-tasks__clear {
+  flex-shrink: 0;
 }
-.agent-session-tasks__notice,
-.agent-session-tasks :deep(.q-field),
-.agent-session-tasks :deep(.q-field__label),
-.agent-session-tasks :deep(.q-field__bottom) {
-  font-family: inherit;
+.agent-session-tasks__link {
+  display: block;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+.agent-session-tasks__link:hover {
+  text-decoration: underline;
+}
+.agent-session-tasks__error {
+  padding: 0 8px 4px;
+  font-family: var(--font-agent);
   font-size: 12px;
-  line-height: 1.4;
 }
 </style>

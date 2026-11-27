@@ -1,23 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, shallowRef } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import AppPage from '@/components/AppPage.vue'
 import PanelResize from '@/components/PanelResize.vue'
 import TaskCreateDialog from '@/components/tasks/TaskCreateDialog.vue'
 import TaskPane from '@/components/tasks/TaskPane.vue'
 import TasksList from '@/components/tasks/TasksList.vue'
-import {
-  enqueueWorkspaceNavigation,
-  useWorkspaceNavigation
-} from '@/composables/use-workspace-navigation'
+import { useWorkspaceNavigation } from '@/composables/use-workspace-navigation'
 import { useServerEvents } from '@/composables/use-server-events'
 import { useTasksStore } from '@/stores/tasks-store'
 import type { Task } from '@/api/types'
 
 const { t } = useI18n()
 const route = useRoute()
-const router = useRouter()
 const store = useTasksStore()
 const workspace = useWorkspaceNavigation()
 const createOpen = shallowRef(false)
@@ -26,12 +22,7 @@ const selectedId = computed(() =>
 )
 
 function select(id: string) {
-  void enqueueWorkspaceNavigation(router, () => ({
-    path: '/tasks/' + encodeURIComponent(id),
-    query: workspace.narrow.value
-      ? { uiPane: 'content', uiWindow: undefined }
-      : {}
-  }))
+  void workspace.openTask(id)
 }
 async function created(task: Task) {
   await store.refresh()

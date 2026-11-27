@@ -7,18 +7,24 @@ import type {
   ArtifactTypeList
 } from '@/api/types'
 
-function pageQuery(cursor?: string, search?: string) {
+function pageQuery(cursor?: string, search?: string, state?: Task['state']) {
   return (
     '?limit=' +
     DEFAULT_ARTIFACT_PAGE_SIZE +
     (cursor ? '&cursor=' + encodeURIComponent(cursor) : '') +
-    (search ? '&search=' + encodeURIComponent(search) : '')
+    (search ? '&search=' + encodeURIComponent(search) : '') +
+    (state ? '&state=' + state : '')
   )
 }
 
 export const artifactDefinitionsApi = {
-  tasks: (cursor?: string, signal?: AbortSignal, search?: string) =>
-    apiGet<TaskList>('/api/tasks' + pageQuery(cursor, search), signal),
+  tasks: (
+    cursor?: string,
+    signal?: AbortSignal,
+    search?: string,
+    state?: Task['state']
+  ) =>
+    apiGet<TaskList>('/api/tasks' + pageQuery(cursor, search, state), signal),
   types: (cursor?: string, signal?: AbortSignal, search?: string) =>
     apiGet<ArtifactTypeList>(
       '/api/artifact-types' + pageQuery(cursor, search),
